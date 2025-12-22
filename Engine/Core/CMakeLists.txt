@@ -42,11 +42,13 @@ add_library(EngineCore STATIC
     src/Engine.cpp
     src/Window.cpp
     src/OpenGLRenderer.cpp
+    src/DirectXRenderer.cpp
     src/Model.cpp
     src/Scene.cpp
     src/Profiler.cpp
     src/Stats.cpp
     src/ImGuiLayer.cpp
+    src/PluginManager.cpp
 )
 
 target_include_directories(EngineCore PUBLIC

@@ -42,6 +42,16 @@ int main(int argc, char** argv) {
     Genesis::Engine::ImGuiLayer gui(window.GetSDLWindow(), window.GetGLContext());
 
     std::cout << "Entering main loop (close window to exit)..." << std::endl;
+
+    // Attempt to load sample plugin (demonstrates plugin API)
+    Genesis::Engine::PluginManager pluginManager;
+    // Platform-specific extension
+#ifdef _WIN32
+    pluginManager.LoadPlugin("SamplePlugin.dll");
+#else
+    pluginManager.LoadPlugin("libSamplePlugin.so");
+#endif
+
     while (window.PollEvents()) {
         profiler.BeginFrame();
         Genesis::Engine::Stats::Reset();
@@ -61,6 +71,9 @@ int main(int argc, char** argv) {
 
         std::this_thread::sleep_for(std::chrono::milliseconds(16));
     }
+
+    // Unload plugins explicitly (optional)
+    pluginManager.UnloadAll();
 
     renderer.Shutdown();
     window.Shutdown();
