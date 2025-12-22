@@ -6,6 +6,9 @@ Genesis is a modular, cross-platform C++ game engine prototype. This repository 
 Requirements:
 - CMake >= 3.16
 - Visual Studio (recommended) or a suitable C++ toolchain
+- SDL3 development libraries (headers and import libs) to build and run the desktop windowing sample
+
+On Windows you can install SDL3 or provide the development package to CMake via your preferred method (vcpkg / MSYS2 / system install).
 
 Build (out-of-source):
 
