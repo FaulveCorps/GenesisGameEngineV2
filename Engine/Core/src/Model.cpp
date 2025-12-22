@@ -36,6 +36,8 @@ void Model::Draw() {
                 glVertex3f(v.x, v.y, v.z);
             }
             glEnd();
+            // count this triangle draw
+            Genesis::Engine::Stats::AddDrawCalls(1);
         }
     }
 }
