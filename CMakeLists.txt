@@ -6,3 +6,4 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Add engine core and sample game
 add_subdirectory(Engine/Core)
 add_subdirectory(GameProjects/SampleGame)
+add_subdirectory(Tools)
