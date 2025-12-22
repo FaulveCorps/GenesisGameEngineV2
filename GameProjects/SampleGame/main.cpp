@@ -26,17 +26,24 @@ int main(int argc, char** argv) {
         return -1;
     }
 
-    Genesis::Engine::Model model;
-    if (!model.Load("assets/models/triangle.obj")) {
+    // Create scene and an entity with a model
+    Genesis::Engine::Scene scene;
+
+    auto entity = scene.Registry().create();
+    auto modelPtr = std::make_shared<Genesis::Engine::Model>();
+    if (!modelPtr->Load("assets/models/triangle.obj")) {
         std::cerr << "Failed to load model" << std::endl;
     }
+    scene.Registry().emplace<Genesis::Engine::ModelComponent>(entity, Genesis::Engine::ModelComponent{ modelPtr });
+    scene.Registry().emplace<Genesis::Engine::Transform>(entity, Genesis::Engine::Transform{});
 
     std::cout << "Entering main loop (close window to exit)..." << std::endl;
     while (window.PollEvents()) {
         renderer.BeginFrame();
 
-        // draw model
-        model.Draw();
+        // scene update/render
+        scene.Update(0.016);
+        scene.Render();
 
         renderer.EndFrame();
         std::this_thread::sleep_for(std::chrono::milliseconds(16));
