@@ -14,31 +14,56 @@ bool Model::Load(const std::string& path) {
         std::cerr << "Assimp failed to load model: " << path << std::endl;
         return false;
     }
+
+    // Convert aiMeshes into our Mesh objects (CPU-side arrays)
+    m_meshes.clear();
+    m_meshes.reserve(m_scene->mNumMeshes);
+
+    for (unsigned int mi = 0; mi < m_scene->mNumMeshes; ++mi) {
+        const aiMesh* mesh = m_scene->mMeshes[mi];
+        if (!mesh) continue;
+
+        std::vector<float> verts;
+        std::vector<float> norms;
+        std::vector<uint32_t> idxs;
+
+        verts.reserve(mesh->mNumVertices * 3);
+        if (mesh->HasNormals()) norms.reserve(mesh->mNumVertices * 3);
+
+        for (unsigned int v = 0; v < mesh->mNumVertices; ++v) {
+            const aiVector3D& pv = mesh->mVertices[v];
+            verts.push_back(pv.x);
+            verts.push_back(pv.y);
+            verts.push_back(pv.z);
+            if (mesh->HasNormals()) {
+                const aiVector3D& n = mesh->mNormals[v];
+                norms.push_back(n.x);
+                norms.push_back(n.y);
+                norms.push_back(n.z);
+            }
+        }
+
+        for (unsigned int f = 0; f < mesh->mNumFaces; ++f) {
+            const aiFace& face = mesh->mFaces[f];
+            if (face.mNumIndices != 3) continue; // should be triangulated
+            idxs.push_back(face.mIndices[0]);
+            idxs.push_back(face.mIndices[1]);
+            idxs.push_back(face.mIndices[2]);
+        }
+
+        Mesh m;
+        m.SetData(verts, norms, idxs);
+        m.UploadToGPU();
+        m_meshes.push_back(std::move(m));
+    }
+
     return true;
 }
 
 void Model::Draw() {
-    if (!m_scene) return;
-
-    // Simple immediate-mode draw (safe for a small sample/model).
-    for (unsigned int m = 0; m < m_scene->mNumMeshes; ++m) {
-        const aiMesh* mesh = m_scene->mMeshes[m];
-        if (!mesh) continue;
-
-        for (unsigned int f = 0; f < mesh->mNumFaces; ++f) {
-            const aiFace& face = mesh->mFaces[f];
-            glBegin(GL_TRIANGLES);
-            for (unsigned int i = 0; i < face.mNumIndices; ++i) {
-                unsigned int idx = face.mIndices[i];
-                const aiVector3D& v = mesh->mVertices[idx];
-                const aiVector3D& n = (mesh->HasNormals() ? mesh->mNormals[idx] : aiVector3D(0,0,1));
-                glNormal3f(n.x, n.y, n.z);
-                glVertex3f(v.x, v.y, v.z);
-            }
-            glEnd();
-            // count this triangle draw
-            Genesis::Engine::Stats::AddDrawCalls(1);
-        }
+    for (const auto& m : m_meshes) {
+        m.Draw();
+        Genesis::Engine::Stats::AddDrawCalls((int)m.GetTriangleCount());
     }
 }
 

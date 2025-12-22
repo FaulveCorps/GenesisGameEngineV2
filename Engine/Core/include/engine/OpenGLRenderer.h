@@ -1,7 +1,9 @@
 #pragma once
 
 #include "engine/IGraphics.h"
+#include "engine/Shader.h"
 #include <GL/gl.h>
+#include <memory>
 
 namespace Genesis::Engine {
 
@@ -18,6 +20,7 @@ public:
 private:
     SDL_Window* m_window = nullptr;
     SDL_GLContext m_context = nullptr;
+    std::shared_ptr<Shader> m_defaultShader;
 };
 
 } // namespace Genesis::Engine

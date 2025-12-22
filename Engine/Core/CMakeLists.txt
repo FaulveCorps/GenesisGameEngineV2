@@ -44,6 +44,8 @@ add_library(EngineCore STATIC
     src/OpenGLRenderer.cpp
     src/DirectXRenderer.cpp
     src/Model.cpp
+    src/Mesh.cpp
+    src/Shader.cpp
     src/Scene.cpp
     src/Profiler.cpp
     src/Stats.cpp

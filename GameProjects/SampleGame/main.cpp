@@ -62,8 +62,7 @@ int main(int argc, char** argv) {
         scene.Update(0.016);
         scene.Render();
 
-        // ImGui
-        gui.NewFrame();
+    // Note: Model rendering now uses vertex arrays (faster than immediate mode)
         gui.Render(profiler);
 
         renderer.EndFrame();

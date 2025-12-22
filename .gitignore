@@ -21,3 +21,4 @@ Thumbs.db
 # Editor
 .vscode/
 .idea/
+vcpkg_assimp_install.log
