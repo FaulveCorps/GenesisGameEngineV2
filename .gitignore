@@ -1,0 +1,23 @@
+# Build
+build/
+cmake-build-debug/
+CMakeCache.txt
+CMakeFiles/
+*.cmake
+*.make
+*.sln
+*.vcxproj*
+*.user
+*.obj
+*.o
+*.exe
+*.dll
+*.pdb
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
