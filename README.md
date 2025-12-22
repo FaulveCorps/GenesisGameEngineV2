@@ -7,8 +7,9 @@ Requirements:
 - CMake >= 3.16
 - Visual Studio (recommended) or a suitable C++ toolchain
 - SDL3 development libraries (headers and import libs) to build and run the desktop windowing sample
+- Assimp development libraries for model import support
 
-On Windows you can install SDL3 or provide the development package to CMake via your preferred method (vcpkg / MSYS2 / system install).
+On Windows you can install SDL3 and Assimp or provide the development packages to CMake via your preferred method (vcpkg / MSYS2 / system install).
 
 Build (out-of-source):
 

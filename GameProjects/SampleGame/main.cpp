@@ -26,11 +26,17 @@ int main(int argc, char** argv) {
         return -1;
     }
 
+    Genesis::Engine::Model model;
+    if (!model.Load("assets/models/triangle.obj")) {
+        std::cerr << "Failed to load model" << std::endl;
+    }
+
     std::cout << "Entering main loop (close window to exit)..." << std::endl;
     while (window.PollEvents()) {
         renderer.BeginFrame();
 
-        // placeholder for update/render
+        // draw model
+        model.Draw();
 
         renderer.EndFrame();
         std::this_thread::sleep_for(std::chrono::milliseconds(16));
