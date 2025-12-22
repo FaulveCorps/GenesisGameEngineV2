@@ -8,3 +8,21 @@ add_subdirectory(Engine/Core)
 add_subdirectory(GameProjects/SampleGame)
 add_subdirectory(Tools)
 add_subdirectory(Plugins/SamplePlugin)
+
+include(InstallRequiredSystemLibraries)
+set(CPACK_GENERATOR "ZIP")
+set(CPACK_PACKAGE_NAME "GenesisGameEngine")
+set(CPACK_PACKAGE_VERSION ${PROJECT_VERSION})
+set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_SOURCE_DIR}/LICENSE")
+
+# Install targets
+install(TARGETS SampleGame
+    RUNTIME DESTINATION bin
+)
+install(TARGETS SamplePlugin
+    RUNTIME DESTINATION plugins
+    LIBRARY DESTINATION plugins
+)
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/assets DESTINATION .)
+
+include(CPack)

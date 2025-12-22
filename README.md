@@ -31,3 +31,13 @@ Tools:
 
 CI:
 - A GitHub Actions workflow is included at `.github/workflows/ci.yml` which builds the project on **Ubuntu**, **macOS**, and **Windows** using `vcpkg` to fetch dependencies (SDL3, Assimp). The workflow runs on push and PR to `main`/`master` and performs a full CMake configure + build step.
+
+Packaging:
+- Use CPack to create a ZIP package of the built artifacts. Example:
+
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --config Release --target package
+```
+
+This will create `GenesisGameEngine-${PROJECT_VERSION}.zip` in the build output. You can also install the project contents to a local prefix with `cmake --install build --config Release --prefix <dir>`.
