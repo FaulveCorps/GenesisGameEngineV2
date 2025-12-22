@@ -49,6 +49,7 @@ jobs:
       - name: Build
         run: cmake --build build --config Release -- -j $(nproc || sysctl -n hw.ncpu || 2)
 
-      - name: Run basic smoke (no GUI)
+      - name: Run tests
         run: |
-          echo "Smoke: build successful"
+          cd build
+          ctest --output-on-failure -C Release

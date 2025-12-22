@@ -8,6 +8,7 @@ add_subdirectory(Engine/Core)
 add_subdirectory(GameProjects/SampleGame)
 add_subdirectory(Tools)
 add_subdirectory(Plugins/SamplePlugin)
+add_subdirectory(tests)
 
 include(InstallRequiredSystemLibraries)
 set(CPACK_GENERATOR "ZIP")
