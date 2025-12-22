@@ -28,3 +28,6 @@ Next step: implement Task 3 — add Core window + input (SDL3) minimal app.
 Tools:
 - `asset_packer` (Tools/asset_packer) — pack/unpack asset directories into a simple .ggpak archive. Usage: `asset_packer pack <input_dir> <out_file>` or `asset_packer unpack <archive> <out_dir>`.
 - `shader_compiler` (Tools/shader_compiler) — compiles GLSL to SPIR-V using `glslangValidator` if available, otherwise copies the source as a fallback. Usage: `shader_compiler <input_shader> <output_spv>`.
+
+CI:
+- A GitHub Actions workflow is included at `.github/workflows/ci.yml` which builds the project on **Ubuntu**, **macOS**, and **Windows** using `vcpkg` to fetch dependencies (SDL3, Assimp). The workflow runs on push and PR to `main`/`master` and performs a full CMake configure + build step.
