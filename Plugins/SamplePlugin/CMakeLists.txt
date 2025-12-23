@@ -10,4 +10,4 @@ target_include_directories(SamplePlugin PRIVATE ${CMAKE_SOURCE_DIR}/Engine/Core/
 # On Windows, export symbols in DLL
 if (WIN32)
     target_compile_definitions(SamplePlugin PRIVATE PLUGIN_EXPORT)
-endif
+endif()

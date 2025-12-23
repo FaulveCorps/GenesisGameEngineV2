@@ -1,9 +1,10 @@
 cmake_minimum_required(VERSION 3.16)
 project(EngineCore LANGUAGES CXX)
 
-find_package(SDL3 REQUIRED)
+# Use CONFIG mode to find vcpkg-provided packages
+find_package(SDL3 CONFIG REQUIRED)
 find_package(OpenGL REQUIRED)
-find_package(assimp REQUIRED)
+find_package(assimp CONFIG REQUIRED)
 
 include(FetchContent)
 FetchContent_Declare(
