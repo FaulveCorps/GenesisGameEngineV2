@@ -59,6 +59,7 @@ bool Model::Load(const std::string& path) {
         Mesh m;
         m.SetData(verts, norms, idxs);
         m.UploadToGPU();
+        std::cout << "Uploaded mesh VAO=" << "(unknown)" << std::endl; // upload logs from Mesh itself
         m_meshes.push_back(std::move(m));
     }
 

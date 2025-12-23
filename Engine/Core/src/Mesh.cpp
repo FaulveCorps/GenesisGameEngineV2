@@ -83,6 +83,8 @@ void Mesh::UploadToGPU() {
         return;
     }
 
+    std::cout << "Mesh::UploadToGPU -> funcs: genVAO=" << (pglGenVertexArrays?1:0) << " bindVAO=" << (pglBindVertexArray?1:0) << " genBuf=" << (pglGenBuffers?1:0) << " bindBuf=" << (pglBindBuffer?1:0) << " bufferData=" << (pglBufferData?1:0) << " enableAttr=" << (pglEnableVertexAttribArray?1:0) << " attribPtr=" << (pglVertexAttribPointer?1:0) << std::endl;
+
     // Create VAO
     pglGenVertexArrays(1, &vao_);
     pglBindVertexArray(vao_);
@@ -103,10 +105,46 @@ void Mesh::UploadToGPU() {
     pglBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo_);
     pglBufferData(GL_ELEMENT_ARRAY_BUFFER, (ptrdiff_t)(indices_.size() * sizeof(uint32_t)), indices_.data(), GL_STATIC_DRAW);
 
+    // Debug: verify EBO binding on VAO immediately after upload
+    {
+        using PFNGLGETINTEGERVPROC = void (APIENTRY*)(unsigned int, int*);
+        PFNGLGETINTEGERVPROC pglGetIntegerv = nullptr;
+        auto addrGetIntegerv = (void*)SDL_GL_GetProcAddress("glGetIntegerv");
+        if (addrGetIntegerv) pglGetIntegerv = (PFNGLGETINTEGERVPROC)addrGetIntegerv;
+        if (pglGetIntegerv) {
+            int boundElem = 0;
+            const unsigned int GL_ELEMENT_ARRAY_BUFFER_BINDING = 0x8895;
+            pglGetIntegerv(GL_ELEMENT_ARRAY_BUFFER_BINDING, &boundElem);
+            std::cout << "Mesh::UploadToGPU -> ebo=" << ebo_ << " GL_ELEMENT_ARRAY_BUFFER_BINDING=" << boundElem << std::endl;
+        } else {
+            std::cerr << "Mesh::UploadToGPU -> glGetIntegerv not available" << std::endl;
+        }
+    }
+
     // Vertex attribute 0 = position (3 floats)
     const unsigned char GL_FALSE = 0;
     pglEnableVertexAttribArray(0);
     pglVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, (const void*)0);
+
+    // Debug: query attrib state immediately after setup
+    {
+        auto addrGetVertexAttrib = (void*)SDL_GL_GetProcAddress("glGetVertexAttribiv");
+        if (addrGetVertexAttrib) {
+            using PFNGLGETVERTEXATTRIBIVPROC = void (APIENTRY*)(unsigned int, unsigned int, int*);
+            PFNGLGETVERTEXATTRIBIVPROC pglGetVertexAttribiv = (PFNGLGETVERTEXATTRIBIVPROC)addrGetVertexAttrib;
+            int enabled0 = 0, bufbind0 = -1; const unsigned int GL_VERTEX_ATTRIB_ARRAY_ENABLED = 0x8622; const unsigned int GL_VERTEX_ATTRIB_ARRAY_BUFFER_BINDING = 0x889F;
+            pglGetVertexAttribiv(0, GL_VERTEX_ATTRIB_ARRAY_ENABLED, &enabled0);
+            pglGetVertexAttribiv(0, GL_VERTEX_ATTRIB_ARRAY_BUFFER_BINDING, &bufbind0);
+            std::cout << "Mesh::UploadToGPU -> after setup attrib0 enabled=" << enabled0 << " buffer_binding=" << bufbind0 << std::endl;
+        }
+        auto addrGetError = (void*)SDL_GL_GetProcAddress("glGetError");
+        if (addrGetError) {
+            using PFNGLGETERRORPROC = unsigned int (APIENTRY*)();
+            PFNGLGETERRORPROC pglGetError = (PFNGLGETERRORPROC)addrGetError;
+            unsigned int err = pglGetError();
+            if (err != 0) std::cerr << "Mesh::UploadToGPU -> GL error after attrib setup: 0x" << std::hex << err << std::dec << std::endl;
+        }
+    }
 
     // If normals exist, create a normals VBO interleaving is not implemented yet; upload as separate VBO
     if (!normals_.empty()) {
@@ -121,6 +159,7 @@ void Mesh::UploadToGPU() {
     // Unbind VAO
     pglBindVertexArray(0);
     uploaded_ = true;
+    std::cout << "Mesh::UploadToGPU -> vao=" << vao_ << " vbo=" << vbo_ << " ebo=" << ebo_ << "" << std::endl;
 }
 
 void Mesh::Draw() const {
@@ -132,12 +171,134 @@ void Mesh::Draw() const {
 
     if (uploaded_ && vao_) {
         // Use VAO path
+        std::cout << "Mesh::Draw -> using VAO path (vao=" << vao_ << ")" << std::endl;
+        std::cout << "Mesh::Draw -> vao=" << vao_ << " vbo=" << vbo_ << " ebo=" << ebo_ << std::endl;
         pglBindVertexArray(vao_);
-        if (!pglDrawElements) ResolveGLFunction((void**)&pglDrawElements, "glDrawElements");
+        // Ensure EBO is bound (some drivers require re-binding per VAO or context)
+        if (ebo_) {
+            if (!pglBindBuffer) ResolveGLFunction((void**)&pglBindBuffer, "glBindBuffer");
+            if (pglBindBuffer) {
+                pglBindBuffer(0x8893 /*GL_ELEMENT_ARRAY_BUFFER*/, ebo_);
+            } else {
+                std::cerr << "Mesh::Draw -> pglBindBuffer not available" << std::endl;
+            }
+
+            // Query binding after rebind
+            using PFNGLGETINTEGERVPROC = void (APIENTRY*)(unsigned int, int*);
+            PFNGLGETINTEGERVPROC pglGetIntegerv = nullptr;
+            auto addrGetIntegerv = (void*)SDL_GL_GetProcAddress("glGetIntegerv");
+            if (addrGetIntegerv) pglGetIntegerv = (PFNGLGETINTEGERVPROC)addrGetIntegerv;
+            if (pglGetIntegerv) {
+                int boundElem = 0;
+                const unsigned int GL_ELEMENT_ARRAY_BUFFER_BINDING = 0x8895;
+                pglGetIntegerv(GL_ELEMENT_ARRAY_BUFFER_BINDING, &boundElem);
+                std::cout << "Mesh::Draw -> after rebind GL_ELEMENT_ARRAY_BUFFER_BINDING=" << boundElem << std::endl;
+            } else {
+                std::cerr << "Mesh::Draw -> glGetIntegerv not available" << std::endl;
+            }
+        }
+
+        if (!pglDrawElements) {
+            if (!ResolveGLFunction((void**)&pglDrawElements, "glDrawElements")) {
+                std::cerr << "Mesh::Draw -> glDrawElements not available" << std::endl;
+                pglBindVertexArray(0);
+                return;
+            }
+        }
+        // Debug: print indices count and first values
+        std::cout << "Mesh::Draw -> indices.count=" << indices_.size();
+        if (indices_.size() > 0) {
+            std::cout << " sample[0..min3]=" << indices_[0];
+            if (indices_.size() > 1) std::cout << "," << indices_[1];
+            if (indices_.size() > 2) std::cout << "," << indices_[2];
+        }
+        std::cout << std::endl;
+
+        // Debug: query current buffer bindings and vertex attrib state
+        {
+            using PFNGLGETINTEGERVPROC = void (APIENTRY*)(unsigned int, int*);
+            PFNGLGETINTEGERVPROC pglGetIntegerv = nullptr;
+            auto addrGetIntegerv = (void*)SDL_GL_GetProcAddress("glGetIntegerv");
+            if (addrGetIntegerv) pglGetIntegerv = (PFNGLGETINTEGERVPROC)addrGetIntegerv;
+            if (pglGetIntegerv) {
+                int boundArray = 0;
+                int boundElem = 0;
+                const unsigned int GL_ARRAY_BUFFER_BINDING = 0x8894;
+                const unsigned int GL_ELEMENT_ARRAY_BUFFER_BINDING = 0x8895;
+                pglGetIntegerv(GL_ARRAY_BUFFER_BINDING, &boundArray);
+                pglGetIntegerv(GL_ELEMENT_ARRAY_BUFFER_BINDING, &boundElem);
+                std::cout << "Mesh::Draw -> GL_ARRAY_BUFFER_BINDING=" << boundArray << " GL_ELEMENT_ARRAY_BUFFER_BINDING=" << boundElem << std::endl;
+
+                // Vertex attrib state
+                using PFNGLGETVERTEXATTRIBIVPROC = void (APIENTRY*)(unsigned int, unsigned int, int*);
+                PFNGLGETVERTEXATTRIBIVPROC pglGetVertexAttribiv = nullptr;
+                auto addrGetVertexAttrib = (void*)SDL_GL_GetProcAddress("glGetVertexAttribiv");
+                if (addrGetVertexAttrib) pglGetVertexAttribiv = (PFNGLGETVERTEXATTRIBIVPROC)addrGetVertexAttrib;
+                if (pglGetVertexAttribiv) {
+                    int enabled0 = 0, bufBind0 = -1;
+                    const unsigned int GL_VERTEX_ATTRIB_ARRAY_ENABLED = 0x8622;
+                    const unsigned int GL_VERTEX_ATTRIB_ARRAY_BUFFER_BINDING = 0x889F;
+                    pglGetVertexAttribiv(0, GL_VERTEX_ATTRIB_ARRAY_ENABLED, &enabled0);
+                    pglGetVertexAttribiv(0, GL_VERTEX_ATTRIB_ARRAY_BUFFER_BINDING, &bufBind0);
+                    std::cout << "Mesh::Draw -> attrib0 enabled=" << enabled0 << " buffer_binding=" << bufBind0 << std::endl;
+                    int enabled1 = 0, bufBind1 = -1;
+                    pglGetVertexAttribiv(1, GL_VERTEX_ATTRIB_ARRAY_ENABLED, &enabled1);
+                    pglGetVertexAttribiv(1, GL_VERTEX_ATTRIB_ARRAY_BUFFER_BINDING, &bufBind1);
+                    std::cout << "Mesh::Draw -> attrib1 enabled=" << enabled1 << " buffer_binding=" << bufBind1 << std::endl;
+
+                    // If attributes aren't set on VAO, try to set them explicitly as a workaround
+                    if (enabled0 == 0) {
+                        std::cout << "Mesh::Draw -> attrib0 not enabled on VAO; explicitly binding VBO and setting attrib pointer" << std::endl;
+                        if (!pglBindBuffer) ResolveGLFunction((void**)&pglBindBuffer, "glBindBuffer");
+                        if (!pglEnableVertexAttribArray) ResolveGLFunction((void**)&pglEnableVertexAttribArray, "glEnableVertexAttribArray");
+                        if (!pglVertexAttribPointer) ResolveGLFunction((void**)&pglVertexAttribPointer, "glVertexAttribPointer");
+                        const unsigned int GL_ARRAY_BUFFER = 0x8892;
+                        if (pglBindBuffer) pglBindBuffer(GL_ARRAY_BUFFER, vbo_);
+                        if (pglEnableVertexAttribArray) pglEnableVertexAttribArray(0);
+                        if (pglVertexAttribPointer) pglVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, (const void*)0);
+                        // Try binding EBO directly
+                        const unsigned int GL_ELEMENT_ARRAY_BUFFER = 0x8893;
+                        if (pglBindBuffer && ebo_) pglBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo_);
+                    }
+                } else {
+                    std::cerr << "Mesh::Draw -> glGetVertexAttribiv not available" << std::endl;
+                }
+
+            } else {
+                std::cerr << "Mesh::Draw -> glGetIntegerv not available" << std::endl;
+            }
+        }
+
         pglDrawElements(GL_TRIANGLES, (int)indices_.size(), GL_UNSIGNED_INT, nullptr);
+
+        // Check for GL errors after drawing
+        {
+            using PFNGLGETERRORPROC = unsigned int (APIENTRY*)();
+            PFNGLGETERRORPROC pglGetError = nullptr;
+            auto addr = (void*)SDL_GL_GetProcAddress("glGetError");
+            if (addr) pglGetError = (PFNGLGETERRORPROC)addr;
+            if (pglGetError) {
+                unsigned int err = pglGetError();
+                if (err != 0) {
+                    std::cerr << "GL error after pglDrawElements: 0x" << std::hex << err << std::dec << std::endl;
+                    if (err == 0x501) {
+                        // GL_INVALID_VALUE: try explicit client-memory glDrawElements (indices pointer)
+                        std::cout << "Mesh::Draw -> glDrawElements reported GL_INVALID_VALUE; trying client-memory indices fallback" << std::endl;
+                        if (pglDrawElements) {
+                            pglDrawElements(GL_TRIANGLES, (int)indices_.size(), GL_UNSIGNED_INT, indices_.data());
+                            unsigned int err2 = pglGetError();
+                            if (err2 != 0) std::cerr << "GL error after client-memory glDrawElements fallback: 0x" << std::hex << err2 << std::dec << std::endl;
+                        } else {
+                            std::cerr << "Mesh::Draw -> glDrawElements not available for fallback" << std::endl;
+                        }
+                    }
+                }
+            }
+        }
         pglBindVertexArray(0);
     } else {
         // Fallback to client arrays
+        std::cout << "Mesh::Draw -> using client arrays fallback" << std::endl;
         if (!pglEnableClientState) ResolveGLFunction((void**)&pglEnableClientState, "glEnableClientState");
         if (!pglVertexPointer) ResolveGLFunction((void**)&pglVertexPointer, "glVertexPointer");
         if (!pglNormalPointer) ResolveGLFunction((void**)&pglNormalPointer, "glNormalPointer");
@@ -145,21 +306,21 @@ void Mesh::Draw() const {
 
         const unsigned int GL_VERTEX_ARRAY = 0x8074;
         const unsigned int GL_NORMAL_ARRAY = 0x8075;
-        pglEnableClientState(GL_VERTEX_ARRAY);
-        pglVertexPointer(3, GL_FLOAT, 0, vertices_.data());
+        if (pglEnableClientState) pglEnableClientState(GL_VERTEX_ARRAY);
+        if (pglVertexPointer) pglVertexPointer(3, GL_FLOAT, 0, vertices_.data());
 
-        if (!normals_.empty()) {
+        if (!normals_.empty() && pglEnableClientState && pglNormalPointer) {
             pglEnableClientState(GL_NORMAL_ARRAY);
             pglNormalPointer(GL_FLOAT, 0, normals_.data());
-        } else {
+        } else if (pglDisableClientState) {
             pglDisableClientState(GL_NORMAL_ARRAY);
         }
 
         if (!pglDrawElements) ResolveGLFunction((void**)&pglDrawElements, "glDrawElements");
-        pglDrawElements(GL_TRIANGLES, (int)indices_.size(), GL_UNSIGNED_INT, indices_.data());
+        if (pglDrawElements) pglDrawElements(GL_TRIANGLES, (int)indices_.size(), GL_UNSIGNED_INT, indices_.data()); else std::cerr << "Mesh::Draw -> no glDrawElements available in fallback" << std::endl;
 
-        pglDisableClientState(GL_VERTEX_ARRAY);
-        if (!normals_.empty()) pglDisableClientState(GL_NORMAL_ARRAY);
+        if (pglDisableClientState) pglDisableClientState(GL_VERTEX_ARRAY);
+        if (!normals_.empty() && pglDisableClientState) pglDisableClientState(GL_NORMAL_ARRAY);
     }
 }
 

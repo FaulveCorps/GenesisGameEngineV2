@@ -142,6 +142,7 @@ std::optional<Shader> Shader::FromSource(const std::string& vertexSrc, const std
     pglDeleteShader(fs);
 
     s.programID_ = program;
+    std::cout << "Shader program created: " << program << std::endl;
     return s;
 }
 
@@ -150,7 +151,15 @@ Shader::~Shader() {
 }
 
 void Shader::Use() const {
-    if (programID_) { Resolve((void**)&pglUseProgram, "glUseProgram"); if (pglUseProgram) pglUseProgram(programID_); }
+    if (programID_) {
+        Resolve((void**)&pglUseProgram, "glUseProgram");
+        if (pglUseProgram) {
+            pglUseProgram(programID_);
+            std::cout << "Shader::Use -> program " << programID_ << " bound" << std::endl;
+        } else {
+            std::cerr << "Shader::Use -> glUseProgram not available" << std::endl;
+        }
+    }
 }
 
 } // namespace Genesis::Engine

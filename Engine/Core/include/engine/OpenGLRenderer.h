@@ -20,6 +20,10 @@ private:
     SDL_Window* m_window = nullptr;
     SDL_GLContext m_context = nullptr;
     std::shared_ptr<Shader> m_defaultShader;
+
+    // Debug draw resources
+    unsigned int m_debugVAO = 0;
+    unsigned int m_debugVBO = 0;
 };
 
 } // namespace Genesis::Engine
