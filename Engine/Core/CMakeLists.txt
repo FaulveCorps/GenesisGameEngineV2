@@ -17,7 +17,7 @@ FetchContent_MakeAvailable(entt)
 FetchContent_Declare(
   imgui
   GIT_REPOSITORY https://github.com/ocornut/imgui.git
-  GIT_TAG v1.89.10
+  GIT_TAG v1.92.5
 )
 FetchContent_MakeAvailable(imgui)
 
