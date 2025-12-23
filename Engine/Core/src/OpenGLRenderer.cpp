@@ -2,6 +2,34 @@
 #include <SDL3/SDL.h>
 #include <iostream>
 
+#ifdef _WIN32
+#define APIENTRY __stdcall
+#endif
+
+// Minimal GL API declarations (avoids including gl.h)
+using PFNGLVIEWPORTPROC = void (APIENTRY*)(int, int, int, int);
+using PFNGLCLEARCOLORPROC = void (APIENTRY*)(float, float, float, float);
+using PFNGLENABLEPROC = void (APIENTRY*)(unsigned int);
+using PFNGLCLEARPROC = void (APIENTRY*)(unsigned int);
+
+static PFNGLVIEWPORTPROC pglViewport = nullptr;
+static PFNGLCLEARCOLORPROC pglClearColor = nullptr;
+static PFNGLENABLEPROC pglEnable = nullptr;
+static PFNGLCLEARPROC pglClear = nullptr;
+
+static bool ResolveGL(void** fnPtr, const char* name) {
+    if (*fnPtr) return true;
+    auto addr = (void*)SDL_GL_GetProcAddress(name);
+    if (!addr) return false;
+    *fnPtr = addr;
+    return true;
+}
+
+// Needed GL constants
+#define GL_DEPTH_TEST        0x0B71
+#define GL_COLOR_BUFFER_BIT  0x00004000
+#define GL_DEPTH_BUFFER_BIT  0x00000100
+
 namespace Genesis::Engine {
 
 bool OpenGLRenderer::Init(SDL_Window* window, SDL_GLContext glContext) {
@@ -19,10 +47,16 @@ bool OpenGLRenderer::Init(SDL_Window* window, SDL_GLContext glContext) {
         return false;
     }
 
+    // Resolve core GL functions used
+    ResolveGL((void**)&pglViewport, "glViewport");
+    ResolveGL((void**)&pglClearColor, "glClearColor");
+    ResolveGL((void**)&pglEnable, "glEnable");
+    ResolveGL((void**)&pglClear, "glClear");
+
     // Basic GL init
-    glViewport(0, 0, 1280, 720);
-    glClearColor(0.1f, 0.12f, 0.15f, 1.0f);
-    glEnable(GL_DEPTH_TEST);
+    if (pglViewport) pglViewport(0, 0, 1280, 720);
+    if (pglClearColor) pglClearColor(0.1f, 0.12f, 0.15f, 1.0f);
+    if (pglEnable) pglEnable(GL_DEPTH_TEST);
 
     // Build a simple default shader (fallback embedded sources)
     const std::string defaultVert = R"(
@@ -60,7 +94,7 @@ void OpenGLRenderer::BeginFrame() {
     if (SDL_GL_MakeCurrent(m_window, m_context) != 0) {
         std::cerr << "SDL_GL_MakeCurrent failed in BeginFrame: " << SDL_GetError() << std::endl;
     }
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    if (pglClear) pglClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     // Ensure the default shader is active where available
     if (m_defaultShader) m_defaultShader->Use();

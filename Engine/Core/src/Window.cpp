@@ -12,9 +12,8 @@ bool Window::Init(const std::string& title, int width, int height) {
         return false;
     }
 
+    // SDL3 has a simplified SDL_CreateWindow signature (no position args)
     m_window = SDL_CreateWindow(title.c_str(),
-                                SDL_WINDOWPOS_CENTERED,
-                                SDL_WINDOWPOS_CENTERED,
                                 width,
                                 height,
                                 SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
@@ -39,7 +38,7 @@ bool Window::Init(const std::string& title, int width, int height) {
 
 void Window::Shutdown() {
     if (m_glContext) {
-        SDL_GL_DeleteContext(m_glContext);
+        SDL_GL_DestroyContext(m_glContext);
         m_glContext = nullptr;
     }
     if (m_window) {
@@ -52,7 +51,7 @@ void Window::Shutdown() {
 bool Window::PollEvents() {
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
-        if (event.type == SDL_EVENT_QUIT || event.type == SDL_EVENT_WINDOW_CLOSE)
+        if (event.type == SDL_EVENT_QUIT || event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED)
             return false;
     }
     return true;

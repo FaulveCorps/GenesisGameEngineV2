@@ -22,3 +22,5 @@ Thumbs.db
 .vscode/
 .idea/
 vcpkg_assimp_install.log
+cmake_version.log
+configure_output.txt

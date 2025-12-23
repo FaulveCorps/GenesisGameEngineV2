@@ -1,5 +1,4 @@
 #include "engine/Mesh.h"
-#include <GL/gl.h>
 #include <SDL3/SDL.h>
 #include <iostream>
 
@@ -26,15 +25,24 @@ static bool ResolveGLFunction(void** fnPtr, const char* name) {
     return true;
 }
 
-using PFNGLGENVERTEXARRAYSPROC = void(*)(GLsizei, unsigned int*);
-using PFNGLBINDVERTEXARRAYPROC = void(*)(unsigned int);
-using PFNGLGENBUFFERSPROC = void(*)(GLsizei, unsigned int*);
-using PFNGLBINDBUFFERPROC = void(*)(GLenum, unsigned int);
-using PFNGLBUFFERDATAPROC = void(*)(GLenum, ptrdiff_t, const void*, GLenum);
-using PFNGLENABLEVERTEXATTRIBARRAYPROC = void(*)(unsigned int);
-using PFNGLVERTEXATTRIBPOINTERPROC = void(*)(unsigned int, int, GLenum, unsigned char, int, const void*);
-using PFNGLDELETEVERTEXARRAYSPROC = void(*)(GLsizei, const unsigned int*);
-using PFNGLDELETEBUFFERSPROC = void(*)(GLsizei, const unsigned int*);
+// Minimal typedefs without including GL headers
+#ifdef _WIN32
+#define APIENTRY __stdcall
+#endif
+using PFNGLGENVERTEXARRAYSPROC = void (APIENTRY*)(int, unsigned int*);
+using PFNGLBINDVERTEXARRAYPROC = void (APIENTRY*)(unsigned int);
+using PFNGLGENBUFFERSPROC = void (APIENTRY*)(int, unsigned int*);
+using PFNGLBINDBUFFERPROC = void (APIENTRY*)(unsigned int, unsigned int);
+using PFNGLBUFFERDATAPROC = void (APIENTRY*)(unsigned int, ptrdiff_t, const void*, unsigned int);
+using PFNGLENABLEVERTEXATTRIBARRAYPROC = void (APIENTRY*)(unsigned int);
+using PFNGLVERTEXATTRIBPOINTERPROC = void (APIENTRY*)(unsigned int, int, unsigned int, unsigned char, int, const void*);
+using PFNGLDELETEVERTEXARRAYSPROC = void (APIENTRY*)(int, const unsigned int*);
+using PFNGLDELETEBUFFERSPROC = void (APIENTRY*)(int, const unsigned int*);
+using PFNGLDRAWELEMENTSPROC = void (APIENTRY*)(unsigned int, int, unsigned int, const void*);
+using PFNGLENABLECLIENTSTATEPROC = void (APIENTRY*)(unsigned int);
+using PFNGLDISABLECLIENTSTATEPROC = void (APIENTRY*)(unsigned int);
+using PFNGLVERTEXPOINTERPROC = void (APIENTRY*)(int, unsigned int, int, const void*);
+using PFNGLNORMALPOINTERPROC = void (APIENTRY*)(unsigned int, int, const void*);
 
 static PFNGLGENVERTEXARRAYSPROC pglGenVertexArrays = nullptr;
 static PFNGLBINDVERTEXARRAYPROC pglBindVertexArray = nullptr;
@@ -45,6 +53,11 @@ static PFNGLENABLEVERTEXATTRIBARRAYPROC pglEnableVertexAttribArray = nullptr;
 static PFNGLVERTEXATTRIBPOINTERPROC pglVertexAttribPointer = nullptr;
 static PFNGLDELETEVERTEXARRAYSPROC pglDeleteVertexArrays = nullptr;
 static PFNGLDELETEBUFFERSPROC pglDeleteBuffers = nullptr;
+static PFNGLDRAWELEMENTSPROC pglDrawElements = nullptr;
+static PFNGLENABLECLIENTSTATEPROC pglEnableClientState = nullptr;
+static PFNGLDISABLECLIENTSTATEPROC pglDisableClientState = nullptr;
+static PFNGLVERTEXPOINTERPROC pglVertexPointer = nullptr;
+static PFNGLNORMALPOINTERPROC pglNormalPointer = nullptr;
 
 void Mesh::UploadToGPU() {
     if (uploaded_) return;
@@ -71,6 +84,12 @@ void Mesh::UploadToGPU() {
 
     // VBO
     pglGenBuffers(1, &vbo_);
+    // Constants
+    const unsigned int GL_ARRAY_BUFFER = 0x8892;
+    const unsigned int GL_ELEMENT_ARRAY_BUFFER = 0x8893;
+    const unsigned int GL_STATIC_DRAW = 0x88E4;
+    const unsigned int GL_FLOAT = 0x1406;
+
     pglBindBuffer(GL_ARRAY_BUFFER, vbo_);
     pglBufferData(GL_ARRAY_BUFFER, (ptrdiff_t)(vertices_.size() * sizeof(float)), vertices_.data(), GL_STATIC_DRAW);
 
@@ -80,6 +99,7 @@ void Mesh::UploadToGPU() {
     pglBufferData(GL_ELEMENT_ARRAY_BUFFER, (ptrdiff_t)(indices_.size() * sizeof(uint32_t)), indices_.data(), GL_STATIC_DRAW);
 
     // Vertex attribute 0 = position (3 floats)
+    const unsigned char GL_FALSE = 0;
     pglEnableVertexAttribArray(0);
     pglVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, (const void*)0);
 
@@ -101,27 +121,39 @@ void Mesh::UploadToGPU() {
 void Mesh::Draw() const {
     if (vertices_.empty() || indices_.empty()) return;
 
+    const unsigned int GL_TRIANGLES = 0x0004;
+    const unsigned int GL_UNSIGNED_INT = 0x1405;
+
     if (uploaded_ && vao_) {
         // Use VAO path
         pglBindVertexArray(vao_);
-        glDrawElements(GL_TRIANGLES, (GLsizei)indices_.size(), GL_UNSIGNED_INT, nullptr);
+        if (!pglDrawElements) ResolveGLFunction((void**)&pglDrawElements, "glDrawElements");
+        pglDrawElements(GL_TRIANGLES, (int)indices_.size(), GL_UNSIGNED_INT, nullptr);
         pglBindVertexArray(0);
     } else {
         // Fallback to client arrays
-        glEnableClientState(GL_VERTEX_ARRAY);
-        glVertexPointer(3, GL_FLOAT, 0, vertices_.data());
+        if (!pglEnableClientState) ResolveGLFunction((void**)&pglEnableClientState, "glEnableClientState");
+        if (!pglVertexPointer) ResolveGLFunction((void**)&pglVertexPointer, "glVertexPointer");
+        if (!pglNormalPointer) ResolveGLFunction((void**)&pglNormalPointer, "glNormalPointer");
+        if (!pglDisableClientState) ResolveGLFunction((void**)&pglDisableClientState, "glDisableClientState");
+
+        const unsigned int GL_VERTEX_ARRAY = 0x8074;
+        const unsigned int GL_NORMAL_ARRAY = 0x8075;
+        pglEnableClientState(GL_VERTEX_ARRAY);
+        pglVertexPointer(3, GL_FLOAT, 0, vertices_.data());
 
         if (!normals_.empty()) {
-            glEnableClientState(GL_NORMAL_ARRAY);
-            glNormalPointer(GL_FLOAT, 0, normals_.data());
+            pglEnableClientState(GL_NORMAL_ARRAY);
+            pglNormalPointer(GL_FLOAT, 0, normals_.data());
         } else {
-            glDisableClientState(GL_NORMAL_ARRAY);
+            pglDisableClientState(GL_NORMAL_ARRAY);
         }
 
-        glDrawElements(GL_TRIANGLES, (GLsizei)indices_.size(), GL_UNSIGNED_INT, indices_.data());
+        if (!pglDrawElements) ResolveGLFunction((void**)&pglDrawElements, "glDrawElements");
+        pglDrawElements(GL_TRIANGLES, (int)indices_.size(), GL_UNSIGNED_INT, indices_.data());
 
-        glDisableClientState(GL_VERTEX_ARRAY);
-        if (!normals_.empty()) glDisableClientState(GL_NORMAL_ARRAY);
+        pglDisableClientState(GL_VERTEX_ARRAY);
+        if (!normals_.empty()) pglDisableClientState(GL_NORMAL_ARRAY);
     }
 }
 

@@ -3,8 +3,6 @@
 #include <SDL3/SDL.h>
 #include <memory>
 
-namespace ImGui { struct ImVec4; }
-
 namespace Genesis::Engine {
 
 class Profiler;

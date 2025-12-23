@@ -2,7 +2,6 @@
 
 #include "engine/IGraphics.h"
 #include "engine/Shader.h"
-#include <GL/gl.h>
 #include <memory>
 
 namespace Genesis::Engine {
