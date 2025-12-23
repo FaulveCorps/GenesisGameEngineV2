@@ -1,8 +1,9 @@
 #include "engine/Model.h"
+#include "engine/Stats.h"
 #include <assimp/Importer.hpp>
 #include <assimp/postprocess.h>
 #include <iostream>
-#include <GL/gl.h>
+
 
 namespace Genesis::Engine {
 

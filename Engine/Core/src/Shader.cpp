@@ -54,6 +54,10 @@ static bool Resolve(void** fnPtr, const char* name) {
 #define GL_COMPILE_STATUS     0x8B81
 #define GL_INFO_LOG_LENGTH    0x8B84
 #define GL_LINK_STATUS        0x8B82
+// GL_FALSE constant without including headers
+#ifndef GL_FALSE
+#define GL_FALSE 0
+#endif
 
 static unsigned int CompileShader(unsigned int type, const std::string& source) {
     Resolve((void**)&pglCreateShader, "glCreateShader");

@@ -7,15 +7,27 @@ FetchContent_Declare(
   GIT_REPOSITORY https://github.com/catchorg/Catch2.git
   GIT_TAG v3.4.0
 )
-FetchContent_MakeAvailable(catch2)
+# Populate Catch2 sources but do not build its library by default
+FetchContent_GetProperties(catch2)
+if(NOT catch2_POPULATED)
+  FetchContent_Populate(catch2)
+endif()
+# Add Catch2 with EXCLUDE_FROM_ALL so its targets are not built unless explicitly referenced
+add_subdirectory(${catch2_SOURCE_DIR} ${catch2_BINARY_DIR} EXCLUDE_FROM_ALL)
 
 add_executable(UnitTests
     test_core.cpp
+    ${catch2_SOURCE_DIR}/extras/catch_amalgamated.cpp
 )
 
-target_include_directories(UnitTests PRIVATE ${CMAKE_SOURCE_DIR}/Engine/Core/include)
+target_include_directories(UnitTests PRIVATE
+  ${CMAKE_SOURCE_DIR}/Engine/Core/include
+  ${CMAKE_SOURCE_DIR}/tests/include
+  ${catch2_SOURCE_DIR}/src
+  ${catch2_SOURCE_DIR}/extras
+)
 
-target_link_libraries(UnitTests PRIVATE EngineCore Catch2::Catch2WithMain)
+target_link_libraries(UnitTests PRIVATE EngineCore)
 
 target_compile_features(UnitTests PUBLIC cxx_std_17)
 

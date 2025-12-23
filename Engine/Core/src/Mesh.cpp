@@ -4,11 +4,7 @@
 
 namespace Genesis::Engine {
 
-Mesh::~Mesh() {
-    if (ebo_) glDeleteBuffers(1, &ebo_);
-    if (vbo_) glDeleteBuffers(1, &vbo_);
-    if (vao_) glDeleteVertexArrays(1, &vao_);
-}
+// Destructor placed after function pointer declarations for visibility
 
 void Mesh::SetData(const std::vector<float>& vertices, const std::vector<float>& normals, const std::vector<uint32_t>& indices) {
     vertices_ = vertices;
@@ -58,6 +54,15 @@ static PFNGLENABLECLIENTSTATEPROC pglEnableClientState = nullptr;
 static PFNGLDISABLECLIENTSTATEPROC pglDisableClientState = nullptr;
 static PFNGLVERTEXPOINTERPROC pglVertexPointer = nullptr;
 static PFNGLNORMALPOINTERPROC pglNormalPointer = nullptr;
+
+Mesh::~Mesh() {
+    // Resolve delete functions lazily
+    if (!pglDeleteBuffers) ResolveGLFunction((void**)&pglDeleteBuffers, "glDeleteBuffers");
+    if (!pglDeleteVertexArrays) ResolveGLFunction((void**)&pglDeleteVertexArrays, "glDeleteVertexArrays");
+    if (ebo_ && pglDeleteBuffers) pglDeleteBuffers(1, &ebo_);
+    if (vbo_ && pglDeleteBuffers) pglDeleteBuffers(1, &vbo_);
+    if (vao_ && pglDeleteVertexArrays) pglDeleteVertexArrays(1, &vao_);
+}
 
 void Mesh::UploadToGPU() {
     if (uploaded_) return;
@@ -123,6 +128,7 @@ void Mesh::Draw() const {
 
     const unsigned int GL_TRIANGLES = 0x0004;
     const unsigned int GL_UNSIGNED_INT = 0x1405;
+    const unsigned int GL_FLOAT = 0x1406;
 
     if (uploaded_ && vao_) {
         // Use VAO path

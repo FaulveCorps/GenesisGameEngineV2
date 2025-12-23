@@ -24,3 +24,7 @@ Thumbs.db
 vcpkg_assimp_install.log
 cmake_version.log
 configure_output.txt
+cmake_config.log
+.gitignore
+configure.log
+cmake_full.log

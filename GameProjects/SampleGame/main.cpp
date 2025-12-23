@@ -2,6 +2,13 @@
 #include "engine/Engine.h"
 #include "engine/Window.h"
 #include "engine/OpenGLRenderer.h"
+#include "engine/Scene.h"
+#include "engine/Components.h"
+#include "engine/Model.h"
+#include "engine/Profiler.h"
+#include "engine/ImGuiLayer.h"
+#include "engine/PluginManager.h"
+#include "engine/Stats.h"
 #include <thread>
 #include <chrono>
 

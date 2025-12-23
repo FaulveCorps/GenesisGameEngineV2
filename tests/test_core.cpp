@@ -1,9 +1,10 @@
 #define CATCH_CONFIG_MAIN
-#include <catch2/catch_all.hpp>
+#include <catch_amalgamated.hpp>
 
 #include "engine/Engine.h"
 #include "engine/Model.h"
 #include "engine/Scene.h"
+#include "engine/Components.h"
 #include "engine/PluginManager.h"
 
 #include <filesystem>

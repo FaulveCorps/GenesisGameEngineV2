@@ -1,10 +1,19 @@
 cmake_minimum_required(VERSION 3.16)
 project(EngineCore LANGUAGES CXX)
 
-# Use CONFIG mode to find vcpkg-provided packages
-find_package(SDL3 CONFIG REQUIRED)
+# Manually set paths to vcpkg-installed packages
+set(VCPKG_INSTALLED "${CMAKE_SOURCE_DIR}/vcpkg/installed/x64-windows" CACHE PATH "vcpkg installed directory")
+
+# SDL3 - includes live under <SDL3/...>, so include root include dir
+set(SDL3_INCLUDE_DIR "${VCPKG_INSTALLED}/include")
+find_library(SDL3_LIBRARY NAMES SDL3 PATHS "${VCPKG_INSTALLED}/lib" NO_DEFAULT_PATH REQUIRED)
+
+# OpenGL
 find_package(OpenGL REQUIRED)
-find_package(assimp CONFIG REQUIRED)
+
+# Assimp - manually find 
+find_path(ASSIMP_INCLUDE_DIR assimp/scene.h PATHS "${VCPKG_INSTALLED}/include" NO_DEFAULT_PATH REQUIRED)
+find_library(ASSIMP_LIBRARY NAMES assimp-vc143-mt PATHS "${VCPKG_INSTALLED}/lib" NO_DEFAULT_PATH REQUIRED)
 
 include(FetchContent)
 FetchContent_Declare(
@@ -30,15 +39,15 @@ add_library(EngineCore STATIC
 )
 
 target_include_directories(EngineCore PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${entt_SOURCE_DIR}/single_include
+  ${CMAKE_CURRENT_SOURCE_DIR}/include
+  ${entt_SOURCE_DIR}/single_include
+  ${SDL3_INCLUDE_DIR}
+  ${ASSIMP_INCLUDE_DIR}
 )
 
 target_compile_features(EngineCore PUBLIC cxx_std_17)
 
-target_link_libraries(EngineCore PRIVATE SDL3::SDL3 OpenGL::GL assimp::assimp)
-
-target_link_libraries(EngineCore PRIVATE SDL3::SDL3)
+target_link_libraries(EngineCore PRIVATE ${SDL3_LIBRARY} OpenGL::GL ${ASSIMP_LIBRARY})
 
 # MSVC: prevent concurrent PDB write conflicts in parallel builds
 if (MSVC)
