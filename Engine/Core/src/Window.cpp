@@ -102,7 +102,7 @@ bool Window::Init(const std::string& title, int width, int height) {
 
 void Window::Shutdown() {
     if (m_glContext) {
-        SDL_GL_DestroyContext(m_glContext);
+        SDL_GL_DeleteContext(m_glContext);
         m_glContext = nullptr;
     }
     if (m_window) {

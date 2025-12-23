@@ -36,3 +36,26 @@ target_compile_definitions(UnitTests PRIVATE PROJECT_SOURCE_DIR="${CMAKE_SOURCE_
 
 include(CTest)
 add_test(NAME UnitTests COMMAND UnitTests)
+
+# Copy runtime DLLs to test output directory on Windows
+if (WIN32)
+    if (NOT DEFINED VCPKG_INSTALLED)
+        set(VCPKG_INSTALLED "${CMAKE_SOURCE_DIR}/vcpkg/installed/x64-windows" CACHE PATH "vcpkg installed directory")
+    endif()
+
+    set(TEST_RUNTIME_DLLS
+        "${VCPKG_INSTALLED}/bin/SDL2.dll"
+        "${VCPKG_INSTALLED}/bin/assimp-vc143-mt.dll"
+        "${VCPKG_INSTALLED}/bin/draco.dll"
+        "${VCPKG_INSTALLED}/bin/kubazip.dll"
+        "${VCPKG_INSTALLED}/bin/minizip.dll"
+        "${VCPKG_INSTALLED}/bin/poly2tri.dll"
+        "${VCPKG_INSTALLED}/bin/pugixml.dll"
+        "${VCPKG_INSTALLED}/bin/zlib1.dll"
+    )
+
+    add_custom_command(TARGET UnitTests POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${TEST_RUNTIME_DLLS} $<TARGET_FILE_DIR:UnitTests>
+        COMMENT "Copying runtime DLLs to test output directory"
+    )
+endif()

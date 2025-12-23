@@ -1,3 +1,4 @@
+#define SDL_MAIN_HANDLED
 #include <iostream>
 #include "engine/Engine.h"
 #include "engine/Window.h"
