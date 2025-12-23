@@ -28,3 +28,5 @@ cmake_config.log
 .gitignore
 configure.log
 cmake_full.log
+.vcpkg_binary_cache
+vcpkg
