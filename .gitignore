@@ -92,3 +92,6 @@ build-vs/_deps/entt-subbuild/x64/Debug/ZERO_CHECK/ZERO_CHECK.tlog/CustomBuild.wr
 build-vs/_deps/entt-subbuild/x64/Debug/ZERO_CHECK/ZERO_CHECK.tlog/ZERO_CHECK.lastbuildstate
 vcpkg
 vcpkg
+vcpkg
+HEADLESS_TEST.md
+TROUBLESHOOTING.md

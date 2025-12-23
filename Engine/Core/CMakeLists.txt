@@ -4,9 +4,9 @@ project(EngineCore LANGUAGES CXX)
 # Manually set paths to vcpkg-installed packages
 set(VCPKG_INSTALLED "${CMAKE_SOURCE_DIR}/vcpkg/installed/x64-windows" CACHE PATH "vcpkg installed directory")
 
-# SDL3 - includes live under <SDL3/...>, so include root include dir
-set(SDL3_INCLUDE_DIR "${VCPKG_INSTALLED}/include")
-find_library(SDL3_LIBRARY NAMES SDL3 PATHS "${VCPKG_INSTALLED}/lib" NO_DEFAULT_PATH REQUIRED)
+# SDL2 - headers under include/SDL2; code uses <SDL.h>
+set(SDL2_INCLUDE_DIR "${VCPKG_INSTALLED}/include/SDL2")
+find_library(SDL2_LIBRARY NAMES SDL2 PATHS "${VCPKG_INSTALLED}/lib" NO_DEFAULT_PATH REQUIRED)
 
 # OpenGL
 find_package(OpenGL REQUIRED)
@@ -41,13 +41,13 @@ add_library(EngineCore STATIC
 target_include_directories(EngineCore PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/include
   ${entt_SOURCE_DIR}/single_include
-  ${SDL3_INCLUDE_DIR}
+  ${SDL2_INCLUDE_DIR}
   ${ASSIMP_INCLUDE_DIR}
 )
 
 target_compile_features(EngineCore PUBLIC cxx_std_17)
 
-target_link_libraries(EngineCore PRIVATE ${SDL3_LIBRARY} OpenGL::GL ${ASSIMP_LIBRARY})
+target_link_libraries(EngineCore PRIVATE ${SDL2_LIBRARY} OpenGL::GL ${ASSIMP_LIBRARY})
 
 # MSVC: prevent concurrent PDB write conflicts in parallel builds
 if (MSVC)

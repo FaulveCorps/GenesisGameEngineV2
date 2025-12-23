@@ -1,7 +1,7 @@
 #include "engine/ImGuiLayer.h"
 #include "engine/Profiler.h"
 #include "engine/Stats.h"
-#include <SDL3/SDL.h>
+#include <SDL.h>
 
 namespace Genesis::Engine {
 

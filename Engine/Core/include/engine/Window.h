@@ -1,7 +1,7 @@
 #pragma once
 
 #include <string>
-#include <SDL3/SDL.h>
+#include <SDL.h>
 
 namespace Genesis::Engine {
 

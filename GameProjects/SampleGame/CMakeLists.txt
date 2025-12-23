@@ -22,7 +22,7 @@ if (WIN32)
     endif()
 
     set(SAMPLEGAME_RUNTIME_DLLS
-        "${VCPKG_INSTALLED}/bin/SDL3.dll"
+          "${VCPKG_INSTALLED}/bin/SDL2.dll"
         "${VCPKG_INSTALLED}/bin/assimp-vc143-mt.dll"
         "${VCPKG_INSTALLED}/bin/draco.dll"
         "${VCPKG_INSTALLED}/bin/kubazip.dll"

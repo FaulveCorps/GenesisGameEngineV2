@@ -1,5 +1,5 @@
 #include "engine/OpenGLRenderer.h"
-#include <SDL3/SDL.h>
+#include <SDL.h>
 #include <iostream>
 
 #ifdef _WIN32
