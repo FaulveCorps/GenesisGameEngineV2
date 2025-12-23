@@ -12,6 +12,13 @@ bool Window::Init(const std::string& title, int width, int height) {
         return false;
     }
 
+    // Request OpenGL 3.3 Core Profile for better compatibility
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+    SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+    SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
+
     // SDL3 has a simplified SDL_CreateWindow signature (no position args)
     m_window = SDL_CreateWindow(title.c_str(),
                                 width,
@@ -19,6 +26,7 @@ bool Window::Init(const std::string& title, int width, int height) {
                                 SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
     if (!m_window) {
         std::cerr << "SDL_CreateWindow failed: " << SDL_GetError() << std::endl;
+        std::cerr << "Note: This may indicate a headless/remote session without GPU access" << std::endl;
         SDL_Quit();
         return false;
     }
@@ -33,6 +41,7 @@ bool Window::Init(const std::string& title, int width, int height) {
         return false;
     }
 
+    std::cout << "Window created successfully: " << width << "x" << height << std::endl;
     return true;
 }
 
