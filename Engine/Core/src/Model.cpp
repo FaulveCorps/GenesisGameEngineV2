@@ -13,8 +13,10 @@ bool Model::Load(const std::string& path) {
 
     if (!m_scene || m_scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !m_scene->mRootNode) {
         std::cerr << "Assimp failed to load model: " << path << std::endl;
+        std::cerr << "Assimp error: " << m_importer.GetErrorString() << std::endl;
         return false;
     }
+    std::cout << "Model loaded: " << path << ", meshes: " << m_scene->mNumMeshes << std::endl;
 
     // Convert aiMeshes into our Mesh objects (CPU-side arrays)
     m_meshes.clear();
@@ -51,6 +53,8 @@ bool Model::Load(const std::string& path) {
             idxs.push_back(face.mIndices[1]);
             idxs.push_back(face.mIndices[2]);
         }
+
+        std::cout << "Mesh " << mi << ": verts=" << verts.size()/3 << ", norms=" << norms.size()/3 << ", tris=" << idxs.size()/3 << std::endl;
 
         Mesh m;
         m.SetData(verts, norms, idxs);

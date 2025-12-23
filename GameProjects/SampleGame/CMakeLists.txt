@@ -37,4 +37,12 @@ if (WIN32)
         COMMAND ${CMAKE_COMMAND} -E copy_if_different ${SAMPLEGAME_RUNTIME_DLLS} $<TARGET_FILE_DIR:SampleGame>
         COMMENT "Copying runtime DLLs to SampleGame output directory"
     )
+
+    # Copy SamplePlugin.dll to SampleGame output directory
+    add_custom_command(TARGET SampleGame POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different 
+            $<TARGET_FILE:SamplePlugin> 
+            $<TARGET_FILE_DIR:SampleGame>
+        COMMENT "Copying SamplePlugin.dll to SampleGame output directory"
+    )
 endif()

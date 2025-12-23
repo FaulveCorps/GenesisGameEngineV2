@@ -60,23 +60,22 @@ bool OpenGLRenderer::Init(SDL_Window* window, SDL_GLContext glContext) {
 
     // Build a simple default shader (fallback embedded sources)
     const std::string defaultVert = R"(
-        #version 120
-        attribute vec3 aPos;
-        attribute vec3 aNormal;
-        varying vec3 vNormal;
+        #version 330 core
+        layout(location = 0) in vec3 aPos;
+        layout(location = 1) in vec3 aNormal;
+        out vec3 vNormal;
         void main() {
             vNormal = aNormal;
-            gl_Position = gl_ModelViewProjectionMatrix * vec4(aPos, 1.0);
+            gl_Position = vec4(aPos, 1.0);
         }
     )";
 
     const std::string defaultFrag = R"(
-        #version 120
-        varying vec3 vNormal;
+        #version 330 core
+        in vec3 vNormal;
+        out vec4 FragColor;
         void main() {
-            vec3 n = normalize(vNormal);
-            float light = max(dot(n, vec3(0.0,0.0,1.0)), 0.0);
-            gl_FragColor = vec4(vec3(0.6,0.7,1.0) * light, 1.0);
+            FragColor = vec4(1.0, 1.0, 1.0, 1.0);
         }
     )";
 
@@ -94,6 +93,12 @@ void OpenGLRenderer::BeginFrame() {
     if (SDL_GL_MakeCurrent(m_window, m_context) != 0) {
         std::cerr << "SDL_GL_MakeCurrent failed in BeginFrame: " << SDL_GetError() << std::endl;
     }
+    
+    // Update viewport in case window was resized
+    int w, h;
+    SDL_GetWindowSize(m_window, &w, &h);
+    if (pglViewport) pglViewport(0, 0, w, h);
+    
     if (pglClear) pglClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     // Ensure the default shader is active where available

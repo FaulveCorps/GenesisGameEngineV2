@@ -41,9 +41,11 @@ int main(int argc, char** argv) {
     auto modelPtr = std::make_shared<Genesis::Engine::Model>();
     if (!modelPtr->Load("assets/models/triangle.obj")) {
         std::cerr << "Failed to load model" << std::endl;
+    } else {
+        std::cout << "Model loaded successfully!" << std::endl;
+        scene.Registry().emplace<Genesis::Engine::ModelComponent>(entity, Genesis::Engine::ModelComponent{ modelPtr });
+        scene.Registry().emplace<Genesis::Engine::Transform>(entity, Genesis::Engine::Transform{});
     }
-    scene.Registry().emplace<Genesis::Engine::ModelComponent>(entity, Genesis::Engine::ModelComponent{ modelPtr });
-    scene.Registry().emplace<Genesis::Engine::Transform>(entity, Genesis::Engine::Transform{});
 
     // Setup profiler and ImGui
     Genesis::Engine::Profiler profiler;
