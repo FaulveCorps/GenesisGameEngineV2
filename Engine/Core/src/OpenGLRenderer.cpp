@@ -300,7 +300,16 @@ void OpenGLRenderer::BeginFrame() {
 
                     pglDrawElements2(0x0004, 3, GL_UNSIGNED_INT, nullptr);
                     auto addrGetError = (void*)SDL_GL_GetProcAddress("glGetError");
-                    if (addrGetError) { using PFNGLGETERRORPROC = unsigned int (APIENTRY*)(); PFNGLGETERRORPROC pglGetError=(PFNGLGETERRORPROC)addrGetError; unsigned int e=pglGetError(); if (e!=0) std::cerr<<"Diag EBO test -> GL error after glDrawElements: 0x"<<std::hex<<e<<std::dec<<std::endl; else std::cout<<"Diag EBO test -> draw succeeded"<<std::endl; }
+                    if (addrGetError) { using PFNGLGETERRORPROC = unsigned int (APIENTRY*)(); PFNGLGETERRORPROC pglGetError=(PFNGLGETERRORPROC)addrGetError; unsigned int e=pglGetError(); if (e!=0) std::cerr<<"Diag EBO test -> GL error after glDrawElements (UINT): 0x"<<std::hex<<e<<std::dec<<std::endl; else std::cout<<"Diag EBO test -> draw (UINT) succeeded"<<std::endl; }
+
+                    // Try with unsigned short indices
+                    {
+                        static const unsigned short triIdxS[] = {0,1,2};
+                        pglBufferData2(GL_ELEMENT_ARRAY_BUFFER, sizeof(triIdxS), triIdxS, GL_STATIC_DRAW);
+                        pglDrawElements2(0x0004, 3, 0x1403 /*GL_UNSIGNED_SHORT*/, nullptr);
+                        if (addrGetError) {
+                            using PFNGLGETERRORPROC = unsigned int (APIENTRY*)(); PFNGLGETERRORPROC pglGetError=(PFNGLGETERRORPROC)addrGetError; unsigned int e2=pglGetError(); if (e2!=0) std::cerr<<"Diag EBO test -> GL error after glDrawElements (USHORT): 0x"<<std::hex<<e2<<std::dec<<std::endl; else std::cout<<"Diag EBO test -> draw (USHORT) succeeded"<<std::endl; }
+                    }
 
                     // Cleanup
                     pglBindVertexArray2(0);

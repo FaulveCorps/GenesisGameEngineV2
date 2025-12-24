@@ -31,6 +31,9 @@ private:
     unsigned int vbo_ = 0;
     unsigned int ebo_ = 0;
     bool uploaded_ = false;
+
+    // Index type used for the element array (GL_UNSIGNED_SHORT or GL_UNSIGNED_INT)
+    unsigned int indexType_ = 0;
 };
 
 } // namespace Genesis::Engine
