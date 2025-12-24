@@ -22,6 +22,9 @@ jobs:
           - gfx: opengl
             extraArgs: ""
             stress: 10
+          - gfx: bgfx
+            extraArgs: ""
+            stress: 10
           - gfx: vulkan
             extraArgs: "--vulkan-triangle --force-vulkan-swapchain"
             stress: 200
@@ -49,8 +52,50 @@ jobs:
     - name: Install vcpkg dependencies
       shell: powershell
       run: |
-        Write-Host "Installing vcpkg packages (sdl2, assimp, vulkan-loader)..."
-        .\vcpkg\vcpkg.exe install sdl2:x64-windows assimp:x64-windows vulkan-loader:x64-windows --disable-metrics
+        Write-Host "Installing vcpkg packages (sdl2, assimp, vulkan-loader, bgfx)..."
+        .\vcpkg\vcpkg.exe install sdl2:x64-windows assimp:x64-windows vulkan-loader:x64-windows bgfx:x64-windows --disable-metrics
+
+    - name: Try installing bgfx tools (shaderc) via vcpkg (best-effort)
+      if: matrix.gfx == 'bgfx'
+      shell: powershell
+      continue-on-error: true
+      run: |
+        Write-Host "Attempting to install bgfx tools (shaderc) via vcpkg..."
+        .\vcpkg\vcpkg.exe install bgfx-tools:x64-windows --disable-metrics || Write-Host "bgfx-tools port not available or failed; continuing"
+        Write-Host "Attempting to install shaderc port via vcpkg (google shaderc) as a fallback..."
+        .\vcpkg\vcpkg.exe install shaderc:x64-windows --disable-metrics || Write-Host "shaderc port not available or failed; continuing"
+        # List likely shaderc locations
+        $candidates = @(
+          "./vcpkg/installed/x64-windows/tools/bgfx/shaderc.exe",
+          "./vcpkg/installed/x64-windows/tools/bgfx-shaderc/shaderc.exe",
+          "./vcpkg/installed/x64-windows/tools/shaderc/shaderc.exe",
+          "./vcpkg/installed/x64-windows/tools/shaderc\bin\shaderc.exe"
+        )
+        foreach ($c in $candidates) { if (Test-Path $c) { Write-Host "Found shaderc at: $c"; exit 0 } }
+        Write-Host "shaderc not found in vcpkg-installed tools; the compile step will run but may be a no-op"
+
+    - name: Compile bgfx shaders (strict)
+      if: matrix.gfx == 'bgfx'
+      shell: powershell
+      run: |
+        Write-Host "Compiling bgfx shaders (requires shaderc to be available)..."
+        powershell -ExecutionPolicy Bypass -File .\scripts\compile_bgfx_shaders.ps1
+        Write-Host "Checking for compiled shader binaries under assets/shaders/bgfx/..."
+        $bins = Get-ChildItem -Path .\assets\shaders\bgfx -Recurse -Include '*.bin' -ErrorAction SilentlyContinue
+        if (-not $bins) {
+          Write-Host "ERROR: Compiled bgfx shader binaries not found. Ensure 'shaderc' is available or precompile shaders locally." -ForegroundColor Red
+          Write-Host "Tip: run .\scripts\compile_bgfx_shaders.ps1 locally or install shaderc via vcpkg (bgfx-tools) on runners." -ForegroundColor Yellow
+          exit 1
+        }
+        Write-Host "Found compiled shaders:"
+        $bins | ForEach-Object { Write-Host "  -> $($_.FullName)" }
+
+    - name: Upload compiled bgfx shaders (artifact)
+      if: matrix.gfx == 'bgfx'
+      uses: actions/upload-artifact@v4
+      with:
+        name: bgfx-shaders
+        path: assets/shaders/bgfx/**
 
     - name: Setup ProcDump (optional)
       shell: powershell

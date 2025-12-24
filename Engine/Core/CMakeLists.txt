@@ -70,9 +70,72 @@ find_path(BGFX_INCLUDE_DIR NAMES bgfx/bgfx.h PATHS "${VCPKG_INSTALLED}/include" 
 find_library(BGFX_LIBRARY NAMES bgfx PATHS "${VCPKG_INSTALLED}/lib" NO_DEFAULT_PATH)
 if (BGFX_INCLUDE_DIR AND BGFX_LIBRARY)
   message(STATUS "bgfx found: include=${BGFX_INCLUDE_DIR} lib=${BGFX_LIBRARY}")
-  target_compile_definitions(EngineCore PRIVATE HAVE_BGFX=1)
-  target_include_directories(EngineCore PRIVATE ${BGFX_INCLUDE_DIR})
-  target_link_libraries(EngineCore PRIVATE ${BGFX_LIBRARY})
+  # Only enable BUILD-level HAVE_BGFX for non-Debug builds (avoids linking release bgfx libs into Debug builds)
+  target_compile_definitions(EngineCore PRIVATE
+    $<$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>,$<CONFIG:MinSizeRel>>:HAVE_BGFX=1>
+  )
+  target_include_directories(EngineCore PRIVATE
+    $<$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>,$<CONFIG:MinSizeRel>>:${BGFX_INCLUDE_DIR}>
+  )
+  # Link bgfx only for non-Debug builds to avoid CRT/iterator mismatches with vcpkg release libs
+  target_link_libraries(EngineCore PRIVATE
+    $<$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>,$<CONFIG:MinSizeRel>>:${BGFX_LIBRARY}>
+  )
+
+  # bgfx has additional dependencies (bx, bimg, and optionally bimg_decode/encode, lodepng, miniz, squish, tinyexr)
+  find_library(BX_LIBRARY NAMES bx PATHS "${VCPKG_INSTALLED}/lib" NO_DEFAULT_PATH)
+  find_library(BIMG_LIBRARY NAMES bimg PATHS "${VCPKG_INSTALLED}/lib" NO_DEFAULT_PATH)
+  find_library(BIMG_DECODE_LIBRARY NAMES bimg_decode PATHS "${VCPKG_INSTALLED}/lib" NO_DEFAULT_PATH)
+  find_library(BIMG_ENCODE_LIBRARY NAMES bimg_encode PATHS "${VCPKG_INSTALLED}/lib" NO_DEFAULT_PATH)
+  find_library(LODEPNG_LIBRARY NAMES lodepng liblodepng lodepng-c PATHS "${VCPKG_INSTALLED}/lib" NO_DEFAULT_PATH)
+  find_library(MINIZ_LIBRARY NAMES miniz PATHS "${VCPKG_INSTALLED}/lib" NO_DEFAULT_PATH)
+  find_library(SQUISH_LIBRARY NAMES squish PATHS "${VCPKG_INSTALLED}/lib" NO_DEFAULT_PATH)
+  find_library(TINYEXR_LIBRARY NAMES tinyexr PATHS "${VCPKG_INSTALLED}/lib" NO_DEFAULT_PATH)
+
+  set(BGFX_DEP_LIBS)
+  if(BX_LIBRARY)
+    list(APPEND BGFX_DEP_LIBS ${BX_LIBRARY})
+  endif()
+  if(BIMG_LIBRARY)
+    list(APPEND BGFX_DEP_LIBS ${BIMG_LIBRARY})
+  endif()
+  if(BIMG_DECODE_LIBRARY)
+    list(APPEND BGFX_DEP_LIBS ${BIMG_DECODE_LIBRARY})
+  endif()
+  if(BIMG_ENCODE_LIBRARY)
+    list(APPEND BGFX_DEP_LIBS ${BIMG_ENCODE_LIBRARY})
+  endif()
+  if(LODEPNG_LIBRARY)
+    list(APPEND BGFX_DEP_LIBS ${LODEPNG_LIBRARY})
+  endif()
+  if(MINIZ_LIBRARY)
+    list(APPEND BGFX_DEP_LIBS ${MINIZ_LIBRARY})
+  endif()
+  if(SQUISH_LIBRARY)
+    list(APPEND BGFX_DEP_LIBS ${SQUISH_LIBRARY})
+  endif()
+  if(TINYEXR_LIBRARY)
+    list(APPEND BGFX_DEP_LIBS ${TINYEXR_LIBRARY})
+  endif()
+
+  if(BGFX_DEP_LIBS)
+    message(STATUS "bgfx dependencies found: ${BGFX_DEP_LIBS}")
+    # Link bgfx dependencies only for non-Debug builds to avoid CRT/iterator mismatches
+    target_link_libraries(EngineCore PRIVATE
+      $<$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>,$<CONFIG:MinSizeRel>>:${BGFX_DEP_LIBS}>
+    )
+
+    # Optional helper target to compile bgfx shaders. The helper script will detect a local shaderc
+    # and attempt compilation; it is safe to run manually and is non-fatal for builds.
+    if (WIN32)
+      add_custom_target(bgfx-shaders
+        COMMAND ${CMAKE_COMMAND} -E echo "Running bgfx shader helper (non-fatal)..."
+        COMMAND powershell -ExecutionPolicy Bypass -File ${CMAKE_SOURCE_DIR}/scripts/compile_bgfx_shaders.ps1
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        COMMENT "bgfx shader compile helper (optional)"
+      )
+    endif()
+  endif()
 else()
   message(STATUS "bgfx not found; BgfxRenderer will be disabled at runtime")
 endif()
