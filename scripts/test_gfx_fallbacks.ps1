@@ -17,12 +17,13 @@ $orders = @(
 )
 
 function Run-Case($order, $strict) {
-    $args = "--gfx-order $order"
-    if ($strict) { $args += " --gfx-strict" }
-    Write-Output "\n--- Running: $args ---"
+    $argsArray = @("--gfx-order", $order)
+    if ($strict) { $argsArray += "--gfx-strict" }
+    $argsSummary = $argsArray -join ' '
+    Write-Output "\n--- Running: $argsSummary ---"
     $start = Get-Date
     # Run and capture output for a short time
-    $proc = Start-Process -FilePath $exePath -ArgumentList $args -RedirectStandardOutput "out.log" -RedirectStandardError "err.log" -WindowStyle Hidden -PassThru
+    $proc = Start-Process -FilePath $exePath -ArgumentList $argsArray -RedirectStandardOutput "out.log" -RedirectStandardError "err.log" -WindowStyle Hidden -PassThru
     Start-Sleep -Seconds $timeoutSec
     if (-not $proc.HasExited) {
         try { $proc.Kill() } catch {};
@@ -31,7 +32,7 @@ function Run-Case($order, $strict) {
     $out = Get-Content "out.log" -ErrorAction SilentlyContinue
     $err = Get-Content "err.log" -ErrorAction SilentlyContinue
     # Find selection lines
-    $sel = $out | Select-String "GraphicsFactory: selected|skipping VulkanRenderer|VulkanRenderer: Win32 fallback|no swapchain" -AllMatches
+    $sel = $out | Select-String "GraphicsFactory: selected|skipping VulkanRenderer|VulkanRenderer: Win32 fallback|no swapchain|GraphicsFactory: skipping VulkanRenderer|GraphicsFactory: selected" -AllMatches
     if ($sel) { $sel | ForEach-Object { Write-Output $_.ToString() } } else { Write-Output "No selection-specific messages found (see out.log)" }
     Write-Output "Exit snippet:"
     $out | Select-Object -Last 8 | ForEach-Object { Write-Output "  $_" }

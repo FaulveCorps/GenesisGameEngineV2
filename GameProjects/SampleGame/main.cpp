@@ -68,7 +68,9 @@ int main(int argc, char** argv) {
                 gfxOrder.push_back(arg.substr(start, comma - start));
                 start = comma + 1;
             }
-            break;
+            // advance past the argument we just consumed
+            ++i;
+            continue;
         }
         if (std::string(argv[i]) == "--gfx-strict") {
             gfxStrict = true;

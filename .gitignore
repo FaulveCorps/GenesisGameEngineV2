@@ -96,3 +96,5 @@ vcpkg
 HEADLESS_TEST.md
 TROUBLESHOOTING.md
 SDL2_MIGRATION.md
+err.log
+out.log
