@@ -110,8 +110,10 @@ int main(int argc, char** argv) {
 
     bool stressMode = false;
     int stressFrames = 0; // 0 == disabled, -1 == infinite
+    bool showHelp = false;
     for (int i = 1; i < argc; ++i) {
-        if (std::string(argv[i]) == "--stress") {
+        std::string a = argv[i];
+        if (a == "--stress") {
             stressMode = true;
             if (i + 1 < argc) {
                 try { stressFrames = std::stoi(argv[i+1]); } catch (...) { stressFrames = -1; }
@@ -121,6 +123,21 @@ int main(int argc, char** argv) {
             std::cout << "Stress mode enabled. frames=" << stressFrames << std::endl;
             break;
         }
+        if (a == "--help" || a == "-h") {
+            showHelp = true;
+            break;
+        }
+    }
+
+    if (showHelp) {
+        std::cout << "SampleGame usage:\n";
+        std::cout << "  --help|-h               Show this help message\n";
+        std::cout << "  --stress [N]            Run in stress mode for N frames (omit N for infinite)\n";
+        std::cout << "  --gfx-order A,B,C       Comma-separated renderer priority (examples: Vulkan,OpenGL or OpenGL,DirectX)\n";
+        std::cout << "  --gfx-strict            Require Vulkan to be present-capable (swapchain + present) to be selected" << std::endl;
+        window.Shutdown();
+        Genesis::Engine::Shutdown();
+        return 0;
     }
 
 #ifdef DIRECTX_SMOKE_TEST
