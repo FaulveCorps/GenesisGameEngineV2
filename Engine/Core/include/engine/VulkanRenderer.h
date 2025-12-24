@@ -3,6 +3,7 @@
 #include "engine/IGraphics.h"
 #include <memory>
 #include <SDL.h>
+#include <vector>
 
 #ifdef HAVE_VULKAN
 #include <vulkan/vulkan.h>
@@ -24,6 +25,24 @@ private:
     SDL_Window* m_window = nullptr;
 #ifdef HAVE_VULKAN
     VkInstance m_instance = VK_NULL_HANDLE;
+    VkSurfaceKHR m_surface = VK_NULL_HANDLE;
+    VkPhysicalDevice m_physicalDevice = VK_NULL_HANDLE;
+    VkDevice m_device = VK_NULL_HANDLE;
+    VkQueue m_graphicsQueue = VK_NULL_HANDLE;
+    VkQueue m_presentQueue = VK_NULL_HANDLE;
+    uint32_t m_graphicsQueueFamily = UINT32_MAX;
+    uint32_t m_presentQueueFamily = UINT32_MAX;
+    VkSwapchainKHR m_swapchain = VK_NULL_HANDLE;
+    std::vector<VkImage> m_swapchainImages;
+    std::vector<VkImageView> m_swapchainImageViews;
+    VkFormat m_swapchainImageFormat = VK_FORMAT_UNDEFINED;
+    VkExtent2D m_swapchainExtent{};
+    VkCommandPool m_commandPool = VK_NULL_HANDLE;
+    std::vector<VkCommandBuffer> m_commandBuffers;
+    VkSemaphore m_imageAvailableSemaphore = VK_NULL_HANDLE;
+    VkSemaphore m_renderFinishedSemaphore = VK_NULL_HANDLE;
+    VkFence m_inFlightFence = VK_NULL_HANDLE;
+    bool m_sdlVulkan = false;
 #endif
     bool m_available = false;
 };
