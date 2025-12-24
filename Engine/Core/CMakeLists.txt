@@ -32,6 +32,7 @@ add_library(EngineCore STATIC
     src/VulkanRenderer.cpp
     src/D3D12Renderer.cpp
     src/BgfxRenderer.cpp
+    src/WgpuRenderer.cpp
     src/GraphicsFactory.cpp
     src/Model.cpp
     src/Mesh.cpp
@@ -125,16 +126,6 @@ if (BGFX_INCLUDE_DIR AND BGFX_LIBRARY)
       $<$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>,$<CONFIG:MinSizeRel>>:${BGFX_DEP_LIBS}>
     )
 
-    # Optional helper target to compile bgfx shaders. The helper script will detect a local shaderc
-    # and attempt compilation; it is safe to run manually and is non-fatal for builds.
-    if (WIN32)
-      add_custom_target(bgfx-shaders
-        COMMAND ${CMAKE_COMMAND} -E echo "Running bgfx shader helper (non-fatal)..."
-        COMMAND powershell -ExecutionPolicy Bypass -File ${CMAKE_SOURCE_DIR}/scripts/compile_bgfx_shaders.ps1
-        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-        COMMENT "bgfx shader compile helper (optional)"
-      )
-    endif()
   endif()
 else()
   message(STATUS "bgfx not found; BgfxRenderer will be disabled at runtime")
@@ -143,6 +134,19 @@ endif()
 # MSVC: prevent concurrent PDB write conflicts in parallel builds
 if (MSVC)
   target_compile_options(EngineCore PRIVATE /FS)
+endif()
+
+# WGPU / Dawn (optional) - prefer vcpkg-provided Dawn or wgpu-native
+# Try to detect common header/library names in vcpkg-installed include/lib
+find_path(WGPU_INCLUDE_DIR NAMES wgpu.h webgpu.h dawn/dawn_proc.h PATHS "${VCPKG_INSTALLED}/include" NO_DEFAULT_PATH)
+find_library(WGPU_LIBRARY NAMES dawn wgpu webgpu wgpu_native PATHS "${VCPKG_INSTALLED}/lib" NO_DEFAULT_PATH)
+if (WGPU_INCLUDE_DIR AND WGPU_LIBRARY)
+  message(STATUS "WGPU/Dawn found: include=${WGPU_INCLUDE_DIR} lib=${WGPU_LIBRARY}")
+  target_compile_definitions(EngineCore PRIVATE HAVE_WGPU=1)
+  target_include_directories(EngineCore PRIVATE ${WGPU_INCLUDE_DIR})
+  target_link_libraries(EngineCore PRIVATE ${WGPU_LIBRARY})
+else()
+  message(STATUS "WGPU/Dawn not found; WgpuRenderer will be disabled at runtime")
 endif()
 
 # Windows: link D3D12 and DXGI libraries for D3D12 renderer

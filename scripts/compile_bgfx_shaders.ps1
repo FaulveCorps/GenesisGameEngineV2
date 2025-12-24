@@ -8,6 +8,9 @@ $repoRoot = Resolve-Path "$scriptDir\.."
 $shadersSrc = Join-Path $repoRoot "assets\shaders\bgfx"
 $shadercCandidates = @(
     "$repoRoot\vcpkg\installed\x64-windows\tools\bgfx\shaderc.exe",
+    "$repoRoot\vcpkg\installed\x64-windows\tools\shaderc\shaderc.exe",
+    "$repoRoot\tools\shaderc\shaderc.exe",
+    "$repoRoot\tools\shaderc\bin\shaderc.exe",
     "shaderc.exe",
     "bgfx-shaderc.exe"
 )

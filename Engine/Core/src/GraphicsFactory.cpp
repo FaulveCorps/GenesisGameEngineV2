@@ -4,6 +4,7 @@
 #include "engine/VulkanRenderer.h"
 #include "engine/D3D12Renderer.h"
 #include "engine/BgfxRenderer.h"
+#include "engine/WgpuRenderer.h"
 #include <algorithm>
 #include <iostream>
 
@@ -18,9 +19,9 @@ static std::string toLower(const std::string& s) {
 std::unique_ptr<IGraphicsAPI> GraphicsFactory::CreateRenderer(SDL_Window* window, SDL_GLContext glContext, const std::vector<std::string>& priorityOrder, bool requirePresentForVulkan) {
     if (!window) return nullptr;
 
-    // If no order specified, use sensible default: Vulkan, DirectX, OpenGL
+    // If no order specified, use sensible default: prefer wgpu, then Vulkan, DirectX, OpenGL
     std::vector<std::string> order = priorityOrder;
-    if (order.empty()) order = { "vulkan", "directx", "opengl" };
+    if (order.empty()) order = { "wgpu", "vulkan", "d3d12", "directx", "opengl", "bgfx" };
 
     for (const auto& entry : order) {
         std::string name = toLower(entry);
@@ -63,6 +64,18 @@ std::unique_ptr<IGraphicsAPI> GraphicsFactory::CreateRenderer(SDL_Window* window
             r->Shutdown();
 #else
             std::cout << "GraphicsFactory: skipping BgfxRenderer (not _WIN32)" << std::endl;
+#endif
+        } else if (name == "wgpu") {
+#ifdef HAVE_WGPU
+            auto r = std::make_unique<WgpuRenderer>();
+            if (r->Init(window, glContext)) {
+                std::cout << "GraphicsFactory: selected WgpuRenderer" << std::endl;
+                return r;
+            }
+            std::cerr << "GraphicsFactory: WgpuRenderer::Init failed; trying next" << std::endl;
+            r->Shutdown();
+#else
+            std::cout << "GraphicsFactory: skipping WgpuRenderer (HAVE_WGPU not defined)" << std::endl;
 #endif
         } else if (name == "d3d12" || name == "directx12") {
 #ifdef _WIN32
