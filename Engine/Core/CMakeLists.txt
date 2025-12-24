@@ -30,6 +30,7 @@ add_library(EngineCore STATIC
     src/OpenGLRenderer.cpp
     src/DirectXRenderer.cpp
     src/VulkanRenderer.cpp
+    src/D3D12Renderer.cpp
     src/GraphicsFactory.cpp
     src/Model.cpp
     src/Mesh.cpp
@@ -66,4 +67,9 @@ endif()
 # MSVC: prevent concurrent PDB write conflicts in parallel builds
 if (MSVC)
   target_compile_options(EngineCore PRIVATE /FS)
+endif()
+
+# Windows: link D3D12 and DXGI libraries for D3D12 renderer
+if (WIN32)
+  target_link_libraries(EngineCore PRIVATE d3d12 dxgi)
 endif()
