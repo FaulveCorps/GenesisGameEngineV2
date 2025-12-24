@@ -53,7 +53,11 @@ jobs:
       shell: powershell
       run: |
         Write-Host "Installing vcpkg packages (sdl2, assimp, vulkan-loader)..."
-        .\vcpkg\vcpkg.exe install sdl2:x64-windows assimp:x64-windows vulkan-loader:x64-windows --disable-metrics
+        $gfx = '${{ matrix.gfx }}'
+        $packages = "sdl2:x64-windows assimp:x64-windows vulkan-loader:x64-windows"
+        if ($gfx -eq 'wgpu') { Write-Host "Matrix gfx is wgpu; adding dawn:x64-windows to installation list"; $packages += " dawn:x64-windows" }
+        Write-Host "Installing packages: $packages"
+        .\vcpkg\vcpkg.exe install $packages --disable-metrics
 
     - name: Try installing Dawn/wgpu via vcpkg (best-effort)
       if: matrix.gfx == 'wgpu'
@@ -72,6 +76,28 @@ jobs:
         )
         foreach ($c in $candidates) { if (Test-Path $c) { Write-Host "Found candidate wgpu/dawn file: $c" } }
         Write-Host "Dawn/wgpu installation attempt complete (may have failed). The build will detect presence via CMake."
+
+    - name: Verify Dawn/wgpu installed (required for gfx=wgpu)
+      if: matrix.gfx == 'wgpu'
+      shell: powershell
+      run: |
+        Write-Host "Verifying Dawn/wgpu installation..."
+        $headerPaths = @(
+          "./vcpkg/installed/x64-windows/include/dawn/dawn_proc.h",
+          "./vcpkg/installed/x64-windows/include/webgpu/webgpu.h",
+          "./vcpkg/installed/x64-windows/include/wgpu.h"
+        )
+        $libPaths = @(
+          "./vcpkg/installed/x64-windows/lib/webgpu_dawn.lib",
+          "./vcpkg/installed/x64-windows/lib/dawn.lib",
+          "./vcpkg/installed/x64-windows/lib/wgpu.lib"
+        )
+        $foundHeader = $false
+        foreach ($p in $headerPaths) { if (Test-Path $p) { Write-Host "Found header: $p"; $foundHeader = $true; break } }
+        if (-not $foundHeader) { Write-Error "Dawn/wgpu headers not found in vcpkg installed tree - ensure dawn:x64-windows is available or pre-cached"; exit 1 }
+        $foundLib = $false
+        foreach ($p in $libPaths) { if (Test-Path $p) { Write-Host "Found lib: $p"; $foundLib = $true; break } }
+        if (-not $foundLib) { Write-Error "Dawn/wgpu libs not found in vcpkg installed tree - ensure dawn:x64-windows is available or pre-cached"; exit 1 }
 
     - name: Download prebuilt shaderc (fallback)
       if: matrix.gfx == 'bgfx'

@@ -19,8 +19,13 @@ TEST_CASE("WGPU smoke test") {
     }
 
     REQUIRE(renderer->Init(win, ctx));
-    renderer->BeginFrame();
-    renderer->EndFrame();
+
+    // Run a few frames to exercise swapchain acquire/present and device tick
+    for (int i = 0; i < 3; ++i) {
+        renderer->BeginFrame();
+        renderer->EndFrame();
+    }
+
     renderer->Shutdown();
 
     SDL_GL_DeleteContext(ctx);

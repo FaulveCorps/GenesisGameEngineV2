@@ -10,11 +10,33 @@
 namespace Genesis::Engine {
 
 // Device error callback for uncaptured device errors
-static void OnDeviceError(const WGPUDevice* /*device*/, WGPUErrorType /*type*/, WGPUStringView message, void* /*userdata1*/, void* /*userdata2*/) {
+static void OnDeviceError(const WGPUDevice* /*device*/, WGPUErrorType type, WGPUStringView message, void* userdata1, void* /*userdata2*/) {
+    // If userdata1 is a WgpuRenderer*, forward to instance handler for proper state updates
+    if (userdata1) {
+        WgpuRenderer* self = reinterpret_cast<WgpuRenderer*>(userdata1);
+        if (self) {
+            self->HandleUncapturedDeviceError(type, message);
+            return;
+        }
+    }
+
     char buf[1024];
     int n = snprintf(buf, sizeof(buf), "%.*s", (int)message.length, message.data);
     (void)n;
     std::cerr << "WgpuRenderer: device error: " << buf << std::endl;
+}
+
+
+void WgpuRenderer::HandleUncapturedDeviceError(WGPUErrorType type, WGPUStringView message) {
+    std::string msg;
+    msg.assign(message.data, message.length);
+    std::cerr << "WgpuRenderer: uncaptured device error: " << msg << std::endl;
+
+    if (type == WGPUErrorType_DeviceLost) {
+        std::cerr << "WgpuRenderer: device lost detected; marking device as lost and scheduling reinit" << std::endl;
+        m_deviceLost = true;
+        m_initialized = false;
+    }
 }
 
 bool WgpuRenderer::Init(SDL_Window* window, SDL_GLContext /*glContext*/) {
@@ -46,7 +68,7 @@ bool WgpuRenderer::Init(SDL_Window* window, SDL_GLContext /*glContext*/) {
         // Create a device (attach uncaptured error callback)
         WGPUDeviceDescriptor deviceDesc = WGPU_DEVICE_DESCRIPTOR_INIT;
         deviceDesc.uncapturedErrorCallbackInfo2.callback = &OnDeviceError;
-        deviceDesc.uncapturedErrorCallbackInfo2.userdata1 = nullptr;
+        deviceDesc.uncapturedErrorCallbackInfo2.userdata1 = this;
         deviceDesc.uncapturedErrorCallbackInfo2.userdata2 = nullptr;
 
         WGPUDevice device = m_adapter.CreateDevice(&deviceDesc);
@@ -201,6 +223,19 @@ void WgpuRenderer::BeginFrame() {
 #ifdef HAVE_WGPU
     if (!m_initialized) return;
 
+    // If the device was reported lost, try to reinitialize on the next frame
+    if (m_deviceLost) {
+        std::cerr << "WgpuRenderer: device lost; attempting reinitialize" << std::endl;
+        // Try a graceful shutdown and reinit sequence
+        Shutdown();
+        if (!Init(m_window, nullptr)) {
+            std::cerr << "WgpuRenderer: reinitialize failed; will retry on next frame" << std::endl;
+            return;
+        }
+        // Clear the device-lost flag on successful reinit
+        m_deviceLost = false;
+    }
+
     // Window size
     int w = 0, h = 0;
     if (m_window) {
@@ -254,6 +289,7 @@ void WgpuRenderer::BeginFrame() {
         WGPUTextureView surfaceView = wgpuTextureCreateView(surfaceTex.texture, nullptr);
         if (!surfaceView) {
             std::cerr << "WgpuRenderer: failed to create surface texture view" << std::endl;
+            if (surfaceTex.texture) { wgpuTextureRelease(surfaceTex.texture); }
             return;
         }
 
@@ -261,6 +297,7 @@ void WgpuRenderer::BeginFrame() {
         if (!encoder) {
             std::cerr << "WgpuRenderer: failed to create command encoder" << std::endl;
             wgpuTextureViewRelease(surfaceView);
+            if (surfaceTex.texture) { wgpuTextureRelease(surfaceTex.texture); }
             return;
         }
 
@@ -283,6 +320,7 @@ void WgpuRenderer::BeginFrame() {
             std::cerr << "WgpuRenderer: failed to begin render pass" << std::endl;
             wgpuCommandEncoderFinish(encoder, nullptr);
             wgpuTextureViewRelease(surfaceView);
+            if (surfaceTex.texture) { wgpuTextureRelease(surfaceTex.texture); }
             return;
         }
 
@@ -301,6 +339,11 @@ void WgpuRenderer::BeginFrame() {
 
         // Present
         wgpuSurfacePresent(m_surface);
+
+        // Release the acquired swapchain texture to avoid leaking references
+        if (surfaceTex.texture) {
+            wgpuTextureRelease(surfaceTex.texture);
+        }
 
     } else {
         // Fallback: create an offscreen render target sized to the SDL window
@@ -410,6 +453,8 @@ void WgpuRenderer::Shutdown() {
     if (m_surface) {
         // Unconfigure will destroy any created swapchain textures
         wgpuSurfaceUnconfigure(m_surface);
+        // Release the surface reference
+        wgpuSurfaceRelease(m_surface);
         m_surface = nullptr;
         m_surfaceConfigured = false;
     }

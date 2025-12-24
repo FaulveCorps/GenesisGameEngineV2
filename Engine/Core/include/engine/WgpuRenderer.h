@@ -47,6 +47,12 @@ private:
     WGPURenderPipeline m_pipeline = nullptr;
     WGPUShaderModule m_vsModule = nullptr;
     WGPUShaderModule m_fsModule = nullptr;
+
+    // Device lost handling
+    bool m_deviceLost = false;
+
+    // Internal handler for uncaptured device errors (invoked from C callback)
+    void HandleUncapturedDeviceError(WGPUErrorType type, WGPUStringView message);
 #endif
 };
 
