@@ -4,6 +4,10 @@
 #include <iostream>
 #include <vector>
 #include <algorithm>
+#include <cstdlib>
+#include <cstdint>
+#include <cstring>
+#include <cctype>
 #ifdef _WIN32
 #include <vulkan/vulkan_win32.h>
 #endif
@@ -232,9 +236,29 @@ bool VulkanRenderer::Init(SDL_Window* window, SDL_GLContext /*glContext*/) {
     std::cout << "VulkanRenderer: obtained graphics and present queues" << std::endl;
     // If we fell back to Win32 surface creation (SDL didn't expose Vulkan), do not attempt a full swapchain here — this environment sometimes crashes with certain drivers.
     if (!m_sdlVulkan) {
-        std::cout << "VulkanRenderer: Win32 fallback - skipping swapchain creation to avoid driver issues. Device initialized for smoke test." << std::endl;
-        m_available = true;
-        return true;
+        // Allow a force option through an environment variable for controlled testing:
+        // set GENESIS_FORCE_VULKAN_SWAPCHAIN=1 to force swapchain creation despite Win32 fallback.
+        const char* env = std::getenv("GENESIS_FORCE_VULKAN_SWAPCHAIN");
+        bool forceSwap = false;
+        std::cout << "VulkanRenderer: GENESIS_FORCE_VULKAN_SWAPCHAIN raw env='" << (env ? env : "(null)") << "'" << std::endl;
+        if (env) {
+            std::string ev(env);
+            // trim whitespace
+            auto trim = [](std::string &s){ while(!s.empty() && std::isspace((unsigned char)s.front())) s.erase(s.begin()); while(!s.empty() && std::isspace((unsigned char)s.back())) s.pop_back(); };
+            trim(ev);
+            std::transform(ev.begin(), ev.end(), ev.begin(), [](unsigned char c){ return std::tolower(c); });
+            if (ev == "1" || ev == "true") forceSwap = true;
+            std::cout << "VulkanRenderer: parsed GENESIS_FORCE_VULKAN_SWAPCHAIN='" << ev << "'" << std::endl;
+        }
+        std::cout << "VulkanRenderer: forceSwap=" << (forceSwap ? "true" : "false") << std::endl;
+        if (!forceSwap) {
+            std::cout << "VulkanRenderer: Win32 fallback - skipping swapchain creation to avoid driver issues. Device initialized for smoke test." << std::endl;
+            m_available = true;
+            return true;
+        } else {
+            std::cout << "VulkanRenderer: Win32 fallback - forcing swapchain creation due to GENESIS_FORCE_VULKAN_SWAPCHAIN=1" << std::endl;
+            // proceed to create swapchain below (risky; used only for controlled tests)
+        }
     }
 
     // Create swapchain
@@ -334,6 +358,105 @@ bool VulkanRenderer::Init(SDL_Window* window, SDL_GLContext /*glContext*/) {
 
     // Command pool
     VkCommandPoolCreateInfo cpci{};
+    // Before creating command pool, optionally create host image for triangle test (env GENESIS_VULKAN_TRIANGLE)
+    const char* triEnv2 = std::getenv("GENESIS_VULKAN_TRIANGLE");
+    if (triEnv2) {
+        std::string tev(triEnv2);
+        auto trim = [](std::string &s){ while(!s.empty() && std::isspace((unsigned char)s.front())) s.erase(s.begin()); while(!s.empty() && std::isspace((unsigned char)s.back())) s.pop_back(); };
+        trim(tev);
+        std::transform(tev.begin(), tev.end(), tev.begin(), [](unsigned char c){ return std::tolower(c); });
+        if (tev == "1" || tev == "true") {
+            m_triangleEnabled = true;
+            if (m_hostImage == VK_NULL_HANDLE) {
+                std::cout << "VulkanRenderer: GENESIS_VULKAN_TRIANGLE enabled; creating host image" << std::endl;
+                auto findMemoryType = [&](uint32_t typeFilter, VkMemoryPropertyFlags props)->uint32_t {
+                    VkPhysicalDeviceMemoryProperties memProps{};
+                    vkGetPhysicalDeviceMemoryProperties(m_physicalDevice, &memProps);
+                    for (uint32_t i = 0; i < memProps.memoryTypeCount; ++i) {
+                        if ((typeFilter & (1u << i)) && (memProps.memoryTypes[i].propertyFlags & props) == props) return i;
+                    }
+                    return UINT32_MAX;
+                };
+
+                VkImageCreateInfo hic{};
+                hic.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+                hic.imageType = VK_IMAGE_TYPE_2D;
+                hic.format = m_swapchainImageFormat;
+                hic.extent = { m_swapchainExtent.width, m_swapchainExtent.height, 1 };
+                hic.mipLevels = 1;
+                hic.arrayLayers = 1;
+                hic.samples = VK_SAMPLE_COUNT_1_BIT;
+                hic.tiling = VK_IMAGE_TILING_LINEAR; // host-accessible
+                hic.usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+                hic.initialLayout = VK_IMAGE_LAYOUT_PREINITIALIZED;
+
+                if (vkCreateImage(m_device, &hic, nullptr, &m_hostImage) != VK_SUCCESS) {
+                    std::cerr << "VulkanRenderer: failed to create host image for triangle" << std::endl;
+                    m_triangleEnabled = false;
+                } else {
+                    VkMemoryRequirements mr{};
+                    vkGetImageMemoryRequirements(m_device, m_hostImage, &mr);
+                    uint32_t mtype = findMemoryType(mr.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+                    if (mtype == UINT32_MAX) mtype = findMemoryType(mr.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+                    if (mtype == UINT32_MAX) {
+                        std::cerr << "VulkanRenderer: no suitable host-visible memory for host image" << std::endl;
+                        vkDestroyImage(m_device, m_hostImage, nullptr);
+                        m_hostImage = VK_NULL_HANDLE;
+                        m_triangleEnabled = false;
+                    } else {
+                        VkMemoryAllocateInfo mai{};
+                        mai.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+                        mai.allocationSize = mr.size;
+                        mai.memoryTypeIndex = mtype;
+                        if (vkAllocateMemory(m_device, &mai, nullptr, &m_hostImageMemory) != VK_SUCCESS) {
+                            std::cerr << "VulkanRenderer: failed to allocate host image memory" << std::endl;
+                            vkDestroyImage(m_device, m_hostImage, nullptr);
+                            m_hostImage = VK_NULL_HANDLE;
+                            m_triangleEnabled = false;
+                        } else {
+                            vkBindImageMemory(m_device, m_hostImage, m_hostImageMemory, 0);
+                            // Fill
+                            VkImageSubresource sub{ VK_IMAGE_ASPECT_COLOR_BIT, 0, 0 };
+                            VkSubresourceLayout layout{};
+                            vkGetImageSubresourceLayout(m_device, m_hostImage, &sub, &layout);
+                            void* data = nullptr;
+                            vkMapMemory(m_device, m_hostImageMemory, 0, VK_WHOLE_SIZE, 0, &data);
+                            uint8_t* base = (uint8_t*)data + layout.offset;
+                            uint32_t w = m_swapchainExtent.width;
+                            uint32_t h = m_swapchainExtent.height;
+                            uint32_t rowPitch = static_cast<uint32_t>(layout.rowPitch);
+                            bool isBGRA = (m_swapchainImageFormat == VK_FORMAT_B8G8R8A8_SRGB || m_swapchainImageFormat == VK_FORMAT_B8G8R8A8_UNORM);
+                            uint8_t bg_r = 26, bg_g = 153, bg_b = 51, bg_a = 255;
+                            uint8_t tri_r = 255, tri_g = 40, tri_b = 40, tri_a = 255;
+                            float vx0 = w * 0.5f, vy0 = h * 0.2f;
+                            float vx1 = w * 0.2f, vy1 = h * 0.8f;
+                            float vx2 = w * 0.8f, vy2 = h * 0.8f;
+                            auto edge = [](float ax, float ay, float bx, float by, float cx, float cy){ return (cx - ax) * (by - ay) - (cy - ay) * (bx - ax); };
+                            float area = edge(vx0, vy0, vx1, vy1, vx2, vy2);
+                            for (uint32_t y = 0; y < h; ++y) {
+                                uint8_t* row = base + y * rowPitch;
+                                for (uint32_t x = 0; x < w; ++x) {
+                                    float px = (float)x + 0.5f, py = (float)y + 0.5f;
+                                    float w0 = edge(vx1, vy1, vx2, vy2, px, py) / area;
+                                    float w1 = edge(vx2, vy2, vx0, vy0, px, py) / area;
+                                    float w2 = edge(vx0, vy0, vx1, vy1, px, py) / area;
+                                    bool inside = (w0 >= 0.0f && w1 >= 0.0f && w2 >= 0.0f) || (w0 <= 0.0f && w1 <= 0.0f && w2 <= 0.0f);
+                                    uint8_t r = inside ? tri_r : bg_r;
+                                    uint8_t g = inside ? tri_g : bg_g;
+                                    uint8_t b = inside ? tri_b : bg_b;
+                                    uint8_t a = tri_a;
+                                    if (isBGRA) { row[x*4 + 0] = b; row[x*4 + 1] = g; row[x*4 + 2] = r; row[x*4 + 3] = a; }
+                                    else { row[x*4 + 0] = r; row[x*4 + 1] = g; row[x*4 + 2] = b; row[x*4 + 3] = a; }
+                                }
+                            }
+                            vkUnmapMemory(m_device, m_hostImageMemory);
+                            std::cout << "VulkanRenderer: host triangle image populated (" << w << "x" << h << ")" << std::endl;
+                        }
+                    }
+                }
+            }
+        }
+    }
     cpci.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
     cpci.queueFamilyIndex = m_graphicsQueueFamily;
     cpci.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
@@ -359,43 +482,110 @@ bool VulkanRenderer::Init(SDL_Window* window, SDL_GLContext /*glContext*/) {
     fci.flags = VK_FENCE_CREATE_SIGNALED_BIT;
     vkCreateFence(m_device, &fci, nullptr, &m_inFlightFence);
 
-    // Record simple command buffers that clear each swapchain image to a color
+    // Record command buffers that either clear each swapchain image or copy a host-generated triangle image into it
     for (uint32_t i = 0; i < imageCount; ++i) {
         VkCommandBufferBeginInfo cbbi{};
         cbbi.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
         vkBeginCommandBuffer(m_commandBuffers[i], &cbbi);
 
-        VkImageMemoryBarrier barrier{};
-        barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-        barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-        barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        barrier.image = m_swapchainImages[i];
-        barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        barrier.subresourceRange.baseMipLevel = 0;
-        barrier.subresourceRange.levelCount = 1;
-        barrier.subresourceRange.baseArrayLayer = 0;
-        barrier.subresourceRange.layerCount = 1;
-        barrier.srcAccessMask = 0;
-        barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        if (m_triangleEnabled && m_hostImage != VK_NULL_HANDLE) {
+            // Transition swapchain image -> TRANSFER_DST
+            VkImageMemoryBarrier barrierDst{};
+            barrierDst.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            barrierDst.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+            barrierDst.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+            barrierDst.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            barrierDst.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            barrierDst.image = m_swapchainImages[i];
+            barrierDst.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            barrierDst.subresourceRange.baseMipLevel = 0;
+            barrierDst.subresourceRange.levelCount = 1;
+            barrierDst.subresourceRange.baseArrayLayer = 0;
+            barrierDst.subresourceRange.layerCount = 1;
+            barrierDst.srcAccessMask = 0;
+            barrierDst.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
 
-        vkCmdPipelineBarrier(m_commandBuffers[i], VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1, &barrier);
+            // Transition host image -> TRANSFER_SRC
+            VkImageMemoryBarrier barrierSrc{};
+            barrierSrc.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            barrierSrc.oldLayout = VK_IMAGE_LAYOUT_PREINITIALIZED;
+            barrierSrc.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+            barrierSrc.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            barrierSrc.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            barrierSrc.image = m_hostImage;
+            barrierSrc.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            barrierSrc.subresourceRange.baseMipLevel = 0;
+            barrierSrc.subresourceRange.levelCount = 1;
+            barrierSrc.subresourceRange.baseArrayLayer = 0;
+            barrierSrc.subresourceRange.layerCount = 1;
+            barrierSrc.srcAccessMask = 0;
+            barrierSrc.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
 
-        VkClearColorValue clearColor; clearColor.float32[0] = 0.1f; clearColor.float32[1] = 0.6f; clearColor.float32[2] = 0.2f; clearColor.float32[3] = 1.0f;
-        VkImageSubresourceRange range{};
-        range.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        range.baseMipLevel = 0; range.levelCount = 1;
-        range.baseArrayLayer = 0; range.layerCount = 1;
+            VkImageMemoryBarrier barriers[] = { barrierSrc, barrierDst };
+            vkCmdPipelineBarrier(m_commandBuffers[i], VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 2, barriers);
 
-        vkCmdClearColorImage(m_commandBuffers[i], m_swapchainImages[i], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearColor, 1, &range);
+            VkImageCopy copyRegion{};
+            copyRegion.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            copyRegion.srcSubresource.mipLevel = 0;
+            copyRegion.srcSubresource.baseArrayLayer = 0;
+            copyRegion.srcSubresource.layerCount = 1;
+            copyRegion.srcOffset = { 0, 0, 0 };
+            copyRegion.dstSubresource = copyRegion.srcSubresource;
+            copyRegion.dstOffset = { 0, 0, 0 };
+            copyRegion.extent = { m_swapchainExtent.width, m_swapchainExtent.height, 1 };
 
-        // transition to present
-        barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-        barrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-        barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-        barrier.dstAccessMask = 0;
-        vkCmdPipelineBarrier(m_commandBuffers[i], VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0, 0, nullptr, 0, nullptr, 1, &barrier);
+            vkCmdCopyImage(m_commandBuffers[i], m_hostImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, m_swapchainImages[i], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
+
+            // transition swapchain to present
+            VkImageMemoryBarrier barrierPresent{};
+            barrierPresent.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            barrierPresent.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+            barrierPresent.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+            barrierPresent.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            barrierPresent.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            barrierPresent.image = m_swapchainImages[i];
+            barrierPresent.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            barrierPresent.subresourceRange.baseMipLevel = 0;
+            barrierPresent.subresourceRange.levelCount = 1;
+            barrierPresent.subresourceRange.baseArrayLayer = 0;
+            barrierPresent.subresourceRange.layerCount = 1;
+            barrierPresent.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+            barrierPresent.dstAccessMask = 0;
+
+            vkCmdPipelineBarrier(m_commandBuffers[i], VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0, 0, nullptr, 0, nullptr, 1, &barrierPresent);
+        } else {
+            VkImageMemoryBarrier barrier{};
+            barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+            barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+            barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            barrier.image = m_swapchainImages[i];
+            barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            barrier.subresourceRange.baseMipLevel = 0;
+            barrier.subresourceRange.levelCount = 1;
+            barrier.subresourceRange.baseArrayLayer = 0;
+            barrier.subresourceRange.layerCount = 1;
+            barrier.srcAccessMask = 0;
+            barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+
+            vkCmdPipelineBarrier(m_commandBuffers[i], VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1, &barrier);
+
+            VkClearColorValue clearColor; clearColor.float32[0] = 0.1f; clearColor.float32[1] = 0.6f; clearColor.float32[2] = 0.2f; clearColor.float32[3] = 1.0f;
+            VkImageSubresourceRange range{};
+            range.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            range.baseMipLevel = 0; range.levelCount = 1;
+            range.baseArrayLayer = 0; range.layerCount = 1;
+
+            vkCmdClearColorImage(m_commandBuffers[i], m_swapchainImages[i], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearColor, 1, &range);
+
+            // transition to present
+            barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+            barrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+            barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+            barrier.dstAccessMask = 0;
+            vkCmdPipelineBarrier(m_commandBuffers[i], VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0, 0, nullptr, 0, nullptr, 1, &barrier);
+        }
 
         vkEndCommandBuffer(m_commandBuffers[i]);
     }
@@ -506,6 +696,10 @@ void VulkanRenderer::Shutdown() {
         m_swapchainImageViews.clear();
 
         if (m_swapchain != VK_NULL_HANDLE) vkDestroySwapchainKHR(m_device, m_swapchain, nullptr);
+
+        // Destroy optional host image used for triangle testing
+        if (m_hostImage != VK_NULL_HANDLE) { vkDestroyImage(m_device, m_hostImage, nullptr); m_hostImage = VK_NULL_HANDLE; }
+        if (m_hostImageMemory != VK_NULL_HANDLE) { vkFreeMemory(m_device, m_hostImageMemory, nullptr); m_hostImageMemory = VK_NULL_HANDLE; }
 
         vkDestroyDevice(m_device, nullptr);
         m_device = VK_NULL_HANDLE;

@@ -46,6 +46,11 @@ private:
     VkSemaphore m_renderFinishedSemaphore = VK_NULL_HANDLE;
     VkFence m_inFlightFence = VK_NULL_HANDLE;
     bool m_sdlVulkan = false;
+
+    // Optional host-side image used for shaderless triangle blit testing
+    VkImage m_hostImage = VK_NULL_HANDLE;
+    VkDeviceMemory m_hostImageMemory = VK_NULL_HANDLE;
+    bool m_triangleEnabled = false;
 #endif
     bool m_available = false;
 };

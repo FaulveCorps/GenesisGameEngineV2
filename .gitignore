@@ -99,3 +99,8 @@ SDL2_MIGRATION.md
 err.log
 out.log
 Tools/Procdump.zip
+out_debug2.log
+out_debug3.log
+out_forced_vulkan_debug.log
+out_forced_vulkan.log
+out_triangle.log
