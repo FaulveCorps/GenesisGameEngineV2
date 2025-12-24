@@ -6,6 +6,7 @@
 #include "engine/DirectXRenderer.h"
 #include "engine/VulkanRenderer.h"
 #include "engine/Scene.h"
+#include "engine/GraphicsFactory.h"
 
 // Temporary: enable to skip loading GPU meshes and exercise DirectX backend only
 // #define DIRECTX_SMOKE_TEST 0 // disabled to allow model loading for GL testing
@@ -35,29 +36,50 @@ int main(int argc, char** argv) {
     }
 
     // Use OpenGLRenderer for main testing by default. Define VULKAN_SMOKE_TEST or DIRECTX_SMOKE_TEST to try other backends.
+// Renderer selection: prefer explicit smoke-test flags, otherwise try a configurable priority order via GraphicsFactory
 #ifdef VULKAN_SMOKE_TEST
-    Genesis::Engine::VulkanRenderer renderer;
-    if (!renderer.Init(window.GetSDLWindow(), window.GetGLContext())) {
-        std::cerr << "Vulkan renderer initialization failed or Vulkan unavailable" << std::endl;
-        // Continue running so we can see fallback behavior
+    // Explicit Vulkan smoke path
+    std::unique_ptr<Genesis::Engine::IGraphicsAPI> rendererPtr = std::make_unique<Genesis::Engine::VulkanRenderer>();
+    if (!rendererPtr->Init(window.GetSDLWindow(), window.GetGLContext())) {
+        std::cerr << "Vulkan smoke init failed or Vulkan unavailable" << std::endl;
+        // continue so we can observe fallback behavior if desired
     }
 #elif defined(DIRECTX_SMOKE_TEST)
-    Genesis::Engine::DirectXRenderer renderer;
-    if (!renderer.Init(window.GetSDLWindow(), window.GetGLContext())) {
-        std::cerr << "DirectX renderer initialization failed" << std::endl;
+    // Explicit DirectX smoke path
+    std::unique_ptr<Genesis::Engine::IGraphicsAPI> rendererPtr = std::make_unique<Genesis::Engine::DirectXRenderer>();
+    if (!rendererPtr->Init(window.GetSDLWindow(), window.GetGLContext())) {
+        std::cerr << "DirectX smoke init failed" << std::endl;
         window.Shutdown();
         Genesis::Engine::Shutdown();
         return -1;
     }
 #else
-    Genesis::Engine::OpenGLRenderer renderer;
-    if (!renderer.Init(window.GetSDLWindow(), window.GetGLContext())) {
-        std::cerr << "Failed to initialize OpenGL renderer" << std::endl;
+    // Default: use runtime factory which tries Vulkan->DirectX->OpenGL (configurable via --gfx-order)
+    std::vector<std::string> gfxOrder;
+    for (int i = 1; i < argc; ++i) {
+        if (std::string(argv[i]) == "--gfx-order" && i + 1 < argc) {
+            std::string arg = argv[i+1];
+            // split by comma
+            size_t start = 0;
+            while (start < arg.size()) {
+                size_t comma = arg.find(',', start);
+                if (comma == std::string::npos) comma = arg.size();
+                gfxOrder.push_back(arg.substr(start, comma - start));
+                start = comma + 1;
+            }
+            break;
+        }
+    }
+    // Use factory
+    std::unique_ptr<Genesis::Engine::IGraphicsAPI> rendererPtr = Genesis::Engine::GraphicsFactory::CreateRenderer(window.GetSDLWindow(), window.GetGLContext(), gfxOrder);
+    if (!rendererPtr) {
+        std::cerr << "Failed to initialize any renderer" << std::endl;
         window.Shutdown();
         Genesis::Engine::Shutdown();
         return -1;
     }
 #endif
+
 
     // Create scene and an entity with a model
     Genesis::Engine::Scene scene;
@@ -114,7 +136,7 @@ int main(int argc, char** argv) {
         profiler.BeginFrame();
         Genesis::Engine::Stats::Reset();
 
-        renderer.BeginFrame();
+        rendererPtr->BeginFrame();
 
         // scene update/render
         scene.Update(0.016);
@@ -125,7 +147,7 @@ int main(int argc, char** argv) {
         gui.Render(profiler);
         std::cout << "Main: after gui.Render" << std::endl;
 
-        renderer.EndFrame();
+        rendererPtr->EndFrame();
         std::cout << "Main: after renderer.EndFrame" << std::endl;
         profiler.EndFrame();
         std::cout << "Main: after profiler.EndFrame" << std::endl;
@@ -150,7 +172,7 @@ int main(int argc, char** argv) {
     // Unload plugins explicitly (optional)
     pluginManager.UnloadAll();
 
-    renderer.Shutdown();
+    rendererPtr->Shutdown();
     window.Shutdown();
     Genesis::Engine::Shutdown();
     return 0;

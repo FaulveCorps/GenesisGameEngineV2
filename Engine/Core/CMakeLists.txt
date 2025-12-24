@@ -30,6 +30,7 @@ add_library(EngineCore STATIC
     src/OpenGLRenderer.cpp
     src/DirectXRenderer.cpp
     src/VulkanRenderer.cpp
+    src/GraphicsFactory.cpp
     src/Model.cpp
     src/Mesh.cpp
     src/Shader.cpp
