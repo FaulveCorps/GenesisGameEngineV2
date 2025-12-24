@@ -11,6 +11,7 @@ find_library(SDL2_LIBRARY NAMES SDL2 PATHS "${VCPKG_INSTALLED}/lib" NO_DEFAULT_P
 # OpenGL
 find_package(OpenGL REQUIRED)
 
+
 # Assimp - manually find 
 find_path(ASSIMP_INCLUDE_DIR assimp/scene.h PATHS "${VCPKG_INSTALLED}/include" NO_DEFAULT_PATH REQUIRED)
 find_library(ASSIMP_LIBRARY NAMES assimp-vc143-mt PATHS "${VCPKG_INSTALLED}/lib" NO_DEFAULT_PATH REQUIRED)
@@ -28,6 +29,7 @@ add_library(EngineCore STATIC
     src/Window.cpp
     src/OpenGLRenderer.cpp
     src/DirectXRenderer.cpp
+    src/VulkanRenderer.cpp
     src/Model.cpp
     src/Mesh.cpp
     src/Shader.cpp
@@ -48,6 +50,17 @@ target_include_directories(EngineCore PUBLIC
 target_compile_features(EngineCore PUBLIC cxx_std_17)
 
 target_link_libraries(EngineCore PRIVATE ${SDL2_LIBRARY} OpenGL::GL ${ASSIMP_LIBRARY})
+
+# Vulkan (optional) - prefer system/vcpkg-provided Vulkan
+find_package(Vulkan)
+if (Vulkan_FOUND)
+  message(STATUS "Vulkan found: ${Vulkan_VERSION}")
+  # Expose HAVE_VULKAN to C++ sources so we can guard Vulkan headers
+  target_compile_definitions(EngineCore PRIVATE HAVE_VULKAN=1)
+  target_link_libraries(EngineCore PRIVATE Vulkan::Vulkan)
+else()
+  message(STATUS "Vulkan not found; VulkanRenderer will be disabled at runtime")
+endif()
 
 # MSVC: prevent concurrent PDB write conflicts in parallel builds
 if (MSVC)

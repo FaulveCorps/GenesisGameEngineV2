@@ -456,11 +456,6 @@ void Mesh::Draw() const {
                             std::cerr << "Mesh::Draw -> glDrawElements not available for fallback" << std::endl;
                         }
                     }
-                            }
-                        } else {
-                            std::cerr << "Mesh::Draw -> glDrawElements not available for fallback" << std::endl;
-                        }
-                    }
                 }
             }
         }

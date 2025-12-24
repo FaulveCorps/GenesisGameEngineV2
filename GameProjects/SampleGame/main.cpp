@@ -4,10 +4,14 @@
 #include "engine/Window.h"
 #include "engine/OpenGLRenderer.h"
 #include "engine/DirectXRenderer.h"
+#include "engine/VulkanRenderer.h"
 #include "engine/Scene.h"
 
 // Temporary: enable to skip loading GPU meshes and exercise DirectX backend only
 // #define DIRECTX_SMOKE_TEST 0 // disabled to allow model loading for GL testing
+
+// Quick smoke test for Vulkan renderer: define to try Vulkan path at startup
+#define VULKAN_SMOKE_TEST 1
 #include "engine/Components.h"
 #include "engine/Model.h"
 #include "engine/Profiler.h"
@@ -30,7 +34,22 @@ int main(int argc, char** argv) {
         return -1;
     }
 
-    // Use OpenGLRenderer for main testing
+    // Use OpenGLRenderer for main testing by default. Define VULKAN_SMOKE_TEST or DIRECTX_SMOKE_TEST to try other backends.
+#ifdef VULKAN_SMOKE_TEST
+    Genesis::Engine::VulkanRenderer renderer;
+    if (!renderer.Init(window.GetSDLWindow(), window.GetGLContext())) {
+        std::cerr << "Vulkan renderer initialization failed or Vulkan unavailable" << std::endl;
+        // Continue running so we can see fallback behavior
+    }
+#elif defined(DIRECTX_SMOKE_TEST)
+    Genesis::Engine::DirectXRenderer renderer;
+    if (!renderer.Init(window.GetSDLWindow(), window.GetGLContext())) {
+        std::cerr << "DirectX renderer initialization failed" << std::endl;
+        window.Shutdown();
+        Genesis::Engine::Shutdown();
+        return -1;
+    }
+#else
     Genesis::Engine::OpenGLRenderer renderer;
     if (!renderer.Init(window.GetSDLWindow(), window.GetGLContext())) {
         std::cerr << "Failed to initialize OpenGL renderer" << std::endl;
@@ -38,6 +57,7 @@ int main(int argc, char** argv) {
         Genesis::Engine::Shutdown();
         return -1;
     }
+#endif
 
     // Create scene and an entity with a model
     Genesis::Engine::Scene scene;
