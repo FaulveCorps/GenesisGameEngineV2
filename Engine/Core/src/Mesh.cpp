@@ -2,6 +2,11 @@
 #include <SDL.h>
 #include <iostream>
 
+// Minimal GL boolean fallback (used by vertex attrib setup) if GL headers are not included
+#ifndef GL_FALSE
+static const unsigned char GL_FALSE = 0;
+#endif
+
 namespace Genesis::Engine {
 
 // Destructor placed after function pointer declarations for visibility
@@ -85,9 +90,25 @@ void Mesh::UploadToGPU() {
 
     std::cout << "Mesh::UploadToGPU -> funcs: genVAO=" << (pglGenVertexArrays?1:0) << " bindVAO=" << (pglBindVertexArray?1:0) << " genBuf=" << (pglGenBuffers?1:0) << " bindBuf=" << (pglBindBuffer?1:0) << " bufferData=" << (pglBufferData?1:0) << " enableAttr=" << (pglEnableVertexAttribArray?1:0) << " attribPtr=" << (pglVertexAttribPointer?1:0) << std::endl;
 
+    // Sanity: print current GL context and function pointer addresses
+    std::cout << "Mesh::UploadToGPU -> SDL_GL_GetCurrentContext=" << (void*)SDL_GL_GetCurrentContext() << " pglBindBuffer=" << (void*)pglBindBuffer << " pglBindVertexArray=" << (void*)pglBindVertexArray << " pglEnableVertexAttribArray=" << (void*)pglEnableVertexAttribArray << std::endl;
+
     // Create VAO
     pglGenVertexArrays(1, &vao_);
     pglBindVertexArray(vao_);
+
+    // Verify VAO is bound
+    {
+        using PFNGLGETINTEGERVPROC = void (APIENTRY*)(unsigned int, int*);
+        PFNGLGETINTEGERVPROC pglGetIntegerv = nullptr;
+        auto addr = (void*)SDL_GL_GetProcAddress("glGetIntegerv");
+        if (addr) pglGetIntegerv = (PFNGLGETINTEGERVPROC)addr;
+        if (pglGetIntegerv) {
+            int vaoBind = 0; const unsigned int GL_VERTEX_ARRAY_BINDING = 0x85B5;
+            pglGetIntegerv(GL_VERTEX_ARRAY_BINDING, &vaoBind);
+            std::cout << "Mesh::UploadToGPU -> after bind VAO GL_VERTEX_ARRAY_BINDING=" << vaoBind << std::endl;
+        }
+    }
 
     // VBO
     pglGenBuffers(1, &vbo_);
@@ -156,10 +177,10 @@ void Mesh::UploadToGPU() {
         pglVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, (const void*)0);
     }
 
-    // Unbind VAO
-    pglBindVertexArray(0);
+    // NOTE: keep VAO bound for diagnosis (some drivers have surprising VAO semantics)
+    // pglBindVertexArray(0);
     uploaded_ = true;
-    std::cout << "Mesh::UploadToGPU -> vao=" << vao_ << " vbo=" << vbo_ << " ebo=" << ebo_ << "" << std::endl;
+    std::cout << "Mesh::UploadToGPU -> SDL_GL_GetCurrentContext=" << (void*)SDL_GL_GetCurrentContext() << " vao=" << vao_ << " vbo=" << vbo_ << " ebo=" << ebo_ << "" << std::endl;
 }
 
 void Mesh::Draw() const {
@@ -174,6 +195,23 @@ void Mesh::Draw() const {
         std::cout << "Mesh::Draw -> using VAO path (vao=" << vao_ << ")" << std::endl;
         std::cout << "Mesh::Draw -> vao=" << vao_ << " vbo=" << vbo_ << " ebo=" << ebo_ << std::endl;
         pglBindVertexArray(vao_);
+
+        // Debug: print current GL context, VAO binding, and function pointer addresses
+        std::cout << "Mesh::Draw -> SDL_GL_GetCurrentContext=" << (void*)SDL_GL_GetCurrentContext() << " pglBindVertexArray=" << (void*)pglBindVertexArray << " pglBindBuffer=" << (void*)pglBindBuffer << " pglDrawElements=" << (void*)pglDrawElements << std::endl;
+        // If pglBindVertexArray pointer is missing, attempt to resolve it
+        if (!pglBindVertexArray) ResolveGLFunction((void**)&pglBindVertexArray, "glBindVertexArray");
+        // Note: resolve glGetVertexAttribiv locally where it is used below
+        {
+            using PFNGLGETINTEGERVPROC = void (APIENTRY*)(unsigned int, int*);
+            PFNGLGETINTEGERVPROC pglGetIntegerv = nullptr;
+            auto addrGetIntegerv = (void*)SDL_GL_GetProcAddress("glGetIntegerv");
+            if (addrGetIntegerv) pglGetIntegerv = (PFNGLGETINTEGERVPROC)addrGetIntegerv;
+            if (pglGetIntegerv) {
+                int vaoBind = 0; const unsigned int GL_VERTEX_ARRAY_BINDING = 0x85B5;
+                pglGetIntegerv(GL_VERTEX_ARRAY_BINDING, &vaoBind);
+                std::cout << "Mesh::Draw -> after bind VAO GL_VERTEX_ARRAY_BINDING=" << vaoBind << std::endl;
+            }
+        }
         // Ensure EBO is bound (some drivers require re-binding per VAO or context)
         if (ebo_) {
             if (!pglBindBuffer) ResolveGLFunction((void**)&pglBindBuffer, "glBindBuffer");

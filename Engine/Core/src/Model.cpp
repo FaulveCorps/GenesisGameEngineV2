@@ -2,6 +2,7 @@
 #include "engine/Stats.h"
 #include <assimp/Importer.hpp>
 #include <assimp/postprocess.h>
+#include <SDL.h>
 #include <iostream>
 
 
@@ -58,8 +59,9 @@ bool Model::Load(const std::string& path) {
 
         Mesh m;
         m.SetData(verts, norms, idxs);
+        std::cout << "Model::Load -> about to UploadToGPU (SDL_GL_GetCurrentContext=" << (void*)SDL_GL_GetCurrentContext() << ")" << std::endl;
         m.UploadToGPU();
-        std::cout << "Uploaded mesh VAO=" << "(unknown)" << std::endl; // upload logs from Mesh itself
+        std::cout << "Model::Load -> returned from UploadToGPU" << std::endl;
         m_meshes.push_back(std::move(m));
     }
 

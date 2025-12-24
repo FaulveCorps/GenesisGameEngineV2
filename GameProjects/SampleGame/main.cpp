@@ -3,7 +3,11 @@
 #include "engine/Engine.h"
 #include "engine/Window.h"
 #include "engine/OpenGLRenderer.h"
+#include "engine/DirectXRenderer.h"
 #include "engine/Scene.h"
+
+// Temporary: enable to skip loading GPU meshes and exercise DirectX backend only
+// #define DIRECTX_SMOKE_TEST 0 // disabled to allow model loading for GL testing
 #include "engine/Components.h"
 #include "engine/Model.h"
 #include "engine/Profiler.h"
@@ -26,9 +30,10 @@ int main(int argc, char** argv) {
         return -1;
     }
 
+    // Use OpenGLRenderer for main testing
     Genesis::Engine::OpenGLRenderer renderer;
     if (!renderer.Init(window.GetSDLWindow(), window.GetGLContext())) {
-        std::cerr << "Failed to initialize renderer" << std::endl;
+        std::cerr << "Failed to initialize OpenGL renderer" << std::endl;
         window.Shutdown();
         Genesis::Engine::Shutdown();
         return -1;
@@ -38,6 +43,9 @@ int main(int argc, char** argv) {
     Genesis::Engine::Scene scene;
 
     auto entity = scene.Registry().create();
+#ifdef DIRECTX_SMOKE_TEST
+    std::cout << "DirectX smoke test: skipping model load" << std::endl;
+#else
     auto modelPtr = std::make_shared<Genesis::Engine::Model>();
     if (!modelPtr->Load("assets/models/triangle.obj")) {
         std::cerr << "Failed to load model" << std::endl;
@@ -46,12 +54,17 @@ int main(int argc, char** argv) {
         scene.Registry().emplace<Genesis::Engine::ModelComponent>(entity, Genesis::Engine::ModelComponent{ modelPtr });
         scene.Registry().emplace<Genesis::Engine::Transform>(entity, Genesis::Engine::Transform{});
     }
+#endif
 
     // Setup profiler and ImGui
     Genesis::Engine::Profiler profiler;
     Genesis::Engine::ImGuiLayer gui(window.GetSDLWindow(), window.GetGLContext());
 
     std::cout << "Entering main loop (close window to exit)..." << std::endl;
+
+#ifdef DIRECTX_SMOKE_TEST
+    // Note: define DIRECTX_SMOKE_TEST in project CMake flags if running smoke test automatically
+#endif
 
     // Attempt to load sample plugin (demonstrates plugin API)
     Genesis::Engine::PluginManager pluginManager;

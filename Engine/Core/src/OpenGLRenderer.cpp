@@ -246,6 +246,68 @@ void OpenGLRenderer::BeginFrame() {
                 }
                 pglDrawArrays(0x0004 /*GL_TRIANGLES*/, 0, 3);
                 pglBindVertexArray(0);
+
+                // Additional diagnostic: create an EBO-backed triangle VAO and draw with glDrawElements
+                auto addrGenVAO2 = (void*)SDL_GL_GetProcAddress("glGenVertexArrays");
+                auto addrBindVAO2 = (void*)SDL_GL_GetProcAddress("glBindVertexArray");
+                auto addrGenBuf2 = (void*)SDL_GL_GetProcAddress("glGenBuffers");
+                auto addrBindBuf2 = (void*)SDL_GL_GetProcAddress("glBindBuffer");
+                auto addrBufData2 = (void*)SDL_GL_GetProcAddress("glBufferData");
+                auto addrEnableAttr2 = (void*)SDL_GL_GetProcAddress("glEnableVertexAttribArray");
+                auto addrAttribPtr2 = (void*)SDL_GL_GetProcAddress("glVertexAttribPointer");
+                auto addrDrawElements2 = (void*)SDL_GL_GetProcAddress("glDrawElements");
+                if (addrGenVAO2 && addrBindVAO2 && addrGenBuf2 && addrBindBuf2 && addrBufData2 && addrEnableAttr2 && addrAttribPtr2 && addrDrawElements2) {
+                    using PFNGLGENVERTEXARRAYSPROC = void (APIENTRY*)(int, unsigned int*);
+                    using PFNGLBINDVERTEXARRAYPROC = void (APIENTRY*)(unsigned int);
+                    using PFNGLGENBUFFERSPROC = void (APIENTRY*)(int, unsigned int*);
+                    using PFNGLBINDBUFFERPROC = void (APIENTRY*)(unsigned int, unsigned int);
+                    using PFNGLBUFFERDATAPROC = void (APIENTRY*)(unsigned int, ptrdiff_t, const void*, unsigned int);
+                    using PFNGLENABLEVERTEXATTRIBARRAYPROC = void (APIENTRY*)(unsigned int);
+                    using PFNGLVERTEXATTRIBPOINTERPROC = void (APIENTRY*)(unsigned int, int, unsigned int, unsigned char, int, const void*);
+                    using PFNGLDRAWELEMENTSPROC = void (APIENTRY*)(unsigned int, int, unsigned int, const void*);
+
+                    auto pglGenVertexArrays2 = (PFNGLGENVERTEXARRAYSPROC)addrGenVAO2;
+                    auto pglBindVertexArray2 = (PFNGLBINDVERTEXARRAYPROC)addrBindVAO2;
+                    auto pglGenBuffers2 = (PFNGLGENBUFFERSPROC)addrGenBuf2;
+                    auto pglBindBuffer2 = (PFNGLBINDBUFFERPROC)addrBindBuf2;
+                    auto pglBufferData2 = (PFNGLBUFFERDATAPROC)addrBufData2;
+                    auto pglEnableVertexAttribArray2 = (PFNGLENABLEVERTEXATTRIBARRAYPROC)addrEnableAttr2;
+                    auto pglVertexAttribPointer2 = (PFNGLVERTEXATTRIBPOINTERPROC)addrAttribPtr2;
+                    auto pglDrawElements2 = (PFNGLDRAWELEMENTSPROC)addrDrawElements2;
+
+                    unsigned int tmpVAO=0, tmpVBO=0, tmpEBO=0;
+                    static const float triVerts2[] = { 0.0f,0.8f,0.0f, -0.8f,-0.8f,0.0f, 0.8f,-0.8f,0.0f };
+                    static const unsigned int triIdx[] = {0,1,2};
+                    pglGenVertexArrays2(1,&tmpVAO);
+                    pglBindVertexArray2(tmpVAO);
+                    pglGenBuffers2(1,&tmpVBO);
+                    const unsigned int GL_ARRAY_BUFFER = 0x8892; const unsigned int GL_ELEMENT_ARRAY_BUFFER = 0x8893; const unsigned int GL_STATIC_DRAW = 0x88E4; const unsigned int GL_FLOAT = 0x1406; const unsigned int GL_UNSIGNED_INT = 0x1405;
+                    pglBindBuffer2(GL_ARRAY_BUFFER, tmpVBO);
+                    pglBufferData2(GL_ARRAY_BUFFER, sizeof(triVerts2), triVerts2, GL_STATIC_DRAW);
+                    pglGenBuffers2(1,&tmpEBO);
+                    pglBindBuffer2(GL_ELEMENT_ARRAY_BUFFER, tmpEBO);
+                    pglBufferData2(GL_ELEMENT_ARRAY_BUFFER, sizeof(triIdx), triIdx, GL_STATIC_DRAW);
+                    pglEnableVertexAttribArray2(0);
+                    pglVertexAttribPointer2(0,3,GL_FLOAT,0,0,(const void*)0);
+
+                    // Query bindings
+                    auto addrGetIntegerv = (void*)SDL_GL_GetProcAddress("glGetIntegerv");
+                    if (addrGetIntegerv) {
+                        using PFNGLGETINTEGERVPROC = void (APIENTRY*)(unsigned int, int*);
+                        PFNGLGETINTEGERVPROC pglGetIntegerv = (PFNGLGETINTEGERVPROC)addrGetIntegerv;
+                        int boundArray=0,boundElem=0; const unsigned int GL_ARRAY_BUFFER_BINDING=0x8894; const unsigned int GL_ELEMENT_ARRAY_BUFFER_BINDING=0x8895; pglGetIntegerv(GL_ARRAY_BUFFER_BINDING,&boundArray); pglGetIntegerv(GL_ELEMENT_ARRAY_BUFFER_BINDING,&boundElem); std::cout<<"Diag EBO test -> GL_ARRAY_BUFFER_BINDING="<<boundArray<<" GL_ELEMENT_ARRAY_BUFFER_BINDING="<<boundElem<<std::endl;
+                    }
+
+                    pglDrawElements2(0x0004, 3, GL_UNSIGNED_INT, nullptr);
+                    auto addrGetError = (void*)SDL_GL_GetProcAddress("glGetError");
+                    if (addrGetError) { using PFNGLGETERRORPROC = unsigned int (APIENTRY*)(); PFNGLGETERRORPROC pglGetError=(PFNGLGETERRORPROC)addrGetError; unsigned int e=pglGetError(); if (e!=0) std::cerr<<"Diag EBO test -> GL error after glDrawElements: 0x"<<std::hex<<e<<std::dec<<std::endl; else std::cout<<"Diag EBO test -> draw succeeded"<<std::endl; }
+
+                    // Cleanup
+                    pglBindVertexArray2(0);
+                    if (tmpVBO) { auto addrDelBuf=(void*)SDL_GL_GetProcAddress("glDeleteBuffers"); if (addrDelBuf) { using PFNGLDELETEBUFFERSPROC=void(APIENTRY*)(int,const unsigned int*); PFNGLDELETEBUFFERSPROC pglDeleteBuffers=(PFNGLDELETEBUFFERSPROC)addrDelBuf; pglDeleteBuffers(1,&tmpVBO);} }
+                    if (tmpEBO) { auto addrDelBuf=(void*)SDL_GL_GetProcAddress("glDeleteBuffers"); if (addrDelBuf) { using PFNGLDELETEBUFFERSPROC=void(APIENTRY*)(int,const unsigned int*); PFNGLDELETEBUFFERSPROC pglDeleteBuffers=(PFNGLDELETEBUFFERSPROC)addrDelBuf; pglDeleteBuffers(1,&tmpEBO);} }
+                    if (tmpVAO) { auto addrDelVAO=(void*)SDL_GL_GetProcAddress("glDeleteVertexArrays"); if (addrDelVAO) { using PFNGLDELETEVERTEXARRAYSPROC=void(APIENTRY*)(int,const unsigned int*); PFNGLDELETEVERTEXARRAYSPROC pglDeleteVertexArrays=(PFNGLDELETEVERTEXARRAYSPROC)addrDelVAO; pglDeleteVertexArrays(1,&tmpVAO);} }
+                }
             }
         }
     }
