@@ -82,6 +82,21 @@ int main(int argc, char** argv) {
 
     std::cout << "Entering main loop (close window to exit)..." << std::endl;
 
+    bool stressMode = false;
+    int stressFrames = 0; // 0 == disabled, -1 == infinite
+    for (int i = 1; i < argc; ++i) {
+        if (std::string(argv[i]) == "--stress") {
+            stressMode = true;
+            if (i + 1 < argc) {
+                try { stressFrames = std::stoi(argv[i+1]); } catch (...) { stressFrames = -1; }
+            } else {
+                stressFrames = -1; // infinite
+            }
+            std::cout << "Stress mode enabled. frames=" << stressFrames << std::endl;
+            break;
+        }
+    }
+
 #ifdef DIRECTX_SMOKE_TEST
     // Note: define DIRECTX_SMOKE_TEST in project CMake flags if running smoke test automatically
 #endif
@@ -95,7 +110,7 @@ int main(int argc, char** argv) {
     pluginManager.LoadPlugin("libSamplePlugin.so");
 #endif
 
-    while (window.PollEvents()) {
+    auto runFrame = [&](void){
         profiler.BeginFrame();
         Genesis::Engine::Stats::Reset();
 
@@ -106,7 +121,7 @@ int main(int argc, char** argv) {
         scene.Render();
         std::cout << "Main: after scene.Render" << std::endl;
 
-    // Note: Model rendering now uses vertex arrays (faster than immediate mode)
+        // Note: Model rendering now uses vertex arrays (faster than immediate mode)
         gui.Render(profiler);
         std::cout << "Main: after gui.Render" << std::endl;
 
@@ -114,8 +129,22 @@ int main(int argc, char** argv) {
         std::cout << "Main: after renderer.EndFrame" << std::endl;
         profiler.EndFrame();
         std::cout << "Main: after profiler.EndFrame" << std::endl;
+    };
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(16));
+    if (stressMode) {
+        if (stressFrames == -1) std::cout << "Stress: running until closed or crash" << std::endl;
+        int frames = 0;
+        while ((stressFrames == -1 || frames < stressFrames) && window.PollEvents()) {
+            runFrame();
+            ++frames;
+            // No sleeping in stress mode to increase chance of reproducing intermittent bugs
+            if ((frames % 1000) == 0) std::cout << "Stress: completed frames=" << frames << std::endl;
+        }
+    } else {
+        while (window.PollEvents()) {
+            runFrame();
+            std::this_thread::sleep_for(std::chrono::milliseconds(16));
+        }
     }
 
     // Unload plugins explicitly (optional)

@@ -152,13 +152,19 @@ void DirectXRenderer::BeginFrame() {
 void DirectXRenderer::EndFrame() {
 #ifdef _WIN32
     if (!m_initialized) return;
-    if (m_swapChain) m_swapChain->Present(1, 0);
+    std::cout << "DirectXRenderer::EndFrame -> enter" << std::endl;
+    if (m_swapChain) {
+        HRESULT hr = m_swapChain->Present(1, 0);
+        if (FAILED(hr)) std::cerr << "DirectXRenderer::EndFrame -> Present failed HRESULT=0x" << std::hex << hr << std::dec << std::endl;
+    }
+    std::cout << "DirectXRenderer::EndFrame -> exit" << std::endl;
 #endif
 }
 
 void DirectXRenderer::Shutdown() {
 #ifdef _WIN32
     if (!m_initialized) return;
+    std::cout << "DirectXRenderer::Shutdown -> enter" << std::endl;
     if (m_vertexBuffer) { m_vertexBuffer->Release(); m_vertexBuffer = nullptr; }
     if (m_inputLayout) { m_inputLayout->Release(); m_inputLayout = nullptr; }
     if (m_vertexShader) { m_vertexShader->Release(); m_vertexShader = nullptr; }
@@ -169,6 +175,7 @@ void DirectXRenderer::Shutdown() {
     if (m_d3dDevice) { m_d3dDevice->Release(); m_d3dDevice = nullptr; }
     m_initialized = false;
     std::cout << "DirectXRenderer: shutdown" << std::endl;
+    std::cout << "DirectXRenderer::Shutdown -> exit" << std::endl;
 #endif
 }
 

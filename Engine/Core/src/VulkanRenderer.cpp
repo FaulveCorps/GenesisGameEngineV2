@@ -420,7 +420,7 @@ void VulkanRenderer::BeginFrame() {
 void VulkanRenderer::EndFrame() {
     if (!m_available) return;
 #ifdef HAVE_VULKAN
-    std::cout << "VulkanRenderer::EndFrame m_device=" << (void*)m_device << " m_swapchain=" << (void*)m_swapchain << std::endl;
+    std::cout << "VulkanRenderer::EndFrame -> enter m_device=" << (void*)m_device << " m_swapchain=" << (void*)m_swapchain << std::endl;
     if (m_device == VK_NULL_HANDLE) { std::cout << "VulkanRenderer::EndFrame -> no device" << std::endl; return; }
     if (m_swapchain == VK_NULL_HANDLE) { std::cout << "VulkanRenderer::EndFrame -> no swapchain, returning early" << std::endl; return; } // no swapchain (skipped for this environment)
 
@@ -473,11 +473,13 @@ void VulkanRenderer::EndFrame() {
     if (pres != VK_SUCCESS) {
         std::cerr << "VulkanRenderer: vkQueuePresentKHR failed: " << pres << std::endl;
     }
+    std::cout << "VulkanRenderer::EndFrame -> exit" << std::endl;
 #endif
 }
 
 void VulkanRenderer::Shutdown() {
 #ifdef HAVE_VULKAN
+    std::cout << "VulkanRenderer::Shutdown -> enter" << std::endl;
     if (m_device != VK_NULL_HANDLE) {
         vkDeviceWaitIdle(m_device);
 
@@ -509,6 +511,7 @@ void VulkanRenderer::Shutdown() {
         vkDestroyInstance(m_instance, nullptr);
         m_instance = VK_NULL_HANDLE;
     }
+    std::cout << "VulkanRenderer::Shutdown -> exit" << std::endl;
 #endif
     SDL_Vulkan_UnloadLibrary();
     m_window = nullptr;

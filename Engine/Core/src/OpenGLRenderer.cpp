@@ -323,13 +323,28 @@ void OpenGLRenderer::BeginFrame() {
 }
 
 void OpenGLRenderer::EndFrame() {
+    std::cout << "OpenGLRenderer::EndFrame -> enter" << std::endl;
+    // Swap buffers
     SDL_GL_SwapWindow(m_window);
+
+    // Check GL error after swap (if available)
+    auto addrGetError = (void*)SDL_GL_GetProcAddress("glGetError");
+    if (addrGetError) {
+        using PFNGLGETERRORPROC = unsigned int (APIENTRY*)();
+        PFNGLGETERRORPROC pglGetError=(PFNGLGETERRORPROC)addrGetError;
+        unsigned int e = pglGetError();
+        if (e != 0) std::cerr << "OpenGLRenderer::EndFrame -> GL error after SwapWindow: 0x" << std::hex << e << std::dec << std::endl;
+        else std::cout << "OpenGLRenderer::EndFrame -> no GL error after SwapWindow" << std::endl;
+    }
+    std::cout << "OpenGLRenderer::EndFrame -> exit" << std::endl;
 }
 
 void OpenGLRenderer::Shutdown() {
+    std::cout << "OpenGLRenderer::Shutdown -> enter" << std::endl;
     // Nothing platform-specific here; Window owns the GL context
     m_window = nullptr;
     m_context = nullptr;
+    std::cout << "OpenGLRenderer::Shutdown -> exit" << std::endl;
 }
 
 } // namespace Genesis::Engine
