@@ -3,6 +3,7 @@
 #include "engine/DirectXRenderer.h"
 #include "engine/VulkanRenderer.h"
 #include "engine/D3D12Renderer.h"
+#include "engine/BgfxRenderer.h"
 #include <algorithm>
 #include <iostream>
 
@@ -50,6 +51,18 @@ std::unique_ptr<IGraphicsAPI> GraphicsFactory::CreateRenderer(SDL_Window* window
             r->Shutdown();
 #else
             std::cout << "GraphicsFactory: skipping VulkanRenderer (HAVE_VULKAN not defined)" << std::endl;
+#endif
+        } else if (name == "bgfx") {
+#ifdef _WIN32
+            auto r = std::make_unique<BgfxRenderer>();
+            if (r->Init(window, glContext)) {
+                std::cout << "GraphicsFactory: selected BgfxRenderer" << std::endl;
+                return r;
+            }
+            std::cerr << "GraphicsFactory: BgfxRenderer::Init failed; trying next" << std::endl;
+            r->Shutdown();
+#else
+            std::cout << "GraphicsFactory: skipping BgfxRenderer (not _WIN32)" << std::endl;
 #endif
         } else if (name == "d3d12" || name == "directx12") {
 #ifdef _WIN32

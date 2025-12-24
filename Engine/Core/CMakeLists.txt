@@ -31,6 +31,7 @@ add_library(EngineCore STATIC
     src/DirectXRenderer.cpp
     src/VulkanRenderer.cpp
     src/D3D12Renderer.cpp
+    src/BgfxRenderer.cpp
     src/GraphicsFactory.cpp
     src/Model.cpp
     src/Mesh.cpp
@@ -62,6 +63,18 @@ if (Vulkan_FOUND)
   target_link_libraries(EngineCore PRIVATE Vulkan::Vulkan)
 else()
   message(STATUS "Vulkan not found; VulkanRenderer will be disabled at runtime")
+endif()
+
+# bgfx (optional) - prefer vcpkg-provided bgfx
+find_path(BGFX_INCLUDE_DIR NAMES bgfx/bgfx.h PATHS "${VCPKG_INSTALLED}/include" NO_DEFAULT_PATH)
+find_library(BGFX_LIBRARY NAMES bgfx PATHS "${VCPKG_INSTALLED}/lib" NO_DEFAULT_PATH)
+if (BGFX_INCLUDE_DIR AND BGFX_LIBRARY)
+  message(STATUS "bgfx found: include=${BGFX_INCLUDE_DIR} lib=${BGFX_LIBRARY}")
+  target_compile_definitions(EngineCore PRIVATE HAVE_BGFX=1)
+  target_include_directories(EngineCore PRIVATE ${BGFX_INCLUDE_DIR})
+  target_link_libraries(EngineCore PRIVATE ${BGFX_LIBRARY})
+else()
+  message(STATUS "bgfx not found; BgfxRenderer will be disabled at runtime")
 endif()
 
 # MSVC: prevent concurrent PDB write conflicts in parallel builds

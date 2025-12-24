@@ -11,6 +11,8 @@ jobs:
   vulkan-nightly:
     runs-on: windows-latest
     timeout-minutes: 360
+    permissions:
+      issues: write
     env:
       ITERATIONS: 500
       STRESS_PER_ITER: 10
@@ -102,6 +104,17 @@ jobs:
           **/*.dmp
           tools/Procdump/*.dmp
         retention-days: 90
+
+    - name: Create GitHub issue for crash
+      if: failure()
+      uses: actions/github-script@v6
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        script: |
+          const runUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${process.env.GITHUB_RUN_ID}`;
+          const title = `[Nightly][Vulkan] Crash detected in nightly run #${process.env.GITHUB_RUN_NUMBER}`;
+          const body = `A crash was detected during the Vulkan nightly stress test run.\n\nWorkflow run: ${runUrl}\n\nArtifacts (dumps/logs) have been uploaded — check the 'Artifacts' tab of the run.\n\nPlease assign or add details for triage.`;
+          await github.rest.issues.create({ owner: context.repo.owner, repo: context.repo.repo, title, body });
 
     - name: Upload build folder (diagnostic)
       if: failure()
