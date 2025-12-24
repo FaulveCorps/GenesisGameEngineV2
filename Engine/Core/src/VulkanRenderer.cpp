@@ -420,8 +420,14 @@ void VulkanRenderer::BeginFrame() {
 void VulkanRenderer::EndFrame() {
     if (!m_available) return;
 #ifdef HAVE_VULKAN
-    if (m_device == VK_NULL_HANDLE) return;
-    if (m_swapchain == VK_NULL_HANDLE) return; // no swapchain (skipped for this environment)
+    std::cout << "VulkanRenderer::EndFrame m_device=" << (void*)m_device << " m_swapchain=" << (void*)m_swapchain << std::endl;
+    if (m_device == VK_NULL_HANDLE) { std::cout << "VulkanRenderer::EndFrame -> no device" << std::endl; return; }
+    if (m_swapchain == VK_NULL_HANDLE) { std::cout << "VulkanRenderer::EndFrame -> no swapchain, returning early" << std::endl; return; } // no swapchain (skipped for this environment)
+
+    if (m_imageAvailableSemaphore == VK_NULL_HANDLE || m_renderFinishedSemaphore == VK_NULL_HANDLE || m_inFlightFence == VK_NULL_HANDLE) {
+        std::cerr << "VulkanRenderer::EndFrame -> missing sync objects; skipping frame to avoid crash" << std::endl;
+        return;
+    }
 
     // Wait for previous frame to finish
     vkWaitForFences(m_device, 1, &m_inFlightFence, VK_TRUE, UINT64_MAX);

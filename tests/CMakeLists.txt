@@ -20,6 +20,18 @@ add_executable(UnitTests
     ${catch2_SOURCE_DIR}/extras/catch_amalgamated.cpp
 )
 
+add_executable(gl_vaorepro
+    gl_vaorepro.cpp
+)
+
+target_include_directories(gl_vaorepro PRIVATE
+  ${CMAKE_SOURCE_DIR}/Engine/Core/include
+)
+
+target_link_libraries(gl_vaorepro PRIVATE EngineCore)
+
+target_compile_features(gl_vaorepro PUBLIC cxx_std_17)
+
 target_include_directories(UnitTests PRIVATE
   ${CMAKE_SOURCE_DIR}/Engine/Core/include
   ${CMAKE_SOURCE_DIR}/tests/include

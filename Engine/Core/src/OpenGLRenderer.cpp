@@ -313,9 +313,9 @@ void OpenGLRenderer::BeginFrame() {
 
                     // Cleanup
                     pglBindVertexArray2(0);
-                    if (tmpVBO) { auto addrDelBuf=(void*)SDL_GL_GetProcAddress("glDeleteBuffers"); if (addrDelBuf) { using PFNGLDELETEBUFFERSPROC=void(APIENTRY*)(int,const unsigned int*); PFNGLDELETEBUFFERSPROC pglDeleteBuffers=(PFNGLDELETEBUFFERSPROC)addrDelBuf; pglDeleteBuffers(1,&tmpVBO);} }
-                    if (tmpEBO) { auto addrDelBuf=(void*)SDL_GL_GetProcAddress("glDeleteBuffers"); if (addrDelBuf) { using PFNGLDELETEBUFFERSPROC=void(APIENTRY*)(int,const unsigned int*); PFNGLDELETEBUFFERSPROC pglDeleteBuffers=(PFNGLDELETEBUFFERSPROC)addrDelBuf; pglDeleteBuffers(1,&tmpEBO);} }
-                    if (tmpVAO) { auto addrDelVAO=(void*)SDL_GL_GetProcAddress("glDeleteVertexArrays"); if (addrDelVAO) { using PFNGLDELETEVERTEXARRAYSPROC=void(APIENTRY*)(int,const unsigned int*); PFNGLDELETEVERTEXARRAYSPROC pglDeleteVertexArrays=(PFNGLDELETEVERTEXARRAYSPROC)addrDelVAO; pglDeleteVertexArrays(1,&tmpVAO);} }
+                    if (tmpVBO) { std::cout<<"OpenGLRenderer: deleting tmpVBO="<<tmpVBO<<std::endl; auto addrDelBuf=(void*)SDL_GL_GetProcAddress("glDeleteBuffers"); if (addrDelBuf) { using PFNGLDELETEBUFFERSPROC=void(APIENTRY*)(int,const unsigned int*); PFNGLDELETEBUFFERSPROC pglDeleteBuffers=(PFNGLDELETEBUFFERSPROC)addrDelBuf; pglDeleteBuffers(1,&tmpVBO);} }
+                    if (tmpEBO) { std::cout<<"OpenGLRenderer: deleting tmpEBO="<<tmpEBO<<std::endl; auto addrDelBuf=(void*)SDL_GL_GetProcAddress("glDeleteBuffers"); if (addrDelBuf) { using PFNGLDELETEBUFFERSPROC=void(APIENTRY*)(int,const unsigned int*); PFNGLDELETEBUFFERSPROC pglDeleteBuffers=(PFNGLDELETEBUFFERSPROC)addrDelBuf; pglDeleteBuffers(1,&tmpEBO);} }
+                    if (tmpVAO) { std::cout<<"OpenGLRenderer: deleting tmpVAO="<<tmpVAO<<std::endl; auto addrDelVAO=(void*)SDL_GL_GetProcAddress("glDeleteVertexArrays"); if (addrDelVAO) { using PFNGLDELETEVERTEXARRAYSPROC=void(APIENTRY*)(int,const unsigned int*); PFNGLDELETEVERTEXARRAYSPROC pglDeleteVertexArrays=(PFNGLDELETEVERTEXARRAYSPROC)addrDelVAO; pglDeleteVertexArrays(1,&tmpVAO);} }
                 }
             }
         }

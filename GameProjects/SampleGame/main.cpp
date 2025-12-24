@@ -11,7 +11,7 @@
 // #define DIRECTX_SMOKE_TEST 0 // disabled to allow model loading for GL testing
 
 // Quick smoke test for Vulkan renderer: define to try Vulkan path at startup
-#define VULKAN_SMOKE_TEST 1
+// #define VULKAN_SMOKE_TEST 1 (disabled for GL testing)
 #include "engine/Components.h"
 #include "engine/Model.h"
 #include "engine/Profiler.h"
@@ -104,12 +104,16 @@ int main(int argc, char** argv) {
         // scene update/render
         scene.Update(0.016);
         scene.Render();
+        std::cout << "Main: after scene.Render" << std::endl;
 
     // Note: Model rendering now uses vertex arrays (faster than immediate mode)
         gui.Render(profiler);
+        std::cout << "Main: after gui.Render" << std::endl;
 
         renderer.EndFrame();
+        std::cout << "Main: after renderer.EndFrame" << std::endl;
         profiler.EndFrame();
+        std::cout << "Main: after profiler.EndFrame" << std::endl;
 
         std::this_thread::sleep_for(std::chrono::milliseconds(16));
     }

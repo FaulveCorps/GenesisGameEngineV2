@@ -64,9 +64,58 @@ Mesh::~Mesh() {
     // Resolve delete functions lazily
     if (!pglDeleteBuffers) ResolveGLFunction((void**)&pglDeleteBuffers, "glDeleteBuffers");
     if (!pglDeleteVertexArrays) ResolveGLFunction((void**)&pglDeleteVertexArrays, "glDeleteVertexArrays");
+    if (ebo_ && pglDeleteBuffers) { std::cout<<"Mesh::~Mesh -> deleting ebo="<<ebo_<<std::endl; pglDeleteBuffers(1, &ebo_); }
+    if (vbo_ && pglDeleteBuffers) { std::cout<<"Mesh::~Mesh -> deleting vbo="<<vbo_<<std::endl; pglDeleteBuffers(1, &vbo_); }
+    if (vao_ && pglDeleteVertexArrays) { std::cout<<"Mesh::~Mesh -> deleting vao="<<vao_<<std::endl; pglDeleteVertexArrays(1, &vao_); }
+}
+
+// Move constructor
+Mesh::Mesh(Mesh&& other) noexcept {
+    vertices_ = std::move(other.vertices_);
+    normals_ = std::move(other.normals_);
+    indices_ = std::move(other.indices_);
+
+    vao_ = other.vao_;
+    vbo_ = other.vbo_;
+    ebo_ = other.ebo_;
+    uploaded_ = other.uploaded_;
+    indexType_ = other.indexType_;
+
+    other.vao_ = 0;
+    other.vbo_ = 0;
+    other.ebo_ = 0;
+    other.uploaded_ = false;
+    other.indexType_ = 0;
+}
+
+// Move assignment
+Mesh& Mesh::operator=(Mesh&& other) noexcept {
+    if (this == &other) return *this;
+
+    // release current resources
+    if (!pglDeleteBuffers) ResolveGLFunction((void**)&pglDeleteBuffers, "glDeleteBuffers");
+    if (!pglDeleteVertexArrays) ResolveGLFunction((void**)&pglDeleteVertexArrays, "glDeleteVertexArrays");
     if (ebo_ && pglDeleteBuffers) pglDeleteBuffers(1, &ebo_);
     if (vbo_ && pglDeleteBuffers) pglDeleteBuffers(1, &vbo_);
     if (vao_ && pglDeleteVertexArrays) pglDeleteVertexArrays(1, &vao_);
+
+    vertices_ = std::move(other.vertices_);
+    normals_ = std::move(other.normals_);
+    indices_ = std::move(other.indices_);
+
+    vao_ = other.vao_;
+    vbo_ = other.vbo_;
+    ebo_ = other.ebo_;
+    uploaded_ = other.uploaded_;
+    indexType_ = other.indexType_;
+
+    other.vao_ = 0;
+    other.vbo_ = 0;
+    other.ebo_ = 0;
+    other.uploaded_ = false;
+    other.indexType_ = 0;
+
+    return *this;
 }
 
 void Mesh::UploadToGPU() {
@@ -316,6 +365,98 @@ void Mesh::Draw() const {
                     // If attributes aren't set on VAO, try to set them explicitly as a workaround
                     if (enabled0 == 0) {
                         std::cout << "Mesh::Draw -> attrib0 not enabled on VAO; explicitly binding VBO and setting attrib pointer" << std::endl;
+
+                        // Extra diagnostics when VAO lacks attribs
+                        auto addrGetString = (void*)SDL_GL_GetProcAddress("glGetString");
+                        if (addrGetString) {
+                            using PFNGLGETSTRINGPROC = const unsigned char* (APIENTRY*)(unsigned int);
+                            PFNGLGETSTRINGPROC pglGetString = (PFNGLGETSTRINGPROC)addrGetString;
+                            const unsigned char* vend = pglGetString(0x1F00 /*GL_VENDOR*/);
+                            const unsigned char* rend = pglGetString(0x1F01 /*GL_RENDERER*/);
+                            std::cout << "Mesh::Draw -> GL_VENDOR=" << (vend? (const char*)vend : "<null>") << " GL_RENDERER=" << (rend? (const char*)rend : "<null>") << std::endl;
+                        }
+
+                        // Check if the buffers still exist
+                        auto addrIsBuf = (void*)SDL_GL_GetProcAddress("glIsBuffer");
+                        if (addrIsBuf) {
+                            using PFNGLISBUFFERPROC = unsigned char (APIENTRY*)(unsigned int);
+                            PFNGLISBUFFERPROC pglIsBuffer = (PFNGLISBUFFERPROC)addrIsBuf;
+                            unsigned char vexist = pglIsBuffer(vbo_);
+                            unsigned char eexist = pglIsBuffer(ebo_);
+                            std::cout << "Mesh::Draw -> vbo exists=" << (int)vexist << " ebo exists=" << (int)eexist << std::endl;
+                        }
+
+                        // Try a temporary VAO+EBO draw here to compare behavior locally
+                        auto addrGenVAO2 = (void*)SDL_GL_GetProcAddress("glGenVertexArrays");
+                        auto addrBindVAO2 = (void*)SDL_GL_GetProcAddress("glBindVertexArray");
+                        auto addrGenBuf2 = (void*)SDL_GL_GetProcAddress("glGenBuffers");
+                        auto addrBindBuf2 = (void*)SDL_GL_GetProcAddress("glBindBuffer");
+                        auto addrBufData2 = (void*)SDL_GL_GetProcAddress("glBufferData");
+                        auto addrEnableAttr2 = (void*)SDL_GL_GetProcAddress("glEnableVertexAttribArray");
+                        auto addrAttribPtr2 = (void*)SDL_GL_GetProcAddress("glVertexAttribPointer");
+                        auto addrDrawElements2 = (void*)SDL_GL_GetProcAddress("glDrawElements");
+                        auto addrGetIntegerv2 = (void*)SDL_GL_GetProcAddress("glGetIntegerv");
+                        auto addrGetError2 = (void*)SDL_GL_GetProcAddress("glGetError");
+
+                        if (addrGenVAO2 && addrBindVAO2 && addrGenBuf2 && addrBindBuf2 && addrBufData2 && addrEnableAttr2 && addrAttribPtr2 && addrDrawElements2) {
+                            using PFNGLGENVERTEXARRAYSPROC = void (APIENTRY*)(int, unsigned int*);
+                            using PFNGLBINDVERTEXARRAYPROC = void (APIENTRY*)(unsigned int);
+                            using PFNGLGENBUFFERSPROC = void (APIENTRY*)(int, unsigned int*);
+                            using PFNGLBINDBUFFERPROC = void (APIENTRY*)(unsigned int, unsigned int);
+                            using PFNGLBUFFERDATAPROC = void (APIENTRY*)(unsigned int, ptrdiff_t, const void*, unsigned int);
+                            using PFNGLENABLEVERTEXATTRIBARRAYPROC = void (APIENTRY*)(unsigned int);
+                            using PFNGLVERTEXATTRIBPOINTERPROC = void (APIENTRY*)(unsigned int, int, unsigned int, unsigned char, int, const void*);
+                            using PFNGLDRAWELEMENTSPROC = void (APIENTRY*)(unsigned int, int, unsigned int, const void*);
+                            using PFNGLGETINTEGERVPROC = void (APIENTRY*)(unsigned int, int*);
+                            using PFNGLGETERRORPROC = unsigned int (APIENTRY*)();
+
+                            auto pglGenVertexArrays2 = (PFNGLGENVERTEXARRAYSPROC)addrGenVAO2;
+                            auto pglBindVertexArray2 = (PFNGLBINDVERTEXARRAYPROC)addrBindVAO2;
+                            auto pglGenBuffers2 = (PFNGLGENBUFFERSPROC)addrGenBuf2;
+                            auto pglBindBuffer2 = (PFNGLBINDBUFFERPROC)addrBindBuf2;
+                            auto pglBufferData2 = (PFNGLBUFFERDATAPROC)addrBufData2;
+                            auto pglEnableVertexAttribArray2 = (PFNGLENABLEVERTEXATTRIBARRAYPROC)addrEnableAttr2;
+                            auto pglVertexAttribPointer2 = (PFNGLVERTEXATTRIBPOINTERPROC)addrAttribPtr2;
+                            auto pglDrawElements2 = (PFNGLDRAWELEMENTSPROC)addrDrawElements2;
+                            auto pglGetIntegerv2 = (PFNGLGETINTEGERVPROC)addrGetIntegerv2;
+                            auto pglGetError2 = (PFNGLGETERRORPROC)addrGetError2;
+
+                            unsigned int tmpVAO=0, tmpVBO=0, tmpEBO=0;
+                            static const float triVerts2[] = { 0.0f,0.8f,0.0f, -0.8f,-0.8f,0.0f, 0.8f,-0.8f,0.0f };
+                            static const unsigned int triIdx[] = {0,1,2};
+
+                            pglGenVertexArrays2(1,&tmpVAO);
+                            pglBindVertexArray2(tmpVAO);
+                            pglGenBuffers2(1,&tmpVBO);
+                            const unsigned int GL_ARRAY_BUFFER = 0x8892; const unsigned int GL_ELEMENT_ARRAY_BUFFER = 0x8893; const unsigned int GL_STATIC_DRAW = 0x88E4; const unsigned int GL_FLOAT = 0x1406; const unsigned int GL_UNSIGNED_INT = 0x1405;
+                            pglBindBuffer2(GL_ARRAY_BUFFER, tmpVBO);
+                            pglBufferData2(GL_ARRAY_BUFFER, sizeof(triVerts2), triVerts2, GL_STATIC_DRAW);
+                            pglGenBuffers2(1,&tmpEBO);
+                            pglBindBuffer2(GL_ELEMENT_ARRAY_BUFFER, tmpEBO);
+                            pglBufferData2(GL_ELEMENT_ARRAY_BUFFER, sizeof(triIdx), triIdx, GL_STATIC_DRAW);
+                            pglEnableVertexAttribArray2(0);
+                            pglVertexAttribPointer2(0,3,GL_FLOAT,0,0,(const void*)0);
+
+                            if (pglGetIntegerv2) {
+                                int b1=0,b2=0; const unsigned int GL_ARRAY_BUFFER_BINDING=0x8894; const unsigned int GL_ELEMENT_ARRAY_BUFFER_BINDING=0x8895; pglGetIntegerv2(GL_ARRAY_BUFFER_BINDING,&b1); pglGetIntegerv2(GL_ELEMENT_ARRAY_BUFFER_BINDING,&b2); std::cout<<"Mesh::Draw diag tmp -> GL_ARRAY_BUFFER_BINDING="<<b1<<" GL_ELEMENT_ARRAY_BUFFER_BINDING="<<b2<<std::endl;
+                            }
+
+                            pglDrawElements2(0x0004, 3, GL_UNSIGNED_INT, nullptr);
+                            if (pglGetError2) { unsigned int e = pglGetError2(); if (e) std::cerr<<"Mesh::Draw diag tmp -> GL error after UINT draw: 0x"<<std::hex<<e<<std::dec<<std::endl; else std::cout<<"Mesh::Draw diag tmp -> draw (UINT) succeeded"<<std::endl; }
+
+                            // try USHORT
+                            static const unsigned short triIdxS[] = {0,1,2};
+                            pglBufferData2(GL_ELEMENT_ARRAY_BUFFER, sizeof(triIdxS), triIdxS, GL_STATIC_DRAW);
+                            pglDrawElements2(0x0004, 3, 0x1403 /*GL_UNSIGNED_SHORT*/, nullptr);
+                            if (pglGetError2) { unsigned int e2 = pglGetError2(); if (e2) std::cerr<<"Mesh::Draw diag tmp -> GL error after USHORT draw: 0x"<<std::hex<<e2<<std::dec<<std::endl; else std::cout<<"Mesh::Draw diag tmp -> draw (USHORT) succeeded"<<std::endl; }
+
+                            // cleanup tmp
+                            pglBindVertexArray2(0);
+                            if (tmpVBO) { auto addrDelBuf=(void*)SDL_GL_GetProcAddress("glDeleteBuffers"); if (addrDelBuf) { using PFNGLDELETEBUFFERSPROC=void(APIENTRY*)(int,const unsigned int*); PFNGLDELETEBUFFERSPROC pglDeleteBuffers=(PFNGLDELETEBUFFERSPROC)addrDelBuf; pglDeleteBuffers(1,&tmpVBO);} }
+                            if (tmpEBO) { auto addrDelBuf=(void*)SDL_GL_GetProcAddress("glDeleteBuffers"); if (addrDelBuf) { using PFNGLDELETEBUFFERSPROC=void(APIENTRY*)(int,const unsigned int*); PFNGLDELETEBUFFERSPROC pglDeleteBuffers=(PFNGLDELETEBUFFERSPROC)addrDelBuf; pglDeleteBuffers(1,&tmpEBO);} }
+                            if (tmpVAO) { auto addrDelVAO=(void*)SDL_GL_GetProcAddress("glDeleteVertexArrays"); if (addrDelVAO) { using PFNGLDELETEVERTEXARRAYSPROC=void(APIENTRY*)(int,const unsigned int*); PFNGLDELETEVERTEXARRAYSPROC pglDeleteVertexArrays=(PFNGLDELETEVERTEXARRAYSPROC)addrDelVAO; pglDeleteVertexArrays(1,&tmpVAO);} }
+                        }
+
                         if (!pglBindBuffer) ResolveGLFunction((void**)&pglBindBuffer, "glBindBuffer");
                         if (!pglEnableVertexAttribArray) ResolveGLFunction((void**)&pglEnableVertexAttribArray, "glEnableVertexAttribArray");
                         if (!pglVertexAttribPointer) ResolveGLFunction((void**)&pglVertexAttribPointer, "glVertexAttribPointer");

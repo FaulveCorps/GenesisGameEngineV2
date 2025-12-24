@@ -10,6 +10,14 @@ public:
     Mesh() = default;
     ~Mesh();
 
+    // Non-copyable (GPU resources must have single owner)
+    Mesh(const Mesh&) = delete;
+    Mesh& operator=(const Mesh&) = delete;
+
+    // Movable: transfer ownership of GPU resources
+    Mesh(Mesh&& other) noexcept;
+    Mesh& operator=(Mesh&& other) noexcept;
+
     // Fill vertex/normal/index arrays
     void SetData(const std::vector<float>& vertices, const std::vector<float>& normals, const std::vector<uint32_t>& indices);
 
