@@ -104,3 +104,5 @@ out_debug3.log
 out_forced_vulkan_debug.log
 out_forced_vulkan.log
 out_triangle.log
+out_cli_triangle.log
+out_cli_triangle2.log

@@ -43,4 +43,17 @@ foreach ($o in $orders) {
     Run-Case $o $true
 }
 
+# Optional: Vulkan triangle smoke test (force swapchain + present a CPU-rasterized triangle)
+Write-Output "\n--- Vulkan triangle smoke test ---"
+$args = @("--gfx-order","Vulkan,OpenGL","--force-vulkan-swapchain","--vulkan-triangle")
+Write-Output "Running: $($args -join ' ')"
+$proc = Start-Process -FilePath $exePath -ArgumentList $args -RedirectStandardOutput "out.log" -RedirectStandardError "err.log" -WindowStyle Hidden -PassThru
+Start-Sleep -Seconds $timeoutSec
+if (-not $proc.HasExited) { try { $proc.Kill() } catch {}; Write-Output "Vulkan triangle process killed after timeout ($timeoutSec)s" }
+$out = Get-Content "out.log" -ErrorAction SilentlyContinue
+$sel = $out | Select-String "VulkanRenderer: host triangle image populated|VulkanRenderer: swapchain created|VulkanRenderer: Win32 fallback - forcing swapchain" -AllMatches
+if ($sel) { $sel | ForEach-Object { Write-Output $_.ToString() } } else { Write-Output "No triangle-specific messages found (see out.log)" }
+Write-Output "Exit snippet:"
+$out | Select-Object -Last 8 | ForEach-Object { Write-Output "  $_" }
+
 Write-Output "\nTest finished"

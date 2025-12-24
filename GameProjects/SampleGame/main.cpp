@@ -75,6 +75,24 @@ int main(int argc, char** argv) {
         if (std::string(argv[i]) == "--gfx-strict") {
             gfxStrict = true;
         }
+        if (std::string(argv[i]) == "--vulkan-triangle") {
+    #ifdef _WIN32
+            _putenv_s("GENESIS_VULKAN_TRIANGLE", "1");
+    #else
+            setenv("GENESIS_VULKAN_TRIANGLE", "1", 1);
+    #endif
+            std::cout << "CLI: enabled GENESIS_VULKAN_TRIANGLE via --vulkan-triangle" << std::endl;
+            continue;
+        }
+        if (std::string(argv[i]) == "--force-vulkan-swapchain") {
+    #ifdef _WIN32
+            _putenv_s("GENESIS_FORCE_VULKAN_SWAPCHAIN", "1");
+    #else
+            setenv("GENESIS_FORCE_VULKAN_SWAPCHAIN", "1", 1);
+    #endif
+            std::cout << "CLI: enabled GENESIS_FORCE_VULKAN_SWAPCHAIN via --force-vulkan-swapchain" << std::endl;
+            continue;
+        }
     }
     // Use factory (gfxStrict enforces swapchain/present capability for Vulkan)
     std::unique_ptr<Genesis::Engine::IGraphicsAPI> rendererPtr = Genesis::Engine::GraphicsFactory::CreateRenderer(window.GetSDLWindow(), window.GetGLContext(), gfxOrder, gfxStrict);
@@ -129,6 +147,7 @@ int main(int argc, char** argv) {
             showHelp = true;
             break;
         }
+
     }
 
     if (showHelp) {
@@ -137,6 +156,8 @@ int main(int argc, char** argv) {
         std::cout << "  --stress [N]            Run in stress mode for N frames (omit N for infinite)\n";
         std::cout << "  --gfx-order A,B,C       Comma-separated renderer priority (examples: Vulkan,OpenGL or OpenGL,DirectX)\n";
         std::cout << "  --gfx-strict            Require Vulkan to be present-capable (swapchain + present) to be selected" << std::endl;
+        std::cout << "  --vulkan-triangle       Opt-in: have Vulkan present a CPU-rasterized triangle (debug)" << std::endl;
+        std::cout << "  --force-vulkan-swapchain Force swapchain creation even when SDL indicates no dynamic Vulkan support (risky)" << std::endl;
         window.Shutdown();
         Genesis::Engine::Shutdown();
         return 0;
