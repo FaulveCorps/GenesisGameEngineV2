@@ -477,6 +477,15 @@ void VulkanRenderer::EndFrame() {
 #endif
 }
 
+bool VulkanRenderer::IsPresentCapable() const {
+#ifdef HAVE_VULKAN
+    // We consider the renderer present-capable if a swapchain exists and we have present resources
+    return (m_swapchain != VK_NULL_HANDLE && m_presentQueue != VK_NULL_HANDLE && m_imageAvailableSemaphore != VK_NULL_HANDLE && m_renderFinishedSemaphore != VK_NULL_HANDLE);
+#else
+    return false;
+#endif
+}
+
 void VulkanRenderer::Shutdown() {
 #ifdef HAVE_VULKAN
     std::cout << "VulkanRenderer::Shutdown -> enter" << std::endl;

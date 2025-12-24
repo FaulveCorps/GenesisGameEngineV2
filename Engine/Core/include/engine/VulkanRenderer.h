@@ -21,6 +21,9 @@ public:
     void EndFrame() override;
     void Shutdown() override;
 
+    // Return true if the renderer has a usable swapchain and present capability
+    bool IsPresentCapable() const;
+
 private:
     SDL_Window* m_window = nullptr;
 #ifdef HAVE_VULKAN

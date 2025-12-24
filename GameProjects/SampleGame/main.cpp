@@ -56,6 +56,7 @@ int main(int argc, char** argv) {
 #else
     // Default: use runtime factory which tries Vulkan->DirectX->OpenGL (configurable via --gfx-order)
     std::vector<std::string> gfxOrder;
+    bool gfxStrict = false;
     for (int i = 1; i < argc; ++i) {
         if (std::string(argv[i]) == "--gfx-order" && i + 1 < argc) {
             std::string arg = argv[i+1];
@@ -69,9 +70,12 @@ int main(int argc, char** argv) {
             }
             break;
         }
+        if (std::string(argv[i]) == "--gfx-strict") {
+            gfxStrict = true;
+        }
     }
-    // Use factory
-    std::unique_ptr<Genesis::Engine::IGraphicsAPI> rendererPtr = Genesis::Engine::GraphicsFactory::CreateRenderer(window.GetSDLWindow(), window.GetGLContext(), gfxOrder);
+    // Use factory (gfxStrict enforces swapchain/present capability for Vulkan)
+    std::unique_ptr<Genesis::Engine::IGraphicsAPI> rendererPtr = Genesis::Engine::GraphicsFactory::CreateRenderer(window.GetSDLWindow(), window.GetGLContext(), gfxOrder, gfxStrict);
     if (!rendererPtr) {
         std::cerr << "Failed to initialize any renderer" << std::endl;
         window.Shutdown();

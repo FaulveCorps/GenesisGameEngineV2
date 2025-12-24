@@ -13,7 +13,7 @@ static std::string toLower(const std::string& s) {
     return r;
 }
 
-std::unique_ptr<IGraphicsAPI> GraphicsFactory::CreateRenderer(SDL_Window* window, SDL_GLContext glContext, const std::vector<std::string>& priorityOrder) {
+std::unique_ptr<IGraphicsAPI> GraphicsFactory::CreateRenderer(SDL_Window* window, SDL_GLContext glContext, const std::vector<std::string>& priorityOrder, bool requirePresentForVulkan) {
     if (!window) return nullptr;
 
     // If no order specified, use sensible default: Vulkan, DirectX, OpenGL
@@ -28,8 +28,22 @@ std::unique_ptr<IGraphicsAPI> GraphicsFactory::CreateRenderer(SDL_Window* window
 #ifdef HAVE_VULKAN
             auto r = std::make_unique<VulkanRenderer>();
             if (r->Init(window, glContext)) {
-                std::cout << "GraphicsFactory: selected VulkanRenderer" << std::endl;
-                return r;
+                // If the caller requested strict Vulkan (requires present), verify capability
+                if (requirePresentForVulkan) {
+                    // Query whether Vulkan renderer has swapchain/present capability
+                    // VulkanRenderer::IsPresentCapable is a lightweight check
+                    auto vr = static_cast<VulkanRenderer*>(r.get());
+                    if (!vr->IsPresentCapable()) {
+                        std::cerr << "GraphicsFactory: Vulkan initialized but not present-capable; trying next" << std::endl;
+                        r->Shutdown();
+                    } else {
+                        std::cout << "GraphicsFactory: selected VulkanRenderer (present-capable)" << std::endl;
+                        return r;
+                    }
+                } else {
+                    std::cout << "GraphicsFactory: selected VulkanRenderer" << std::endl;
+                    return r;
+                }
             }
             std::cerr << "GraphicsFactory: VulkanRenderer::Init failed; trying next" << std::endl;
             r->Shutdown();
