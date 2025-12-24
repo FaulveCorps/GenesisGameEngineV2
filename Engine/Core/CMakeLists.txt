@@ -139,7 +139,19 @@ endif()
 # WGPU / Dawn (optional) - prefer vcpkg-provided Dawn or wgpu-native
 # Try to detect common header/library names in vcpkg-installed include/lib
 find_path(WGPU_INCLUDE_DIR NAMES wgpu.h webgpu.h dawn/dawn_proc.h PATHS "${VCPKG_INSTALLED}/include" NO_DEFAULT_PATH)
-find_library(WGPU_LIBRARY NAMES dawn wgpu webgpu wgpu_native PATHS "${VCPKG_INSTALLED}/lib" NO_DEFAULT_PATH)
+find_library(WGPU_LIBRARY NAMES dawn wgpu webgpu wgpu_native webgpu_dawn PATHS "${VCPKG_INSTALLED}/lib" NO_DEFAULT_PATH)
+# Fallback: check common vcpkg layout directly if find_* didn't match
+if (NOT WGPU_INCLUDE_DIR)
+  if (EXISTS "${VCPKG_INSTALLED}/include/webgpu/webgpu.h")
+    set(WGPU_INCLUDE_DIR "${VCPKG_INSTALLED}/include")
+  endif()
+endif()
+if (NOT WGPU_LIBRARY)
+  if (EXISTS "${VCPKG_INSTALLED}/lib/webgpu_dawn.lib")
+    set(WGPU_LIBRARY "${VCPKG_INSTALLED}/lib/webgpu_dawn.lib")
+  endif()
+endif()
+
 if (WGPU_INCLUDE_DIR AND WGPU_LIBRARY)
   message(STATUS "WGPU/Dawn found: include=${WGPU_INCLUDE_DIR} lib=${WGPU_LIBRARY}")
   target_compile_definitions(EngineCore PRIVATE HAVE_WGPU=1)
