@@ -1,9 +1,9 @@
 #include "catch_amalgamated.hpp"
-#include "engine/GraphicsFactory.h"
-#include "engine/RendererManager.h"
-#include "engine/SoftwareRenderer.h"
-#include "engine/Shader.h"
-#include "engine/ShaderRegistry.h"
+#include "ENGINE/GraphicsFactory.h"
+#include "ENGINE/RendererManager.h"
+#include "ENGINE/SoftwareRenderer.h"
+#include "ENGINE/Shader.h"
+#include "ENGINE/ShaderRegistry.h"
 #include <SDL.h>
 #include <filesystem>
 #include <iostream>

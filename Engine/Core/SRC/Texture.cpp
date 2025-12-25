@@ -1,5 +1,5 @@
-#include "engine/Texture.h"
-#include "engine/TextureRegistry.h"
+#include "ENGINE/Texture.h"
+#include "ENGINE/TextureRegistry.h"
 #include <SDL.h>
 #include <iostream>
 

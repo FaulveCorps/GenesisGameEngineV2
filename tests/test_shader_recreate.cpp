@@ -1,8 +1,8 @@
 #include "catch_amalgamated.hpp"
-#include "engine/GraphicsFactory.h"
-#include "engine/RendererManager.h"
-#include "engine/Shader.h"
-#include "engine/ShaderRegistry.h"
+#include "ENGINE/GraphicsFactory.h"
+#include "ENGINE/RendererManager.h"
+#include "ENGINE/Shader.h"
+#include "ENGINE/ShaderRegistry.h"
 #include <SDL.h>
 
 TEST_CASE("Shader re-creation across renderer switches") {

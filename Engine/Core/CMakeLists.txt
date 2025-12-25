@@ -25,28 +25,28 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(entt)
 
 add_library(EngineCore STATIC
-    src/Engine.cpp
-    src/Window.cpp
-    src/OpenGLRenderer.cpp
-    src/DirectXRenderer.cpp
-    src/VulkanRenderer.cpp
-    src/D3D12Renderer.cpp
-    src/WgpuRenderer.cpp
-    src/SoftwareRenderer.cpp
-    src/RendererManager.cpp
-    src/MeshRegistry.cpp
-    src/ShaderRegistry.cpp
-    src/TextureRegistry.cpp
-    src/Texture.cpp
-    src/GraphicsFactory.cpp
-    src/Model.cpp
-    src/Mesh.cpp
-    src/Shader.cpp
-    src/Scene.cpp
-    src/Profiler.cpp
-    src/Stats.cpp
-    src/ImGuiLayer.cpp
-    src/PluginManager.cpp
+    SRC/Engine.cpp
+    SRC/Window.cpp
+    SRC/OpenGLRenderer.cpp
+    SRC/DirectXRenderer.cpp
+    SRC/VulkanRenderer.cpp
+    SRC/D3D12Renderer.cpp
+    SRC/WgpuRenderer.cpp
+    SRC/SoftwareRenderer.cpp
+    SRC/RendererManager.cpp
+    SRC/MeshRegistry.cpp
+    SRC/ShaderRegistry.cpp
+    SRC/TextureRegistry.cpp
+    SRC/Texture.cpp
+    SRC/GraphicsFactory.cpp
+    SRC/Model.cpp
+    SRC/Mesh.cpp
+    SRC/Shader.cpp
+    SRC/Scene.cpp
+    SRC/Profiler.cpp
+    SRC/Stats.cpp
+    SRC/ImGuiLayer.cpp
+    SRC/PluginManager.cpp
 ) 
 
 target_include_directories(EngineCore PUBLIC

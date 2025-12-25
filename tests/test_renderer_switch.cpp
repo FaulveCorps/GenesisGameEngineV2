@@ -1,8 +1,8 @@
 #include "catch_amalgamated.hpp"
-#include "engine/GraphicsFactory.h"
-#include "engine/RendererManager.h"
-#include "engine/SoftwareRenderer.h"
-#include "engine/Mesh.h"
+#include "ENGINE/GraphicsFactory.h"
+#include "ENGINE/RendererManager.h"
+#include "ENGINE/SoftwareRenderer.h"
+#include "ENGINE/Mesh.h"
 #include <SDL.h>
 
 TEST_CASE("Renderer runtime switch basic") {

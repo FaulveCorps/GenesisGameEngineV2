@@ -73,12 +73,12 @@ cmake --build build --config Debug --clean-first
 GenesisGameEngine/
 ├── Engine/
 │   └── Core/
-│       ├── include/engine/
+│       ├── include/ENGINE/
 │       │   ├── Engine.h, Scene.h, Components.h
 │       │   ├── Model.h, Shader.h, Mesh.h
 │       │   ├── OpenGLRenderer.h, DirectXRenderer.h
 │       │   └── PluginManager.h, ImGuiLayer.h
-│       └── src/
+│       └── SRC/
 │           ├── Engine.cpp, Scene.cpp, Model.cpp
 │           ├── Mesh.cpp, Shader.cpp
 │           ├── OpenGLRenderer.cpp, DirectXRenderer.cpp

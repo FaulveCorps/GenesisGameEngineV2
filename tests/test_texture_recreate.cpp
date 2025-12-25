@@ -1,8 +1,8 @@
 #include "catch_amalgamated.hpp"
-#include "engine/GraphicsFactory.h"
-#include "engine/RendererManager.h"
-#include "engine/Texture.h"
-#include "engine/TextureRegistry.h"
+#include "ENGINE/GraphicsFactory.h"
+#include "ENGINE/RendererManager.h"
+#include "ENGINE/Texture.h"
+#include "ENGINE/TextureRegistry.h"
 #include <SDL.h>
 
 TEST_CASE("Texture re-creation across renderer switches") {

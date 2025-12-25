@@ -1,7 +1,7 @@
 #include "catch_amalgamated.hpp"
-#include "engine/GraphicsFactory.h"
+#include "ENGINE/GraphicsFactory.h"
 #ifdef HAVE_WGPU
-#include "engine/WgpuRenderer.h"
+#include "ENGINE/WgpuRenderer.h"
 #endif
 #include <SDL.h>
 
@@ -54,7 +54,7 @@ TEST_CASE("WGPU smoke test") {
 #ifdef HAVE_WGPU
     // Attempt an offscreen render and readback to verify a triangle (red) was rendered
     {
-        #include "engine/WgpuRenderer.h"
+        #include "ENGINE/WgpuRenderer.h"
         using namespace Genesis::Engine;
         WgpuRenderer* wr = dynamic_cast<WgpuRenderer*>(renderer.get());
         if (wr) {

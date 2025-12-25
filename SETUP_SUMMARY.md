@@ -80,8 +80,8 @@ Source Tree
 │
 ├─ Engine/Core/
 │  ├─ CMakeLists.txt            # EngineCore library + SDL3 runtime GL functions
-│  ├─ include/engine/            # API headers
-│  └─ src/                       # Implementations (OpenGL via SDL_GL_GetProcAddress)
+│  ├─ include/ENGINE/            # API headers
+│  └─ SRC/                       # Implementations (OpenGL via SDL_GL_GetProcAddress)
 │
 ├─ GameProjects/SampleGame/      # Executable using EngineCore
 ├─ Tests/                        # Unit tests (Catch2)

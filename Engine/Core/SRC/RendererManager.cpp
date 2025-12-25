@@ -1,9 +1,9 @@
-#include "engine/RendererManager.h"
-#include "engine/GraphicsFactory.h"
-#include "engine/Mesh.h"
-#include "engine/MeshRegistry.h"
-#include "engine/ShaderRegistry.h"
-#include "engine/TextureRegistry.h"
+#include "ENGINE/RendererManager.h"
+#include "ENGINE/GraphicsFactory.h"
+#include "ENGINE/Mesh.h"
+#include "ENGINE/MeshRegistry.h"
+#include "ENGINE/ShaderRegistry.h"
+#include "ENGINE/TextureRegistry.h"
 #include <iostream>
 
 namespace Genesis::Engine {

@@ -1,6 +1,6 @@
 #include "catch_amalgamated.hpp"
-#include "engine/GraphicsFactory.h"
-#include "engine/SoftwareRenderer.h"
+#include "ENGINE/GraphicsFactory.h"
+#include "ENGINE/SoftwareRenderer.h"
 #include <SDL.h>
 
 TEST_CASE("Software smoke test") {
