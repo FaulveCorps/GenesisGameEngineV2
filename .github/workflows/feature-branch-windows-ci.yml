@@ -46,7 +46,7 @@ jobs:
         run: |
           Write-Host "Configuring CMake (Ninja) using vcpkg toolchain..."
           $toolchain = "${{ github.workspace }}\\vcpkg\\scripts\\buildsystems\\vcpkg.cmake"
-          cmake -S . -B build -G "Ninja" -A x64 -DCMAKE_BUILD_TYPE=Debug -DCMAKE_TOOLCHAIN_FILE="$toolchain" -DVCPKG_TARGET_TRIPLET="x64-windows" 2>&1 | Tee-Object -FilePath cmake_configure.log -Encoding UTF8
+          cmake -S . -B build -G "Ninja" -DCMAKE_BUILD_TYPE=Debug -DCMAKE_TOOLCHAIN_FILE="$toolchain" -DVCPKG_TARGET_TRIPLET="x64-windows" 2>&1 | Tee-Object -FilePath cmake_configure.log -Encoding UTF8
           if ($LASTEXITCODE -ne 0) {
             Write-Host "CMake configure failed. See cmake_configure.log for details."
             Exit $LASTEXITCODE
