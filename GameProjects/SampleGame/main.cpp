@@ -354,6 +354,12 @@ int main(int argc, char** argv) {
         }
 
         profiler.EndFrame();
+        // Update window title with renderer name and FPS
+        if (auto cur = Genesis::Engine::RendererManager::GetRenderer()) {
+            char buf[128];
+            snprintf(buf, sizeof(buf), "SampleGame - Renderer: %s | FPS: %.1f", cur->GetName().c_str(), profiler.GetFPS());
+            SDL_SetWindowTitle(window.GetSDLWindow(), buf);
+        }
         std::cout << "Main: after profiler.EndFrame" << std::endl;
     };
 
