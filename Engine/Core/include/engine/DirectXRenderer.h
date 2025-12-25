@@ -1,6 +1,7 @@
 #pragma once
 
 #include "engine/IGraphics.h"
+#include <string>
 
 #ifdef _WIN32
 // Forward declarations for D3D11 COM interfaces in the global namespace (avoid including heavy headers in header)
@@ -25,6 +26,8 @@ public:
     void BeginFrame() override;
     void EndFrame() override;
     void Shutdown() override;
+
+    std::string GetName() const override { return std::string("directx"); }
 
 private:
     // Platform-specific members (D3D11)

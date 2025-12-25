@@ -1,6 +1,7 @@
 #pragma once
 
 #include "engine/IGraphics.h"
+#include <string>
 
 #ifdef _WIN32
 // Windows types (UINT, HANDLE, etc.) are needed by the member declarations below
@@ -31,6 +32,8 @@ public:
     void BeginFrame() override;
     void EndFrame() override;
     void Shutdown() override;
+
+    std::string GetName() const override { return std::string("d3d12"); }
 
 private:
 #ifdef _WIN32

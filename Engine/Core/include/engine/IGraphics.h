@@ -3,6 +3,7 @@
 #include <SDL.h>
 #include <vector>
 #include <cstdint>
+#include <string>
 
 namespace Genesis::Engine {
 
@@ -31,6 +32,9 @@ public:
     virtual MeshHandle CreateMesh(const MeshDesc& /*desc*/) { return MeshHandle{}; }
     virtual void DestroyMesh(const MeshHandle& /*h*/) { }
     virtual void DrawMesh(const MeshHandle& /*h*/) { }
+
+    // Human-readable renderer name for UI/debugging
+    virtual std::string GetName() const { return std::string("unknown"); }
 };
 
 } // namespace Genesis::Engine

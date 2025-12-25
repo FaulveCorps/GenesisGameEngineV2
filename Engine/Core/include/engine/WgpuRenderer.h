@@ -1,6 +1,7 @@
 #pragma once
 
 #include "engine/IGraphics.h"
+#include <string>
 
 #ifdef _WIN32
 struct HWND__;
@@ -38,6 +39,8 @@ public:
     void BeginFrame() override;
     void EndFrame() override;
     void Shutdown() override;
+
+    std::string GetName() const override { return std::string("wgpu"); }
 
     // Render an offscreen image and read back pixels (RGBA8); returns true on success
     bool ReadbackOffscreen(uint32_t width, uint32_t height, std::vector<uint8_t>& out);

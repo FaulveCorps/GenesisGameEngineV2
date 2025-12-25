@@ -76,6 +76,13 @@ out_cli_triangle.log
 out_cli_triangle2.log
 smoke-*.log
 
+# Runtime-generated artifacts (screenshots, test outputs)
+/artifacts/
+*.bmp
+software_render*.bmp
+test_cycle_*.bmp
+
+
 # Crash capture / Procdump artifacts
 Tools/Procdump.zip
 tools/Procdump/*.dmp

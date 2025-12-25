@@ -3,6 +3,7 @@
 #include "engine/Mesh.h"
 #include "engine/MeshRegistry.h"
 #include "engine/ShaderRegistry.h"
+#include "engine/TextureRegistry.h"
 #include <iostream>
 
 namespace Genesis::Engine {
@@ -35,6 +36,7 @@ bool RendererManager::SwitchRendererByName(const std::string& name, SDL_Window* 
     // Destroy resources on the old renderer first
     MeshRegistry::Instance().DestroyAllOnRenderer(old);
     ShaderRegistry::Instance().DestroyAllOnRenderer(old);
+    TextureRegistry::Instance().DestroyAllOnRenderer(old);
 
     if (old) {
         try {
@@ -50,6 +52,14 @@ bool RendererManager::SwitchRendererByName(const std::string& name, SDL_Window* 
     // Upload resources into new renderer
     MeshRegistry::Instance().UploadAllToRenderer(GetRenderer());
     ShaderRegistry::Instance().UploadAllToRenderer(GetRenderer());
+    TextureRegistry::Instance().UploadAllToRenderer(GetRenderer());
+
+    // Update the SDL window title (if available) to indicate current renderer
+    if (window) {
+        auto cur = GetRenderer();
+        std::string title = std::string("Renderer: ") + (cur ? cur->GetName() : std::string("(none)"));
+        SDL_SetWindowTitle(window, title.c_str());
+    }
 
     std::cout << "RendererManager: switched to '" << name << "'" << std::endl;
     return true;

@@ -18,6 +18,8 @@ public:
     void EndFrame() override;
     void Shutdown() override;
 
+    std::string GetName() const override { return std::string("software"); }
+
     // Render to a BGRA8 buffer of size width x height and return it in 'out'
     bool ReadbackOffscreen(uint32_t width, uint32_t height, std::vector<uint8_t>& out);
 

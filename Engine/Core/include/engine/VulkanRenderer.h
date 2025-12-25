@@ -4,6 +4,7 @@
 #include <memory>
 #include <SDL.h>
 #include <vector>
+#include <string>
 
 #ifdef HAVE_VULKAN
 #include <vulkan/vulkan.h>
@@ -23,6 +24,8 @@ public:
 
     // Return true if the renderer has a usable swapchain and present capability
     bool IsPresentCapable() const;
+
+    std::string GetName() const override { return std::string("vulkan"); }
 
 private:
     SDL_Window* m_window = nullptr;

@@ -16,6 +16,8 @@ public:
     void EndFrame() override;
     void Shutdown() override;
 
+    std::string GetName() const override { return std::string("opengl"); }
+
 private:
     SDL_Window* m_window = nullptr;
     SDL_GLContext m_context = nullptr;
