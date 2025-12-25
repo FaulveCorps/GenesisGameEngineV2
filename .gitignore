@@ -78,7 +78,6 @@ smoke-*.log
 
 # Runtime-generated artifacts (screenshots, test outputs)
 /artifacts/
-*.bmp
 software_render*.bmp
 test_cycle_*.bmp
 
