@@ -18,6 +18,7 @@ add_subdirectory(${catch2_SOURCE_DIR} ${catch2_BINARY_DIR} EXCLUDE_FROM_ALL)
 add_executable(UnitTests
     test_core.cpp
     test_wgpu_smoke.cpp
+    test_software_smoke.cpp
     ${catch2_SOURCE_DIR}/extras/catch_amalgamated.cpp
 )
 

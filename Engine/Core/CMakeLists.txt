@@ -32,6 +32,7 @@ add_library(EngineCore STATIC
     src/VulkanRenderer.cpp
     src/D3D12Renderer.cpp
     src/WgpuRenderer.cpp
+    src/SoftwareRenderer.cpp
     src/GraphicsFactory.cpp
     src/Model.cpp
     src/Mesh.cpp

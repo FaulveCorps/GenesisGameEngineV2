@@ -4,6 +4,7 @@
 #include "engine/VulkanRenderer.h"
 #include "engine/D3D12Renderer.h"
 #include "engine/WgpuRenderer.h"
+#include "engine/SoftwareRenderer.h"
 #include <algorithm>
 #include <iostream>
 
@@ -95,6 +96,14 @@ std::unique_ptr<IGraphicsAPI> GraphicsFactory::CreateRenderer(SDL_Window* window
                 return r;
             }
             std::cerr << "GraphicsFactory: OpenGLRenderer::Init failed; trying next" << std::endl;
+            r->Shutdown();
+        } else if (name == "software" || name == "null") {
+            auto r = std::make_unique<SoftwareRenderer>();
+            if (r->Init(window, glContext)) {
+                std::cout << "GraphicsFactory: selected SoftwareRenderer" << std::endl;
+                return r;
+            }
+            std::cerr << "GraphicsFactory: SoftwareRenderer::Init failed; trying next" << std::endl;
             r->Shutdown();
         } else {
             std::cout << "GraphicsFactory: unknown renderer name '" << entry << "'" << std::endl;
