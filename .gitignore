@@ -1,104 +1,72 @@
-# Build
-build/
-vcpkg/
-cmake-build-debug/
-CMakeCache.txt
-CMakeFiles/
+# Build artifacts & caches
+# General build directories (avoid committing generated build trees)
+/build/
+/build_vs/
+/build-vs/
+/out/
+/bin/
+/lib/
+/tmp/
+
+# CMake & build system artefacts (generated)
+/CMakeFiles/
+/CMakeCache.txt
+/cmake_install.cmake
+/Makefile
+/install_manifest.txt
 *.cmake
 *.make
+
+# Visual Studio / MSBuild outputs
 *.sln
 *.vcxproj*
+*.vcxproj.user
+*.vcxproj.filters
 *.user
+*.suo
+*.sdf
+*.opensdf
+ipch/
+*.ipch
 *.obj
 *.o
 *.exe
-*.dll
+# Keep binary artifacts out of source control; they will live in build directories
+**/bin/*
+**/lib/*
 *.pdb
+
+# vcpkg build outputs and caches (keep vcpkg.exe if checked in)
+/vcpkg/installed/
+/vcpkg/buildtrees/
+/vcpkg/packages/
+/vcpkg/archives/
+/vcpkg/tools/
+!vcpkg/vcpkg.exe
+
 
 # OS
 .DS_Store
 Thumbs.db
 
-# Editor
+# Editor / user files and logs
 .vscode/
 .idea/
-vcpkg_assimp_install.log
-cmake_version.log
-configure_output.txt
-cmake_config.log
-.gitignore
-configure.log
-cmake_full.log
+*.code-workspace
+
+# vcpkg binary cache and top-level helper artifacts (keep vcpkg.exe if present)
 .vcpkg_binary_cache
-vcpkg
-BUILD_OPTIMIZATION.md
-vcpkg
-build-vs/_deps/catch2-subbuild/catch2-populate-prefix/src/catch2-populate-stamp/catch2-populate-gitclone-lastrun.txt
-build-vs/_deps/catch2-subbuild/catch2-populate-prefix/src/catch2-populate-stamp/catch2-populate-gitinfo.txt
-build-vs/_deps/catch2-subbuild/catch2-populate-prefix/src/catch2-populate-stamp/catch2-populate-patch-info.txt
-build-vs/_deps/catch2-subbuild/catch2-populate-prefix/src/catch2-populate-stamp/catch2-populate-update-info.txt
-build-vs/_deps/catch2-subbuild/catch2-populate-prefix/src/catch2-populate-stamp/Debug/catch2-populate-build
-build-vs/_deps/catch2-subbuild/catch2-populate-prefix/src/catch2-populate-stamp/Debug/catch2-populate-configure
-build-vs/_deps/catch2-subbuild/catch2-populate-prefix/src/catch2-populate-stamp/Debug/catch2-populate-done
-build-vs/_deps/catch2-subbuild/catch2-populate-prefix/src/catch2-populate-stamp/Debug/catch2-populate-download
-build-vs/_deps/catch2-subbuild/catch2-populate-prefix/src/catch2-populate-stamp/Debug/catch2-populate-install
-build-vs/_deps/catch2-subbuild/catch2-populate-prefix/src/catch2-populate-stamp/Debug/catch2-populate-mkdir
-build-vs/_deps/catch2-subbuild/catch2-populate-prefix/src/catch2-populate-stamp/Debug/catch2-populate-patch
-build-vs/_deps/catch2-subbuild/catch2-populate-prefix/src/catch2-populate-stamp/Debug/catch2-populate-test
-build-vs/_deps/catch2-subbuild/catch2-populate-prefix/tmp/catch2-populate-cfgcmd.txt
-build-vs/_deps/catch2-subbuild/x64/Debug/ALL_BUILD/ALL_BUILD.recipe
-build-vs/_deps/catch2-subbuild/x64/Debug/ALL_BUILD/ALL_BUILD.tlog/ALL_BUILD.lastbuildstate
-build-vs/_deps/catch2-subbuild/x64/Debug/ALL_BUILD/ALL_BUILD.tlog/CustomBuild.command.1.tlog
-build-vs/_deps/catch2-subbuild/x64/Debug/ALL_BUILD/ALL_BUILD.tlog/CustomBuild.read.1.tlog
-build-vs/_deps/catch2-subbuild/x64/Debug/ALL_BUILD/ALL_BUILD.tlog/CustomBuild.write.1.tlog
-build-vs/_deps/catch2-subbuild/x64/Debug/catch2-populate/catch2-populate.recipe
-build-vs/_deps/catch2-subbuild/x64/Debug/catch2-populate/catch2-populate.tlog/catch2-populate.lastbuildstate
-build-vs/_deps/catch2-subbuild/x64/Debug/catch2-populate/catch2-populate.tlog/CustomBuild.command.1.tlog
-build-vs/_deps/catch2-subbuild/x64/Debug/catch2-populate/catch2-populate.tlog/CustomBuild.read.1.tlog
-build-vs/_deps/catch2-subbuild/x64/Debug/catch2-populate/catch2-populate.tlog/CustomBuild.write.1.tlog
-build-vs/_deps/catch2-subbuild/x64/Debug/ZERO_CHECK/ZERO_CHECK.recipe
-build-vs/_deps/catch2-subbuild/x64/Debug/ZERO_CHECK/ZERO_CHECK.tlog/CustomBuild.command.1.tlog
-build-vs/_deps/catch2-subbuild/x64/Debug/ZERO_CHECK/ZERO_CHECK.tlog/CustomBuild.read.1.tlog
-build-vs/_deps/catch2-subbuild/x64/Debug/ZERO_CHECK/ZERO_CHECK.tlog/CustomBuild.write.1.tlog
-build-vs/_deps/catch2-subbuild/x64/Debug/ZERO_CHECK/ZERO_CHECK.tlog/ZERO_CHECK.lastbuildstate
-build-vs/_deps/entt-build/entt.pc
-build-vs/_deps/entt-subbuild/entt-populate-prefix/src/entt-populate-stamp/entt-populate-gitclone-lastrun.txt
-build-vs/_deps/entt-subbuild/entt-populate-prefix/src/entt-populate-stamp/entt-populate-gitinfo.txt
-build-vs/_deps/entt-subbuild/entt-populate-prefix/src/entt-populate-stamp/entt-populate-patch-info.txt
-build-vs/_deps/entt-subbuild/entt-populate-prefix/src/entt-populate-stamp/entt-populate-update-info.txt
-build-vs/_deps/entt-subbuild/entt-populate-prefix/src/entt-populate-stamp/Debug/entt-populate-build
-build-vs/_deps/entt-subbuild/entt-populate-prefix/src/entt-populate-stamp/Debug/entt-populate-configure
-build-vs/_deps/entt-subbuild/entt-populate-prefix/src/entt-populate-stamp/Debug/entt-populate-done
-build-vs/_deps/entt-subbuild/entt-populate-prefix/src/entt-populate-stamp/Debug/entt-populate-download
-build-vs/_deps/entt-subbuild/entt-populate-prefix/src/entt-populate-stamp/Debug/entt-populate-install
-build-vs/_deps/entt-subbuild/entt-populate-prefix/src/entt-populate-stamp/Debug/entt-populate-mkdir
-build-vs/_deps/entt-subbuild/entt-populate-prefix/src/entt-populate-stamp/Debug/entt-populate-patch
-build-vs/_deps/entt-subbuild/entt-populate-prefix/src/entt-populate-stamp/Debug/entt-populate-test
-build-vs/_deps/entt-subbuild/entt-populate-prefix/tmp/entt-populate-cfgcmd.txt
-build-vs/_deps/entt-subbuild/x64/Debug/ALL_BUILD/ALL_BUILD.recipe
-build-vs/_deps/entt-subbuild/x64/Debug/ALL_BUILD/ALL_BUILD.tlog/ALL_BUILD.lastbuildstate
-build-vs/_deps/entt-subbuild/x64/Debug/ALL_BUILD/ALL_BUILD.tlog/CustomBuild.command.1.tlog
-build-vs/_deps/entt-subbuild/x64/Debug/ALL_BUILD/ALL_BUILD.tlog/CustomBuild.read.1.tlog
-build-vs/_deps/entt-subbuild/x64/Debug/ALL_BUILD/ALL_BUILD.tlog/CustomBuild.write.1.tlog
-build-vs/_deps/entt-subbuild/x64/Debug/entt-populate/entt-populate.recipe
-build-vs/_deps/entt-subbuild/x64/Debug/entt-populate/entt-populate.tlog/CustomBuild.command.1.tlog
-build-vs/_deps/entt-subbuild/x64/Debug/entt-populate/entt-populate.tlog/CustomBuild.read.1.tlog
-build-vs/_deps/entt-subbuild/x64/Debug/entt-populate/entt-populate.tlog/CustomBuild.write.1.tlog
-build-vs/_deps/entt-subbuild/x64/Debug/entt-populate/entt-populate.tlog/entt-populate.lastbuildstate
-build-vs/_deps/entt-subbuild/x64/Debug/ZERO_CHECK/ZERO_CHECK.recipe
-build-vs/_deps/entt-subbuild/x64/Debug/ZERO_CHECK/ZERO_CHECK.tlog/CustomBuild.command.1.tlog
-build-vs/_deps/entt-subbuild/x64/Debug/ZERO_CHECK/ZERO_CHECK.tlog/CustomBuild.read.1.tlog
-build-vs/_deps/entt-subbuild/x64/Debug/ZERO_CHECK/ZERO_CHECK.tlog/CustomBuild.write.1.tlog
-build-vs/_deps/entt-subbuild/x64/Debug/ZERO_CHECK/ZERO_CHECK.tlog/ZERO_CHECK.lastbuildstate
-vcpkg
-vcpkg
-vcpkg
-HEADLESS_TEST.md
-TROUBLESHOOTING.md
-SDL2_MIGRATION.md
+/vcpkg/
+!vcpkg/vcpkg.exe
+
+# Ignore subbuild generated stamps & tlogs (externalprojects/_deps)
+/build-vs/_deps/
+/build_vs/_deps/
+
+# Logs and smoke/test artifacts
+*.log
 err.log
 out.log
-Tools/Procdump.zip
 out_debug2.log
 out_debug3.log
 out_forced_vulkan_debug.log
@@ -106,3 +74,16 @@ out_forced_vulkan.log
 out_triangle.log
 out_cli_triangle.log
 out_cli_triangle2.log
+smoke-*.log
+
+# Crash capture / Procdump artifacts
+Tools/Procdump.zip
+tools/Procdump/*.dmp
+
+# Temporary and misc
+*.tmp
+*.bak
+*~
+.DS_Store
+Thumbs.db
+
