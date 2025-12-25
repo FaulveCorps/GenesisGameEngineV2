@@ -111,7 +111,7 @@ bool OpenGLRenderer::Init(SDL_Window* window, SDL_GLContext glContext) {
     if (!s) {
         std::cerr << "Warning: default shader failed to compile; falling back to fixed-function pipeline" << std::endl;
     } else {
-        m_defaultShader = std::make_shared<Shader>(std::move(*s));
+        m_defaultShader = s;
     }
 
     // Create a simple debug triangle VAO/VBO so we can always draw something for troubleshooting

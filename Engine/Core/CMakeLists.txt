@@ -35,6 +35,7 @@ add_library(EngineCore STATIC
     src/SoftwareRenderer.cpp
     src/RendererManager.cpp
     src/MeshRegistry.cpp
+    src/ShaderRegistry.cpp
     src/GraphicsFactory.cpp
     src/Model.cpp
     src/Mesh.cpp

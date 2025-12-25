@@ -1,4 +1,6 @@
 #include "engine/Shader.h"
+#include "engine/ShaderRegistry.h"
+#include "engine/IGraphics.h"
 #include <SDL.h>
 
 namespace Genesis::Engine {
@@ -91,12 +93,36 @@ static unsigned int CompileShader(unsigned int type, const std::string& source) 
     return id;
 }
 
-std::optional<Shader> Shader::FromSource(const std::string& vertexSrc, const std::string& fragmentSrc) {
-    Shader s;
-    unsigned int vs = CompileShader(GL_VERTEX_SHADER, vertexSrc);
-    if (!vs) return std::nullopt;
-    unsigned int fs = CompileShader(GL_FRAGMENT_SHADER, fragmentSrc);
-    if (!fs) { Resolve((void**)&pglDeleteShader, "glDeleteShader"); if (pglDeleteShader) pglDeleteShader(vs); return std::nullopt; }
+std::shared_ptr<Shader> Shader::CreateFromSource(const std::string& vertexSrc, const std::string& fragmentSrc) {
+    auto s = std::make_shared<Shader>();
+    s->vertexSrcGL_ = vertexSrc;
+    s->fragmentSrcGL_ = fragmentSrc;
+
+    // Register so the registry can rebuild/destroy across switches
+    ShaderRegistry::Instance().Register(s.get());
+    return s;
+}
+
+std::shared_ptr<Shader> Shader::FromSource(const std::string& vertexSrc, const std::string& fragmentSrc) {
+    auto s = CreateFromSource(vertexSrc, fragmentSrc);
+    // Attempt immediate GL compile if possible
+    s->UploadToRenderer(nullptr);
+    if (s->programID_ == 0) {
+        // Try to compile under current GL context; if still 0, caller should check and handle
+        // Note: returning s even with programID_==0 is acceptable; it can be compiled later
+    }
+    return s;
+}
+
+void Shader::UploadToRenderer(IGraphicsAPI* /*renderer*/) {
+    // For now, support GL re-creation only. If GL functions are available, compile program from stored sources.
+    if (programID_) return; // already built
+    if (vertexSrcGL_.empty() || fragmentSrcGL_.empty()) return;
+
+    unsigned int vs = CompileShader(GL_VERTEX_SHADER, vertexSrcGL_);
+    if (!vs) return;
+    unsigned int fs = CompileShader(GL_FRAGMENT_SHADER, fragmentSrcGL_);
+    if (!fs) { if (vs) pglDeleteShader(vs); return; }
 
     Resolve((void**)&pglCreateProgram, "glCreateProgram");
     Resolve((void**)&pglAttachShader, "glAttachShader");
@@ -104,12 +130,13 @@ std::optional<Shader> Shader::FromSource(const std::string& vertexSrc, const std
     Resolve((void**)&pglLinkProgram, "glLinkProgram");
     Resolve((void**)&pglGetProgramiv, "glGetProgramiv");
     Resolve((void**)&pglGetProgramInfoLog, "glGetProgramInfoLog");
-    Resolve((void**)&pglDetachShader, "glDetachShader");
     Resolve((void**)&pglDeleteProgram, "glDeleteProgram");
     Resolve((void**)&pglDeleteShader, "glDeleteShader");
-    if (!pglCreateProgram || !pglAttachShader || !pglBindAttribLocation || !pglLinkProgram || !pglGetProgramiv || !pglGetProgramInfoLog || !pglDetachShader || !pglDeleteProgram || !pglDeleteShader) {
+    if (!pglCreateProgram || !pglAttachShader || !pglBindAttribLocation || !pglLinkProgram || !pglGetProgramiv || !pglGetProgramInfoLog || !pglDeleteProgram || !pglDeleteShader) {
         std::cerr << "GL program functions not available" << std::endl;
-        return std::nullopt;
+        if (vs) pglDeleteShader(vs);
+        if (fs) pglDeleteShader(fs);
+        return;
     }
 
     unsigned int program = pglCreateProgram();
@@ -129,11 +156,11 @@ std::optional<Shader> Shader::FromSource(const std::string& vertexSrc, const std
         pglGetProgramiv(program, GL_INFO_LOG_LENGTH, &length);
         std::string message(length, '\0');
         pglGetProgramInfoLog(program, length, &length, &message[0]);
-        std::cerr << "Shader link error: " << message << std::endl;
+        std::cerr << "GL link error: " << message << std::endl;
         pglDeleteProgram(program);
         pglDeleteShader(vs);
         pglDeleteShader(fs);
-        return std::nullopt;
+        return;
     }
 
     pglDetachShader(program, vs);
@@ -141,13 +168,19 @@ std::optional<Shader> Shader::FromSource(const std::string& vertexSrc, const std
     pglDeleteShader(vs);
     pglDeleteShader(fs);
 
-    s.programID_ = program;
-    std::cout << "Shader program created: " << program << std::endl;
-    return s;
+    programID_ = program;
+    std::cout << "Shader::UploadToRenderer -> created GL program " << programID_ << std::endl;
 }
 
-Shader::~Shader() {
-    if (programID_) { Resolve((void**)&pglDeleteProgram, "glDeleteProgram"); if (pglDeleteProgram) pglDeleteProgram(programID_); }
+void Shader::DestroyOnRenderer(IGraphicsAPI* /*renderer*/) {
+    if (programID_) {
+        Resolve((void**)&pglDeleteProgram, "glDeleteProgram");
+        if (pglDeleteProgram) {
+            pglDeleteProgram(programID_);
+            std::cout << "Shader::DestroyOnRenderer -> deleted GL program " << programID_ << std::endl;
+        }
+        programID_ = 0;
+    }
 }
 
 void Shader::Use() const {
@@ -160,6 +193,12 @@ void Shader::Use() const {
             std::cerr << "Shader::Use -> glUseProgram not available" << std::endl;
         }
     }
+}
+
+Shader::~Shader() {
+    // Ensure removal from registry and cleanup
+    ShaderRegistry::Instance().Unregister(this);
+    DestroyOnRenderer(nullptr);
 }
 
 } // namespace Genesis::Engine

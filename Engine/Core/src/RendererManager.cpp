@@ -2,6 +2,7 @@
 #include "engine/GraphicsFactory.h"
 #include "engine/Mesh.h"
 #include "engine/MeshRegistry.h"
+#include "engine/ShaderRegistry.h"
 #include <iostream>
 
 namespace Genesis::Engine {
@@ -33,6 +34,7 @@ bool RendererManager::SwitchRendererByName(const std::string& name, SDL_Window* 
     IGraphicsAPI* old = GetRenderer();
     // Destroy resources on the old renderer first
     MeshRegistry::Instance().DestroyAllOnRenderer(old);
+    ShaderRegistry::Instance().DestroyAllOnRenderer(old);
 
     if (old) {
         try {
@@ -47,6 +49,7 @@ bool RendererManager::SwitchRendererByName(const std::string& name, SDL_Window* 
 
     // Upload resources into new renderer
     MeshRegistry::Instance().UploadAllToRenderer(GetRenderer());
+    ShaderRegistry::Instance().UploadAllToRenderer(GetRenderer());
 
     std::cout << "RendererManager: switched to '" << name << "'" << std::endl;
     return true;
