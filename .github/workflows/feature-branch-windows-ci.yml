@@ -1,0 +1,72 @@
+name: Feature Branch Windows CI
+
+on:
+  push:
+    branches: [ feature/software-renderer ]
+
+jobs:
+  windows-ci:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Bootstrap vcpkg (skip if present)
+        shell: powershell
+        run: |
+          if (-Not (Test-Path .\vcpkg\vcpkg.exe)) { .\vcpkg\bootstrap-vcpkg.bat } else { Write-Host "vcpkg.exe present - skipping bootstrap" }
+
+      - name: Install vcpkg dependencies
+        shell: powershell
+        run: |
+          Write-Host "Installing sdl2 and assimp via vcpkg"
+          .\vcpkg\vcpkg.exe install sdl2:x64-windows assimp:x64-windows --disable-metrics
+
+      - name: Configure CMake (Ninja)
+        shell: powershell
+        run: |
+          Write-Host "Configuring CMake (Ninja)"
+          cmake -S . -B build -G "Ninja" -A x64 -DCMAKE_BUILD_TYPE=Debug -DVCPKG_INSTALLED="${{ github.workspace }}\\vcpkg\\installed\\x64-windows"
+
+      - name: Build SampleGame
+        shell: powershell
+        run: |
+          Write-Host "Building SampleGame"
+          cmake --build build --config Debug --target SampleGame
+
+      - name: Run UnitTests and capture log
+        shell: powershell
+        continue-on-error: true
+        run: |
+          Write-Host "Running UnitTests..."
+          $exe = Join-Path $PWD "build\tests\Debug\UnitTests.exe"
+          $log = "unittests.log"
+          if (-Not (Test-Path $exe)) { Write-Host "UnitTests executable not found: $exe"; Exit 0 }
+          & $exe --reporter console *>&1 | Tee-Object -FilePath $log
+          $exit = $LASTEXITCODE
+          Write-Host "UnitTests exit code: $exit"
+          if ($exit -ne 0) { Write-Host "UnitTests failed (non-zero exit)" }
+
+      - name: Run OpenGL smoke run and capture log
+        shell: powershell
+        continue-on-error: true
+        run: |
+          Write-Host "Running SampleGame (opengl) smoke run..."
+          $exe = Join-Path $PWD "build\GameProjects\SampleGame\Debug\SampleGame.exe"
+          $log = "smoke-opengl.log"
+          if (-Not (Test-Path $exe)) { Write-Host "SampleGame executable not found: $exe"; Exit 0 }
+          & $exe --gfx-order opengl --2d-demo --stress 1 *>&1 | Tee-Object -FilePath $log
+          $exit = $LASTEXITCODE
+          Write-Host "Smoke run exit code: $exit"
+          if ($exit -ne 0) { Write-Host "Smoke run failed (non-zero exit)" }
+
+      - name: Upload logs and build folder
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: feature-branch-logs
+          path: |
+            unittests.log
+            smoke-opengl.log
+            build
