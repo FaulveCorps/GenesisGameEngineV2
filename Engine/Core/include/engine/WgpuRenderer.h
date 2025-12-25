@@ -8,7 +8,20 @@ typedef HWND__* HWND;
 #endif
 
 #ifdef HAVE_WGPU
-#include <wgpu.h>
+#if defined(__has_include)
+  #if __has_include(<wgpu.h>)
+    #include <wgpu.h>
+  #elif __has_include(<webgpu/webgpu.h>)
+    #include <webgpu/webgpu.h>
+  #elif __has_include(<dawn/webgpu.h>)
+    #include <dawn/webgpu.h>
+  #else
+    #error "WGPU header not found"
+  #endif
+#else
+  /* Fallback for compilers without __has_include */
+  #include <webgpu/webgpu.h>
+#endif
 #include <dawn/native/DawnNative.h>
 #endif
 
@@ -51,8 +64,13 @@ private:
     // Device lost handling
     bool m_deviceLost = false;
 
-    // Internal handler for uncaptured device errors (invoked from C callback)
+    // Internal handlers for uncaptured errors and device lost notifications
     void HandleUncapturedDeviceError(WGPUErrorType type, WGPUStringView message);
+    void HandleDeviceLost(WGPUDeviceLostReason reason, WGPUStringView message);
+
+    // Static C-compatible callbacks wired into WGPU device descriptor
+    static void OnUncapturedErrorCallback(const WGPUDevice* device, WGPUErrorType type, WGPUStringView message, void* userdata1, void* userdata2);
+    static void OnDeviceLostCallback(const WGPUDevice* device, WGPUDeviceLostReason reason, WGPUStringView message, void* userdata1, void* userdata2);
 #endif
 };
 

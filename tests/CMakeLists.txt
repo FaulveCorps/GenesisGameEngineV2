@@ -36,6 +36,7 @@ target_compile_features(gl_vaorepro PUBLIC cxx_std_17)
 target_include_directories(UnitTests PRIVATE
   ${CMAKE_SOURCE_DIR}/Engine/Core/include
   ${CMAKE_SOURCE_DIR}/tests/include
+  ${catch2_SOURCE_DIR}/single_include
   ${catch2_SOURCE_DIR}/src
   ${catch2_SOURCE_DIR}/extras
 )
@@ -65,6 +66,7 @@ if (WIN32)
         "${VCPKG_INSTALLED}/bin/poly2tri.dll"
         "${VCPKG_INSTALLED}/bin/pugixml.dll"
         "${VCPKG_INSTALLED}/bin/zlib1.dll"
+        "${VCPKG_INSTALLED}/bin/webgpu_dawn.dll"
     )
 
     add_custom_command(TARGET UnitTests POST_BUILD

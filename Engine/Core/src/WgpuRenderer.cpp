@@ -9,8 +9,8 @@
 
 namespace Genesis::Engine {
 
-// Device error callback for uncaptured device errors
-static void OnDeviceError(const WGPUDevice* /*device*/, WGPUErrorType type, WGPUStringView message, void* userdata1, void* /*userdata2*/) {
+// Static callbacks invoked by the WGPU device for uncaptured errors and device-loss
+void WgpuRenderer::OnUncapturedErrorCallback(const WGPUDevice* /*device*/, WGPUErrorType type, WGPUStringView message, void* userdata1, void* /*userdata2*/) {
     // If userdata1 is a WgpuRenderer*, forward to instance handler for proper state updates
     if (userdata1) {
         WgpuRenderer* self = reinterpret_cast<WgpuRenderer*>(userdata1);
@@ -23,20 +23,37 @@ static void OnDeviceError(const WGPUDevice* /*device*/, WGPUErrorType type, WGPU
     char buf[1024];
     int n = snprintf(buf, sizeof(buf), "%.*s", (int)message.length, message.data);
     (void)n;
-    std::cerr << "WgpuRenderer: device error: " << buf << std::endl;
+    std::cerr << "WgpuRenderer: uncaptured device error: " << buf << std::endl;
+}
+
+void WgpuRenderer::OnDeviceLostCallback(const WGPUDevice* /*device*/, WGPUDeviceLostReason reason, WGPUStringView message, void* userdata1, void* /*userdata2*/) {
+    if (userdata1) {
+        WgpuRenderer* self = reinterpret_cast<WgpuRenderer*>(userdata1);
+        if (self) {
+            self->HandleDeviceLost(reason, message);
+            return;
+        }
+    }
+
+    char buf[1024];
+    int n = snprintf(buf, sizeof(buf), "%.*s", (int)message.length, message.data);
+    (void)n;
+    std::cerr << "WgpuRenderer: device lost: " << buf << " (reason=" << reason << ")" << std::endl;
 }
 
 
 void WgpuRenderer::HandleUncapturedDeviceError(WGPUErrorType type, WGPUStringView message) {
     std::string msg;
     msg.assign(message.data, message.length);
-    std::cerr << "WgpuRenderer: uncaptured device error: " << msg << std::endl;
+    std::cerr << "WgpuRenderer: uncaptured device error (" << type << "): " << msg << std::endl;
+}
 
-    if (type == WGPUErrorType_DeviceLost) {
-        std::cerr << "WgpuRenderer: device lost detected; marking device as lost and scheduling reinit" << std::endl;
-        m_deviceLost = true;
-        m_initialized = false;
-    }
+void WgpuRenderer::HandleDeviceLost(WGPUDeviceLostReason reason, WGPUStringView message) {
+    std::string msg;
+    msg.assign(message.data, message.length);
+    std::cerr << "WgpuRenderer: device lost (reason=" << reason << "): " << msg << std::endl;
+    m_deviceLost = true;
+    m_initialized = false;
 }
 
 bool WgpuRenderer::Init(SDL_Window* window, SDL_GLContext /*glContext*/) {
@@ -65,11 +82,14 @@ bool WgpuRenderer::Init(SDL_Window* window, SDL_GLContext /*glContext*/) {
         // Pick first adapter
         m_adapter = adapters[0];
 
-        // Create a device (attach uncaptured error callback)
+        // Create a device (attach device-lost and uncaptured error callbacks)
         WGPUDeviceDescriptor deviceDesc = WGPU_DEVICE_DESCRIPTOR_INIT;
-        deviceDesc.uncapturedErrorCallbackInfo2.callback = &OnDeviceError;
-        deviceDesc.uncapturedErrorCallbackInfo2.userdata1 = this;
-        deviceDesc.uncapturedErrorCallbackInfo2.userdata2 = nullptr;
+        deviceDesc.deviceLostCallbackInfo.callback = &WgpuRenderer::OnDeviceLostCallback;
+        deviceDesc.deviceLostCallbackInfo.userdata1 = this;
+        deviceDesc.deviceLostCallbackInfo.userdata2 = nullptr;
+        deviceDesc.uncapturedErrorCallbackInfo.callback = &WgpuRenderer::OnUncapturedErrorCallback;
+        deviceDesc.uncapturedErrorCallbackInfo.userdata1 = this;
+        deviceDesc.uncapturedErrorCallbackInfo.userdata2 = nullptr;
 
         WGPUDevice device = m_adapter.CreateDevice(&deviceDesc);
         if (!device) {
@@ -182,17 +202,13 @@ bool WgpuRenderer::Init(SDL_Window* window, SDL_GLContext /*glContext*/) {
         if (pipelineLayout) wgpuPipelineLayoutRelease(pipelineLayout);
 
         // Create a Win32 surface for presenting to the SDL window (if available)
-        WGPUSurfaceDescriptorFromWindowsHWND fromWindowsHWND;
-        memset(&fromWindowsHWND, 0, sizeof(fromWindowsHWND));
-        fromWindowsHWND.chain.next = nullptr;
-        fromWindowsHWND.chain.sType = WGPUSType_SurfaceDescriptorFromWindowsHWND;
-        fromWindowsHWND.hinstance = GetModuleHandle(NULL);
-        fromWindowsHWND.hwnd = hwnd;
+        WGPUSurfaceSourceWindowsHWND winSrc = WGPU_SURFACE_SOURCE_WINDOWS_HWND_INIT;
+        winSrc.hinstance = GetModuleHandle(NULL);
+        winSrc.hwnd = hwnd;
 
-        WGPUSurfaceDescriptor surfaceDescriptor;
-        memset(&surfaceDescriptor, 0, sizeof(surfaceDescriptor));
-        surfaceDescriptor.nextInChain = &fromWindowsHWND.chain;
-        surfaceDescriptor.label = nullptr;
+        WGPUSurfaceDescriptor surfaceDescriptor = WGPU_SURFACE_DESCRIPTOR_INIT;
+        surfaceDescriptor.nextInChain = &winSrc.chain;
+        surfaceDescriptor.label = WGPU_STRING_VIEW_INIT;
 
         m_surface = wgpuInstanceCreateSurface(m_instance.Get(), &surfaceDescriptor);
         if (!m_surface) {
@@ -278,10 +294,11 @@ void WgpuRenderer::BeginFrame() {
         }
 
         // Acquire current swapchain texture
-        WGPUSurfaceTexture surfaceTex;
+        WGPUSurfaceTexture surfaceTex = WGPU_SURFACE_TEXTURE_INIT;
         wgpuSurfaceGetCurrentTexture(m_surface, &surfaceTex);
-        if (surfaceTex.status != WGPUSurfaceGetCurrentTextureStatus_Success) {
-            std::cerr << "WgpuRenderer: cannot acquire next swap chain texture" << std::endl;
+        if (surfaceTex.status != WGPUSurfaceGetCurrentTextureStatus_SuccessOptimal &&
+            surfaceTex.status != WGPUSurfaceGetCurrentTextureStatus_SuccessSuboptimal) {
+            std::cerr << "WgpuRenderer: cannot acquire next swap chain texture (status=" << surfaceTex.status << ")" << std::endl;
             return;
         }
 

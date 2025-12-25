@@ -87,3 +87,9 @@ tools/Procdump/*.dmp
 .DS_Store
 Thumbs.db
 
+BUILD_OPTIMIZATION.md
+HEADLESS_TEST.md
+SDL2_MIGRATION.md
+TROUBLESHOOTING.md
+build-ninja-debug/CMakeCache.txt
+build-ninja-debug/CMakeFiles/cmake.check_cache
