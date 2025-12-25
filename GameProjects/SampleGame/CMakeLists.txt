@@ -30,7 +30,20 @@ if (WIN32)
         "${VCPKG_INSTALLED}/bin/poly2tri.dll"
         "${VCPKG_INSTALLED}/bin/pugixml.dll"
         "${VCPKG_INSTALLED}/bin/zlib1.dll"
+        "${VCPKG_INSTALLED}/bin/webgpu_dawn.dll"
+        "${VCPKG_INSTALLED}/bin/abseil_dll.dll"
     )
+
+    # Attempt to include MSVC redistributable CRT DLLs (if present on developer machine)
+    if (MSVC)
+        if (DEFINED ENV{ProgramFiles})
+            file(GLOB VCRUNTIME_DIRS "$ENV{ProgramFiles}/Microsoft Visual Studio/2022/*/VC/Redist/MSVC/*/x64/Microsoft.VC143.CRT")
+            foreach(d ${VCRUNTIME_DIRS})
+                file(GLOB CRT_DLLS "${d}/*.dll")
+                list(APPEND SAMPLEGAME_RUNTIME_DLLS ${CRT_DLLS})
+            endforeach()
+        endif()
+    endif()
 
     add_custom_command(TARGET SampleGame POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:SampleGame>

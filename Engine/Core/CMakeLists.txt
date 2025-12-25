@@ -154,7 +154,7 @@ endif()
 
 if (WGPU_INCLUDE_DIR AND WGPU_LIBRARY)
   message(STATUS "WGPU/Dawn found: include=${WGPU_INCLUDE_DIR} lib=${WGPU_LIBRARY}")
-  target_compile_definitions(EngineCore PRIVATE HAVE_WGPU=1)
+  target_compile_definitions(EngineCore PUBLIC HAVE_WGPU=1)
   target_include_directories(EngineCore PRIVATE ${WGPU_INCLUDE_DIR})
   target_link_libraries(EngineCore PRIVATE ${WGPU_LIBRARY})
 else()

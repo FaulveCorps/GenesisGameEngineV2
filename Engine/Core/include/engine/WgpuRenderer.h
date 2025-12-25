@@ -25,6 +25,8 @@ typedef HWND__* HWND;
 #include <dawn/native/DawnNative.h>
 #endif
 
+#include <vector>
+
 namespace Genesis::Engine {
 
 class WgpuRenderer : public IGraphicsAPI {
@@ -36,6 +38,9 @@ public:
     void BeginFrame() override;
     void EndFrame() override;
     void Shutdown() override;
+
+    // Render an offscreen image and read back pixels (RGBA8); returns true on success
+    bool ReadbackOffscreen(uint32_t width, uint32_t height, std::vector<uint8_t>& out);
 
 private:
 #ifdef HAVE_WGPU

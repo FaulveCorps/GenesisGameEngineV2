@@ -6,6 +6,8 @@
 #endif
 #include <cstring>
 #include <fstream>
+#include <future>
+#include <chrono>
 
 namespace Genesis::Engine {
 
@@ -108,7 +110,7 @@ bool WgpuRenderer::Init(SDL_Window* window, SDL_GLContext /*glContext*/) {
             vs_code.assign(std::istreambuf_iterator<char>(vs_file), std::istreambuf_iterator<char>());
         } else {
             vs_code = R"wgsl(
-                @stage(vertex) fn vs_main(@builtin(vertex_index) VertexIndex : u32) -> @builtin(position) vec4<f32> {
+                @vertex fn vs_main(@builtin(vertex_index) VertexIndex : u32) -> @builtin(position) vec4<f32> {
                     var pos = array<vec2<f32>, 3>(vec2<f32>(0.0, 0.5), vec2<f32>(-0.5,-0.5), vec2<f32>(0.5,-0.5));
                     let p : vec2<f32> = pos[VertexIndex];
                     return vec4<f32>(p, 0.0, 1.0);
@@ -122,7 +124,7 @@ bool WgpuRenderer::Init(SDL_Window* window, SDL_GLContext /*glContext*/) {
             fs_code.assign(std::istreambuf_iterator<char>(fs_file), std::istreambuf_iterator<char>());
         } else {
             fs_code = R"wgsl(
-                @stage(fragment) fn fs_main() -> @location(0) vec4<f32> {
+                @fragment fn fs_main() -> @location(0) vec4<f32> {
                     return vec4<f32>(1.0, 0.0, 0.0, 1.0);
                 }
             )wgsl";
@@ -234,6 +236,190 @@ bool WgpuRenderer::Init(SDL_Window* window, SDL_GLContext /*glContext*/) {
     return false;
 #endif
 }
+
+#ifdef HAVE_WGPU
+namespace {
+    // Helper used for buffer map async callback
+    static void BufferMapCallback(WGPUMapAsyncStatus status, WGPUStringView message, void* userdata1, void* /*userdata2*/) {
+        if (!userdata1) return;
+        std::promise<bool>* p = reinterpret_cast<std::promise<bool>*>(userdata1);
+        std::string msg;
+        if (message.data && message.length > 0) msg.assign(message.data, message.length);
+        std::cerr << "WgpuRenderer: BufferMapCallback status=" << status << " message='" << msg << "'" << std::endl;
+        try {
+            p->set_value(status == WGPUMapAsyncStatus_Success);
+        } catch (...) {
+            // Ignore any exceptions here
+        }
+    }
+}
+
+bool WgpuRenderer::ReadbackOffscreen(uint32_t width, uint32_t height, std::vector<uint8_t>& out) {
+    if (!m_initialized || !m_device) return false;
+
+    const uint32_t bytesPerPixel = 4;
+    const uint32_t bytesPerRowUnaligned = width * bytesPerPixel;
+    const uint32_t bytesPerRow = ((bytesPerRowUnaligned + 255u) / 256u) * 256u; // WebGPU requires rows be a multiple of 256
+    const uint64_t bufferSize = static_cast<uint64_t>(bytesPerRow) * static_cast<uint64_t>(height);
+
+    // Create an offscreen texture to render into
+    WGPUTextureDescriptor texDesc = WGPU_TEXTURE_DESCRIPTOR_INIT;
+    texDesc.dimension = WGPUTextureDimension_2D;
+    texDesc.size.width = width;
+    texDesc.size.height = height;
+    texDesc.size.depthOrArrayLayers = 1;
+    texDesc.mipLevelCount = 1;
+    texDesc.sampleCount = 1;
+    texDesc.format = WGPUTextureFormat_BGRA8Unorm;
+    texDesc.usage = static_cast<WGPUTextureUsage>(WGPUTextureUsage_RenderAttachment | WGPUTextureUsage_CopySrc);
+
+    WGPUTexture target = wgpuDeviceCreateTexture(m_device, &texDesc);
+    if (!target) return false;
+
+    WGPUTextureView view = wgpuTextureCreateView(target, nullptr);
+    if (!view) { wgpuTextureDestroy(target); return false; }
+
+    WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(m_device, nullptr);
+    if (!encoder) { wgpuTextureViewRelease(view); wgpuTextureDestroy(target); return false; }
+
+    // Render pass
+    WGPURenderPassColorAttachment colorAttachment = WGPU_RENDER_PASS_COLOR_ATTACHMENT_INIT;
+    colorAttachment.view = view;
+    colorAttachment.loadOp = WGPULoadOp_Clear;
+    colorAttachment.storeOp = WGPUStoreOp_Store;
+    colorAttachment.clearValue = WGPU_COLOR_INIT;
+    // Let the fragment shader drive color; clear to black initially
+    colorAttachment.clearValue.r = 0.0f;
+    colorAttachment.clearValue.g = 0.0f;
+    colorAttachment.clearValue.b = 0.0f;
+    colorAttachment.clearValue.a = 1.0f;
+
+    WGPURenderPassDescriptor rpDesc = WGPU_RENDER_PASS_DESCRIPTOR_INIT;
+    rpDesc.colorAttachmentCount = 1;
+    rpDesc.colorAttachments = &colorAttachment;
+
+    WGPURenderPassEncoder pass = wgpuCommandEncoderBeginRenderPass(encoder, &rpDesc);
+    if (!pass) { wgpuCommandEncoderFinish(encoder, nullptr); wgpuTextureViewRelease(view); wgpuTextureDestroy(target); return false; }
+
+    wgpuRenderPassEncoderSetPipeline(pass, m_pipeline);
+    wgpuRenderPassEncoderDraw(pass, 3, 1, 0, 0);
+    wgpuRenderPassEncoderEnd(pass);
+
+    // Create readback buffer
+    WGPUBufferDescriptor bufDesc = WGPU_BUFFER_DESCRIPTOR_INIT;
+    bufDesc.usage = static_cast<WGPUBufferUsage>(WGPUBufferUsage_MapRead | WGPUBufferUsage_CopyDst);
+    bufDesc.size = bufferSize;
+    WGPUBuffer staging = wgpuDeviceCreateBuffer(m_device, &bufDesc);
+    if (!staging) { wgpuTextureViewRelease(view); wgpuTextureDestroy(target); return false; }
+
+    // Copy texture to buffer
+    WGPUTexelCopyTextureInfo src = WGPU_TEXEL_COPY_TEXTURE_INFO_INIT;
+    src.texture = target;
+    src.mipLevel = 0;
+    src.origin = WGPU_ORIGIN_3D_INIT;
+    src.aspect = WGPUTextureAspect_All;
+
+    WGPUTexelCopyBufferInfo dst = WGPU_TEXEL_COPY_BUFFER_INFO_INIT;
+    WGPUTexelCopyBufferLayout layout = WGPU_TEXEL_COPY_BUFFER_LAYOUT_INIT;
+    layout.offset = 0;
+    layout.bytesPerRow = bytesPerRow;
+    layout.rowsPerImage = height;
+    dst.layout = layout;
+    dst.buffer = staging;
+
+    WGPUExtent3D extent = WGPU_EXTENT_3D_INIT;
+    extent.width = width;
+    extent.height = height;
+    extent.depthOrArrayLayers = 1;
+
+    wgpuCommandEncoderCopyTextureToBuffer(encoder, &src, &dst, &extent);
+
+    WGPUCommandBuffer cmd = wgpuCommandEncoderFinish(encoder, nullptr);
+    if (!cmd) {
+        wgpuTextureViewRelease(view);
+        wgpuTextureDestroy(target);
+        wgpuBufferRelease(staging);
+        return false;
+    }
+
+    wgpuQueueSubmit(m_queue, 1, &cmd);
+    wgpuCommandBufferRelease(cmd);
+
+    std::cerr << "WgpuRenderer: submitted render+copy to queue, waiting for buffer map" << std::endl;
+
+    // Map buffer asynchronously and wait for completion
+    auto promPtr = new std::promise<bool>();
+    std::future<bool> fut = promPtr->get_future();
+
+    WGPUBufferMapCallbackInfo cbInfo = WGPU_BUFFER_MAP_CALLBACK_INFO_INIT;
+    cbInfo.mode = WGPUCallbackMode_AllowProcessEvents;
+    cbInfo.callback = &BufferMapCallback;
+    cbInfo.userdata1 = promPtr;
+    cbInfo.userdata2 = nullptr;
+
+    wgpuBufferMapAsync(staging, WGPUMapMode_Read, 0, bufferSize, cbInfo);
+
+    // Wait for map completion, but pump instance/device events so callbacks are processed
+    auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    bool ready = false;
+    while (std::chrono::steady_clock::now() < deadline) {
+        auto st = fut.wait_for(std::chrono::milliseconds(10));
+        // Process any instance/device events which may schedule callbacks
+        dawn::native::InstanceProcessEvents(m_instance.Get());
+        dawn::native::DeviceTick(m_device);
+        if (st == std::future_status::ready) { ready = true; break; }
+    }
+
+    if (!ready) {
+        std::cerr << "WgpuRenderer: buffer map async timed out" << std::endl;
+        delete promPtr;
+        wgpuBufferRelease(staging);
+        wgpuTextureViewRelease(view);
+        wgpuTextureDestroy(target);
+        return false;
+    }
+
+    bool ok = fut.get();
+    std::cerr << "WgpuRenderer: buffer map async completed; ok=" << ok << std::endl;
+    delete promPtr;
+    if (!ok) {
+        std::cerr << "WgpuRenderer: buffer map async returned failure" << std::endl;
+        wgpuBufferRelease(staging);
+        wgpuTextureViewRelease(view);
+        wgpuTextureDestroy(target);
+        return false;
+    }
+
+    // Read mapped memory
+    const void* mapped = wgpuBufferGetConstMappedRange(staging, 0, static_cast<size_t>(bufferSize));
+    std::cerr << "WgpuRenderer: wgpuBufferGetConstMappedRange -> " << mapped << " (bufferSize=" << bufferSize << ")" << std::endl;
+    if (!mapped) {
+        std::cerr << "WgpuRenderer: mapped pointer null despite successful map" << std::endl;
+        wgpuBufferUnmap(staging);
+        wgpuBufferRelease(staging);
+        wgpuTextureViewRelease(view);
+        wgpuTextureDestroy(target);
+        return false;
+    }
+
+    // Copy rows into tightly-packed RGBA buffer
+    out.resize(static_cast<size_t>(width) * static_cast<size_t>(height) * 4);
+    const uint8_t* srcPtr = reinterpret_cast<const uint8_t*>(mapped);
+    for (uint32_t y = 0; y < height; ++y) {
+        const uint8_t* rowPtr = srcPtr + static_cast<size_t>(y) * bytesPerRow;
+        memcpy(&out[static_cast<size_t>(y) * width * 4], rowPtr, static_cast<size_t>(width) * 4);
+    }
+    std::cerr << "WgpuRenderer: copied " << out.size() << " bytes from staging buffer" << std::endl;
+
+    // Unmap and cleanup
+    wgpuBufferUnmap(staging);
+    wgpuBufferRelease(staging);
+    wgpuTextureViewRelease(view);
+    wgpuTextureDestroy(target);
+
+    return true;
+}
+#endif
 
 void WgpuRenderer::BeginFrame() {
 #ifdef HAVE_WGPU

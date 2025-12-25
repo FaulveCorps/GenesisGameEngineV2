@@ -147,6 +147,19 @@ jobs:
         Write-Host "Building SampleGame (gfx=${{ matrix.gfx }})..."
         cmake --build build --config Debug --target SampleGame
 
+    - name: Run UnitTests and capture log
+      shell: powershell
+      continue-on-error: true
+      run: |
+        Write-Host "Running UnitTests..."
+        $exe = Join-Path $PWD "build\\tests\\Debug\\UnitTests.exe"
+        $log = "unittests-${{ matrix.gfx }}.log"
+        if (-Not (Test-Path $exe)) { Write-Host "UnitTests executable not found: $exe; skipping"; exit 0 }
+        & $exe --reporter console *>&1 | Tee-Object -FilePath $log
+        $exit = $LASTEXITCODE
+        Write-Host "UnitTests exit code: $exit"
+        if ($exit -ne 0) { Write-Error "UnitTests failed"; exit $exit }
+
     - name: Run smoke test and capture log
       shell: powershell
       continue-on-error: true
