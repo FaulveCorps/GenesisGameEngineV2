@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <memory>
 #include <vector>
+#include <string>
 
 namespace Genesis::Engine {
 class IGraphicsAPI;
@@ -10,6 +11,7 @@ class IGraphicsAPI;
 class Texture {
 public:
     static std::shared_ptr<Texture> CreateFromMemory(uint32_t width, uint32_t height, const std::vector<uint8_t>& pixels);
+    static std::shared_ptr<Texture> CreateFromFile(const std::string& path);
     ~Texture();
 
     void UploadToRenderer(IGraphicsAPI* renderer);
