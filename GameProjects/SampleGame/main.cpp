@@ -220,6 +220,14 @@ int main(int argc, char** argv) {
     }
 #endif
 
+    // 2D demo texture (in-memory) if requested
+    std::shared_ptr<Genesis::Engine::Texture> demoTex;
+    if (do2dDemo) {
+        std::vector<uint8_t> pixels = { 255,0,0,255, 0,255,0,255, 0,0,255,255, 255,255,0,255 };
+        demoTex = Genesis::Engine::Texture::CreateFromMemory(2, 2, pixels);
+        if (demoTex) Genesis::Engine::TextureRegistry::Instance().UploadAllToRenderer(Genesis::Engine::RendererManager::GetRenderer());
+    }
+
     // Setup profiler and ImGui
     Genesis::Engine::Profiler profiler;
     Genesis::Engine::ImGuiLayer gui(window.GetSDLWindow(), window.GetGLContext());
@@ -229,6 +237,7 @@ int main(int argc, char** argv) {
     bool stressMode = false;
     int stressFrames = 0; // 0 == disabled, -1 == infinite
     bool showHelp = false;
+    bool do2dDemo = false;
     for (int i = 1; i < argc; ++i) {
         std::string a = argv[i];
         if (a == "--stress") {
@@ -244,6 +253,11 @@ int main(int argc, char** argv) {
         if (a == "--help" || a == "-h") {
             showHelp = true;
             break;
+        }
+        if (a == "--2d-demo") {
+            do2dDemo = true;
+            std::cout << "CLI: 2D demo mode enabled" << std::endl;
+            continue;
         }
 
     }
@@ -322,6 +336,15 @@ int main(int argc, char** argv) {
             }
 
             if (softwarePixels.empty()) softwarePixels.resize(static_cast<size_t>(softwareW) * softwareH * 4);
+
+            // If 2D demo is enabled, queue a demo sprite
+            if (do2dDemo && demoTex) {
+                // draw centered sprite 1/4 of the window size
+                float w = softwareW / 4.0f; float h = softwareH / 4.0f;
+                float x = (softwareW - w) * 0.5f;
+                float y = (softwareH - h) * 0.5f;
+                Genesis::Engine::RendererManager::GetRenderer()->DrawTexture(demoTex.get(), x, y, w, h);
+            }
 
             if (sr->ReadbackOffscreen(static_cast<uint32_t>(softwareW), static_cast<uint32_t>(softwareH), softwarePixels)) {
                 if (softwareTexture && softwareSDLRenderer) {

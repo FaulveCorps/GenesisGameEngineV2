@@ -18,6 +18,8 @@ struct MeshDesc {
     std::vector<uint32_t> indices;
 };
 
+class Texture;
+
 class IGraphicsAPI {
 public:
     virtual ~IGraphicsAPI() = default;
@@ -32,6 +34,11 @@ public:
     virtual MeshHandle CreateMesh(const MeshDesc& /*desc*/) { return MeshHandle{}; }
     virtual void DestroyMesh(const MeshHandle& /*h*/) { }
     virtual void DrawMesh(const MeshHandle& /*h*/) { }
+
+    // Immediate-mode 2D texture draw (coordinates in pixels, UV in 0..1, color ARGB)
+    virtual void DrawTexture(Texture* /*tex*/, float /*x*/, float /*y*/, float /*w*/, float /*h*/,
+                             float /*u0*/ = 0.f, float /*v0*/ = 0.f, float /*u1*/ = 1.f, float /*v1*/ = 1.f,
+                             uint32_t /*color*/ = 0xFFFFFFFF) { }
 
     // Human-readable renderer name for UI/debugging
     virtual std::string GetName() const { return std::string("unknown"); }
