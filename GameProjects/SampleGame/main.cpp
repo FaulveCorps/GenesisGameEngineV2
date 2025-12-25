@@ -22,8 +22,11 @@
 #include "engine/ImGuiLayer.h"
 #include "engine/PluginManager.h"
 #include "engine/Stats.h"
+#include "engine/Shader.h"
+#include "engine/ShaderRegistry.h"
 #include <thread>
 #include <chrono>
+#include <filesystem>
 
 int main(int argc, char** argv) {
     if (!Genesis::Engine::Init()) {
@@ -66,6 +69,8 @@ int main(int argc, char** argv) {
     // Default: use runtime factory which tries Vulkan->DirectX->OpenGL (configurable via --gfx-order)
     std::vector<std::string> gfxOrder;
     bool gfxStrict = false;
+    int autoCycleCount = 0;
+    int autoCycleIntervalMs = 1000;
     for (int i = 1; i < argc; ++i) {
         if (std::string(argv[i]) == "--gfx-order" && i + 1 < argc) {
             std::string arg = argv[i+1];
@@ -83,6 +88,18 @@ int main(int argc, char** argv) {
         }
         if (std::string(argv[i]) == "--gfx-strict") {
             gfxStrict = true;
+        }
+        if (std::string(argv[i]) == "--auto-cycle" && i + 1 < argc) {
+            try { autoCycleCount = std::stoi(argv[i+1]); } catch (...) { autoCycleCount = 0; }
+            ++i;
+            std::cout << "CLI: auto-cycle count set to " << autoCycleCount << std::endl;
+            continue;
+        }
+        if (std::string(argv[i]) == "--auto-interval" && i + 1 < argc) {
+            try { autoCycleIntervalMs = std::stoi(argv[i+1]); } catch (...) { autoCycleIntervalMs = 1000; }
+            ++i;
+            std::cout << "CLI: auto-cycle interval set to " << autoCycleIntervalMs << "ms" << std::endl;
+            continue;
         }
         if (std::string(argv[i]) == "--vulkan-triangle") {
     #ifdef _WIN32
@@ -157,6 +174,26 @@ int main(int argc, char** argv) {
 
     // Initial setup based on the currently-selected renderer
     setupSoftwareVisual(Genesis::Engine::RendererManager::GetRenderer());
+
+    // Create small test shader to validate re-creation across renderer switches
+    std::shared_ptr<Genesis::Engine::Shader> testShader;
+    {
+        const std::string testVert = R"(
+            #version 330 core
+            layout(location = 0) in vec3 aPos;
+            void main() { gl_Position = vec4(aPos, 1.0); }
+        )";
+        const std::string testFrag = R"(
+            #version 330 core
+            out vec4 FragColor;
+            void main() { FragColor = vec4(1.0); }
+        )";
+        testShader = Genesis::Engine::Shader::CreateFromSource(testVert, testFrag);
+        if (testShader) {
+            Genesis::Engine::ShaderRegistry::Instance().UploadAllToRenderer(Genesis::Engine::RendererManager::GetRenderer());
+            std::cout << "SampleGame: created test shader id=" << testShader->GetID() << std::endl;
+        }
+    }
 #endif
 
 
@@ -315,6 +352,19 @@ int main(int argc, char** argv) {
     };
 
     Uint32 lastToggleTime = 0;
+    // Auto-cycle support variables
+    std::filesystem::path artifacts;
+    int cyclesDone = 0;
+    Uint32 lastAutoSwitchTime = SDL_GetTicks();
+    if (autoCycleCount > 0) {
+        artifacts = std::filesystem::current_path() / "artifacts";
+        try {
+            std::filesystem::create_directories(artifacts);
+            std::cout << "SampleGame: artifacts dir created at " << artifacts.string() << std::endl;
+        } catch (const std::exception& e) {
+            std::cerr << "SampleGame: failed to create artifacts dir: " << e.what() << std::endl;
+        }
+    }
 
     if (stressMode) {
         if (stressFrames == -1) std::cout << "Stress: running until closed or crash" << std::endl;
@@ -332,6 +382,44 @@ int main(int argc, char** argv) {
                     std::cout << "SampleGame: cycled renderer (stress)" << std::endl;
                 }
             }
+
+            // Auto-cycle handling (stress mode)
+            if (autoCycleCount > 0) {
+                Uint32 nowAuto = SDL_GetTicks();
+                if (nowAuto - lastAutoSwitchTime >= static_cast<Uint32>(autoCycleIntervalMs)) {
+                    lastAutoSwitchTime = nowAuto;
+                    if (Genesis::Engine::RendererManager::CycleRenderer(window.GetSDLWindow(), window.GetGLContext())) {
+                        setupSoftwareVisual(Genesis::Engine::RendererManager::GetRenderer());
+                        Genesis::Engine::ShaderRegistry::Instance().UploadAllToRenderer(Genesis::Engine::RendererManager::GetRenderer());
+                        std::cout << "SampleGame: auto-cycled renderer (stress) cyclesDone=" << cyclesDone << std::endl;
+                        // If software renderer, save screenshot
+                        if (auto sr = dynamic_cast<Genesis::Engine::SoftwareRenderer*>(Genesis::Engine::RendererManager::GetRenderer())) {
+                            std::vector<uint8_t> pixels;
+                            if (sr->ReadbackOffscreen(static_cast<uint32_t>(softwareW), static_cast<uint32_t>(softwareH), pixels)) {
+                                SDL_Surface* surf = SDL_CreateRGBSurfaceFrom((void*)pixels.data(), softwareW, softwareH, 32, softwareW * 4,
+                                    0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000);
+                                if (surf) {
+                                    std::string fname = (artifacts / ("screenshot_auto_stress_" + std::to_string(cyclesDone) + ".bmp")).string();
+                                    if (SDL_SaveBMP(surf, fname.c_str()) == 0) {
+                                        std::cout << "SampleGame: saved auto screenshot to " << fname << std::endl;
+                                    } else {
+                                        std::cerr << "SampleGame: failed to save auto BMP: " << SDL_GetError() << std::endl;
+                                    }
+                                    SDL_FreeSurface(surf);
+                                }
+                            } else {
+                                std::cerr << "SampleGame: auto ReadbackOffscreen failed (stress)" << std::endl;
+                            }
+                        }
+                        ++cyclesDone;
+                        if (cyclesDone >= autoCycleCount) {
+                            std::cout << "SampleGame: auto-cycle complete (" << cyclesDone << " cycles). Exiting." << std::endl;
+                            break;
+                        }
+                    }
+                }
+            }
+
             // No sleeping in stress mode to increase chance of reproducing intermittent bugs
             if ((frames % 1000) == 0) std::cout << "Stress: completed frames=" << frames << std::endl;
         }
@@ -347,6 +435,43 @@ int main(int argc, char** argv) {
                 if (Genesis::Engine::RendererManager::CycleRenderer(window.GetSDLWindow(), window.GetGLContext())) {
                     setupSoftwareVisual(Genesis::Engine::RendererManager::GetRenderer());
                     std::cout << "SampleGame: cycled renderer" << std::endl;
+                }
+            }
+
+            // Auto-cycle handling (interactive mode)
+            if (autoCycleCount > 0) {
+                Uint32 nowAuto = SDL_GetTicks();
+                if (nowAuto - lastAutoSwitchTime >= static_cast<Uint32>(autoCycleIntervalMs)) {
+                    lastAutoSwitchTime = nowAuto;
+                    if (Genesis::Engine::RendererManager::CycleRenderer(window.GetSDLWindow(), window.GetGLContext())) {
+                        setupSoftwareVisual(Genesis::Engine::RendererManager::GetRenderer());
+                        Genesis::Engine::ShaderRegistry::Instance().UploadAllToRenderer(Genesis::Engine::RendererManager::GetRenderer());
+                        if (testShader) std::cout << "SampleGame: testShader->GetID()=" << testShader->GetID() << std::endl;
+                        std::cout << "SampleGame: auto-cycled renderer cyclesDone=" << cyclesDone << std::endl;
+                        if (auto sr = dynamic_cast<Genesis::Engine::SoftwareRenderer*>(Genesis::Engine::RendererManager::GetRenderer())) {
+                            std::vector<uint8_t> pixels;
+                            if (sr->ReadbackOffscreen(static_cast<uint32_t>(softwareW), static_cast<uint32_t>(softwareH), pixels)) {
+                                SDL_Surface* surf = SDL_CreateRGBSurfaceFrom((void*)pixels.data(), softwareW, softwareH, 32, softwareW * 4,
+                                    0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000);
+                                if (surf) {
+                                    std::string fname = (artifacts / ("screenshot_auto_" + std::to_string(cyclesDone) + ".bmp")).string();
+                                    if (SDL_SaveBMP(surf, fname.c_str()) == 0) {
+                                        std::cout << "SampleGame: saved auto screenshot to " << fname << std::endl;
+                                    } else {
+                                        std::cerr << "SampleGame: failed to save auto BMP: " << SDL_GetError() << std::endl;
+                                    }
+                                    SDL_FreeSurface(surf);
+                                }
+                            } else {
+                                std::cerr << "SampleGame: auto ReadbackOffscreen failed" << std::endl;
+                            }
+                        }
+                        ++cyclesDone;
+                        if (cyclesDone >= autoCycleCount) {
+                            std::cout << "SampleGame: auto-cycle complete (" << cyclesDone << " cycles). Exiting." << std::endl;
+                            break;
+                        }
+                    }
                 }
             }
 
