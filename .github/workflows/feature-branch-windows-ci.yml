@@ -12,10 +12,28 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Bootstrap vcpkg (skip if present)
+      - name: Bootstrap vcpkg (robust)
         shell: powershell
         run: |
-          if (-Not (Test-Path .\vcpkg\vcpkg.exe)) { .\vcpkg\bootstrap-vcpkg.bat } else { Write-Host "vcpkg.exe present - skipping bootstrap" }
+          Write-Host "Bootstrapping or updating vcpkg..."
+          if (-Not (Test-Path .\vcpkg\vcpkg.exe)) {
+            if (Test-Path .\vcpkg) {
+              Write-Host "Found vcpkg folder but missing vcpkg.exe. Attempting to update or re-clone..."
+              if (Test-Path .\vcpkg\.git) {
+                git -C .\vcpkg pull
+              } else {
+                Write-Host "Removing non-git vcpkg folder and re-cloning"
+                Remove-Item -Recurse -Force .\vcpkg
+                git clone https://github.com/microsoft/vcpkg.git vcpkg
+              }
+              .\vcpkg\bootstrap-vcpkg.bat
+            } else {
+              git clone https://github.com/microsoft/vcpkg.git vcpkg
+              .\vcpkg\bootstrap-vcpkg.bat
+            }
+          } else {
+            Write-Host "vcpkg.exe present - skipping bootstrap"
+          }
 
       - name: Install vcpkg dependencies
         shell: powershell
