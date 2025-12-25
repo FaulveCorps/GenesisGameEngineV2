@@ -157,8 +157,8 @@ cmake --build build --config Release
 
 ## Support
 
-For detailed architecture info, see [docs/architecture.md](docs/architecture.md).
-For build system details, see [docs/build.md](docs/build.md).
+For detailed architecture info, see [Docs/architecture.md](Docs/architecture.md).
+For build system details, see [Docs/build.md](Docs/build.md).
 
 ---
 **Last Updated**: December 23, 2025
