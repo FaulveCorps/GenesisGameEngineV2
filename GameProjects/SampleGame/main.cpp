@@ -7,6 +7,8 @@
 #include "engine/VulkanRenderer.h"
 #include "engine/Scene.h"
 #include "engine/GraphicsFactory.h"
+#include "engine/SoftwareRenderer.h"
+#include <vector>
 
 // Temporary: enable to skip loading GPU meshes and exercise DirectX backend only
 // #define DIRECTX_SMOKE_TEST 0 // disabled to allow model loading for GL testing
@@ -102,6 +104,37 @@ int main(int argc, char** argv) {
         Genesis::Engine::Shutdown();
         return -1;
     }
+
+    // If the selected renderer is the SoftwareRenderer, create a small secondary window and SDL renderer/texture
+    // to present the CPU rasterized buffer so the user can visually confirm the software rendering.
+    Genesis::Engine::SoftwareRenderer* softwareRendererPtr = dynamic_cast<Genesis::Engine::SoftwareRenderer*>(rendererPtr.get());
+    SDL_Window* softwareWindow = nullptr;
+    SDL_Renderer* softwareSDLRenderer = nullptr;
+    SDL_Texture* softwareTexture = nullptr;
+    int softwareW = 640;
+    int softwareH = 480;
+    std::vector<uint8_t> softwarePixels;
+    if (softwareRendererPtr) {
+        std::cout << "SampleGame: software renderer selected; creating visual output window" << std::endl;
+        softwareWindow = SDL_CreateWindow("Software Output", SDL_WINDOWPOS_CENTERED + 40, SDL_WINDOWPOS_CENTERED + 40, softwareW, softwareH, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
+        if (!softwareWindow) {
+            std::cerr << "SampleGame: software visual window creation failed: " << SDL_GetError() << "; will save BMP to disk as fallback" << std::endl;
+        } else {
+            softwareSDLRenderer = SDL_CreateRenderer(softwareWindow, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+            if (!softwareSDLRenderer) {
+                std::cerr << "SampleGame: SDL_CreateRenderer failed for software output: " << SDL_GetError() << " - falling back to SDL_RENDERER_SOFTWARE\n";
+                softwareSDLRenderer = SDL_CreateRenderer(softwareWindow, -1, SDL_RENDERER_SOFTWARE);
+            }
+            if (softwareSDLRenderer) {
+                softwareTexture = SDL_CreateTexture(softwareSDLRenderer, SDL_PIXELFORMAT_BGRA32, SDL_TEXTUREACCESS_STREAMING, softwareW, softwareH);
+                if (!softwareTexture) {
+                    std::cerr << "SampleGame: SDL_CreateTexture failed for software output: " << SDL_GetError() << std::endl;
+                } else {
+                    softwarePixels.resize(static_cast<size_t>(softwareW) * softwareH * 4);
+                }
+            }
+        }
+    }
 #endif
 
 
@@ -193,6 +226,67 @@ int main(int argc, char** argv) {
 
         rendererPtr->EndFrame();
         std::cout << "Main: after renderer.EndFrame" << std::endl;
+
+        // If the renderer is the software CPU renderer, read back the offscreen buffer each frame and present it
+        if (softwareRendererPtr) {
+            // Determine display size for software output (secondary window if present, otherwise main window size)
+            if (softwareWindow) {
+                int newW = softwareW, newH = softwareH;
+                SDL_GetWindowSize(softwareWindow, &newW, &newH);
+                if (newW <= 0) newW = 1;
+                if (newH <= 0) newH = 1;
+                if (newW != softwareW || newH != softwareH) {
+                    softwareW = newW; softwareH = newH;
+                    if (softwareTexture) { SDL_DestroyTexture(softwareTexture); softwareTexture = nullptr; }
+                    if (softwareSDLRenderer) {
+                        softwareTexture = SDL_CreateTexture(softwareSDLRenderer, SDL_PIXELFORMAT_BGRA32, SDL_TEXTUREACCESS_STREAMING, softwareW, softwareH);
+                        if (!softwareTexture) std::cerr << "SampleGame: SDL_CreateTexture failed on resize: " << SDL_GetError() << std::endl;
+                    }
+                    softwarePixels.clear();
+                    softwarePixels.resize(static_cast<size_t>(softwareW) * softwareH * 4);
+                }
+            } else {
+                int mainW = 0, mainH = 0;
+                SDL_GetWindowSize(window.GetSDLWindow(), &mainW, &mainH);
+                if (mainW != softwareW || mainH != softwareH) {
+                    softwareW = mainW; softwareH = mainH;
+                    softwarePixels.clear();
+                    softwarePixels.resize(static_cast<size_t>(softwareW) * softwareH * 4);
+                }
+            }
+
+            if (softwarePixels.empty()) softwarePixels.resize(static_cast<size_t>(softwareW) * softwareH * 4);
+
+            if (softwareRendererPtr->ReadbackOffscreen(static_cast<uint32_t>(softwareW), static_cast<uint32_t>(softwareH), softwarePixels)) {
+                if (softwareTexture && softwareSDLRenderer) {
+                    SDL_UpdateTexture(softwareTexture, nullptr, softwarePixels.data(), softwareW * 4);
+                    SDL_RenderClear(softwareSDLRenderer);
+                    SDL_RenderCopy(softwareSDLRenderer, softwareTexture, nullptr, nullptr);
+                    SDL_RenderPresent(softwareSDLRenderer);
+                } else {
+                    static bool saved = false;
+                    if (!saved) {
+                        SDL_Surface* surf = SDL_CreateRGBSurfaceFrom((void*)softwarePixels.data(), softwareW, softwareH, 32, softwareW * 4,
+                            0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000);
+                        if (surf) {
+                            std::string fname = "software_render.bmp";
+                            if (SDL_SaveBMP(surf, fname.c_str()) == 0) {
+                                std::cout << "SampleGame: saved software render output to " << fname << std::endl;
+                                saved = true;
+                            } else {
+                                std::cerr << "SampleGame: failed to save BMP: " << SDL_GetError() << std::endl;
+                            }
+                            SDL_FreeSurface(surf);
+                        } else {
+                            std::cerr << "SampleGame: SDL_CreateRGBSurfaceFrom failed: " << SDL_GetError() << std::endl;
+                        }
+                    }
+                }
+            } else {
+                std::cerr << "SampleGame: software ReadbackOffscreen failed" << std::endl;
+            }
+        }
+
         profiler.EndFrame();
         std::cout << "Main: after profiler.EndFrame" << std::endl;
     };
@@ -215,6 +309,11 @@ int main(int argc, char** argv) {
 
     // Unload plugins explicitly (optional)
     pluginManager.UnloadAll();
+
+    // Tear down secondary software visual resources if present
+    if (softwareTexture) { SDL_DestroyTexture(softwareTexture); softwareTexture = nullptr; }
+    if (softwareSDLRenderer) { SDL_DestroyRenderer(softwareSDLRenderer); softwareSDLRenderer = nullptr; }
+    if (softwareWindow) { SDL_DestroyWindow(softwareWindow); softwareWindow = nullptr; }
 
     rendererPtr->Shutdown();
     window.Shutdown();

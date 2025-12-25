@@ -26,5 +26,14 @@ if (auto* sr = dynamic_cast<Genesis::Engine::SoftwareRenderer*>(renderer.get()))
 **Notes for CI**
 - The project now includes `tests/test_software_smoke.cpp` which uses the SoftwareRenderer to perform a deterministic offscreen render and verify pixel values. This test is part of the `UnitTests` suite and will run on CI without requiring GPU drivers.
 
+**Running a visual proof (SampleGame)**
+- Build and run the SampleGame with the software renderer forced:
+
+```
+SampleGame.exe --gfx-order software
+```
+
+- When the software renderer is selected, SampleGame creates a secondary window called **Software Output** and presents the CPU-rendered image in real time (BGRA pixels). If the platform cannot create the secondary window (headless CI, missing windowing support), SampleGame will save the first captured frame to `software_render.bmp` in the current working directory as a fallback.
+
 **Future**
 - The SoftwareRenderer is intentionally minimal and intended for testing; for production or performance-sensitive rendering, prefer a real GPU backend (WGPU, Vulkan, D3D12, OpenGL).
