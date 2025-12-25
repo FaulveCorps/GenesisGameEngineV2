@@ -30,6 +30,14 @@ cd build\GameProjects\SampleGame\Debug
 .\SampleGame.exe
 ```
 
+### Auto-cycle and artifacts
+You can run `SampleGame` in an automated renderer cycle mode which will switch renderers N times and save software framebuffer screenshots to `artifacts/`:
+
+```powershell
+.\SampleGame.exe --gfx-order software --auto-cycle 5 --auto-interval 1000
+```
+
+Screenshots and test outputs are saved into the `artifacts/` directory (ignored by default).
 ## Build Targets
 
 | Target | Type | Location | Purpose |

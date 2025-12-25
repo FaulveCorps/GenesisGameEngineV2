@@ -175,6 +175,12 @@ int main(int argc, char** argv) {
     // Initial setup based on the currently-selected renderer
     setupSoftwareVisual(Genesis::Engine::RendererManager::GetRenderer());
 
+    // Update window title to include selected renderer
+    if (auto cur = Genesis::Engine::RendererManager::GetRenderer()) {
+        std::string title = std::string("SampleGame - Renderer: ") + cur->GetName();
+        SDL_SetWindowTitle(window.GetSDLWindow(), title.c_str());
+    }
+
     // Create small test shader to validate re-creation across renderer switches
     std::shared_ptr<Genesis::Engine::Shader> testShader;
     {

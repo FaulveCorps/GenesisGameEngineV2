@@ -23,6 +23,10 @@ cmake --build . --config Debug
 
 This initial scaffold builds a small `EngineCore` static library and a `SampleGame` executable used for smoke tests. Later steps will integrate SDL3, OpenGL, Assimp, EnTT, and ImGui.
 
+Runtime renderer switching: The engine supports runtime switching between renderers (e.g., OpenGL, Vulkan, WGPU, DirectX, Software). Shaders and textures are now tracked by registries and will be re-created on renderer switches where supported.
+
+Artifacts: runtime screenshots and automatic test outputs are written to an `artifacts/` directory; this directory is ignored by default (see `.gitignore`).
+
 Next step: implement Task 3 — add Core window + input (SDL3) minimal app.
 
 Tools:
