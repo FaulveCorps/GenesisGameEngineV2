@@ -33,6 +33,8 @@ add_library(EngineCore STATIC
     src/D3D12Renderer.cpp
     src/WgpuRenderer.cpp
     src/SoftwareRenderer.cpp
+    src/RendererManager.cpp
+    src/MeshRegistry.cpp
     src/GraphicsFactory.cpp
     src/Model.cpp
     src/Mesh.cpp

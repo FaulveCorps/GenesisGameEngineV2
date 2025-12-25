@@ -1,4 +1,6 @@
 #include "engine/Mesh.h"
+#include "engine/MeshRegistry.h"
+#include "engine/RendererManager.h"
 #include <SDL.h>
 #include <iostream>
 
@@ -15,6 +17,9 @@ void Mesh::SetData(const std::vector<float>& vertices, const std::vector<float>&
     vertices_ = vertices;
     normals_ = normals;
     indices_ = indices;
+
+    // Register so we can recreate/destroy resources when renderer switches
+    MeshRegistry::Instance().Register(this);
 }
 
 // Minimal dynamic GL function loader (resolve only what we need)
@@ -61,12 +66,24 @@ static PFNGLVERTEXPOINTERPROC pglVertexPointer = nullptr;
 static PFNGLNORMALPOINTERPROC pglNormalPointer = nullptr;
 
 Mesh::~Mesh() {
-    // Resolve delete functions lazily
+    // Unregister from global registry
+    MeshRegistry::Instance().Unregister(this);
+
+    // Resolve delete functions lazily and delete GL resources if present
     if (!pglDeleteBuffers) ResolveGLFunction((void**)&pglDeleteBuffers, "glDeleteBuffers");
     if (!pglDeleteVertexArrays) ResolveGLFunction((void**)&pglDeleteVertexArrays, "glDeleteVertexArrays");
     if (ebo_ && pglDeleteBuffers) { std::cout<<"Mesh::~Mesh -> deleting ebo="<<ebo_<<std::endl; pglDeleteBuffers(1, &ebo_); }
     if (vbo_ && pglDeleteBuffers) { std::cout<<"Mesh::~Mesh -> deleting vbo="<<vbo_<<std::endl; pglDeleteBuffers(1, &vbo_); }
     if (vao_ && pglDeleteVertexArrays) { std::cout<<"Mesh::~Mesh -> deleting vao="<<vao_<<std::endl; pglDeleteVertexArrays(1, &vao_); }
+
+    // If this mesh had a renderer-side handle, attempt to destroy it on the current renderer
+    IGraphicsAPI* cur = RendererManager::GetRenderer();
+    if (uploadKind_ == UploadKind::Renderer && handle_.IsValid() && cur) {
+        cur->DestroyMesh(handle_);
+        handle_ = {};
+        uploadKind_ = UploadKind::None;
+        uploaded_ = false;
+    }
 }
 
 // Move constructor
@@ -122,6 +139,21 @@ void Mesh::UploadToGPU() {
     if (uploaded_) return;
     if (vertices_.empty() || indices_.empty()) return;
 
+    // If a non-GL renderer is active and supports CreateMesh, try to upload there first
+    IGraphicsAPI* cur = RendererManager::GetRenderer();
+    if (cur) {
+        MeshDesc desc{ vertices_, normals_, indices_ };
+        MeshHandle h = cur->CreateMesh(desc);
+        if (h.IsValid()) {
+            handle_ = h;
+            uploaded_ = true;
+            uploadKind_ = UploadKind::Renderer;
+            std::cout << "Mesh::UploadToGPU -> uploaded to renderer handle=" << h.id << std::endl;
+            return;
+        }
+    }
+
+    // Fallback: try to create GL buffers as before
     // Resolve required functions
     if (!ResolveGLFunction((void**)&pglGenVertexArrays, "glGenVertexArrays") ||
         !ResolveGLFunction((void**)&pglBindVertexArray, "glBindVertexArray") ||
@@ -249,8 +281,58 @@ void Mesh::UploadToGPU() {
     std::cout << "Mesh::UploadToGPU -> SDL_GL_GetCurrentContext=" << (void*)SDL_GL_GetCurrentContext() << " vao=" << vao_ << " vbo=" << vbo_ << " ebo=" << ebo_ << "" << std::endl;
 }
 
+void Mesh::DestroyOnRenderer(IGraphicsAPI* renderer) {
+    // If this mesh was uploaded to a renderer-side handle, destroy it there
+    if (uploadKind_ == UploadKind::Renderer && handle_.IsValid()) {
+        if (renderer) {
+            renderer->DestroyMesh(handle_);
+        }
+        handle_ = {};
+        uploadKind_ = UploadKind::None;
+        uploaded_ = false;
+        return;
+    }
+
+    // If this mesh has GL resources, delete them now
+    if (vao_ || vbo_ || ebo_) {
+        if (!pglDeleteBuffers) ResolveGLFunction((void**)&pglDeleteBuffers, "glDeleteBuffers");
+        if (!pglDeleteVertexArrays) ResolveGLFunction((void**)&pglDeleteVertexArrays, "glDeleteVertexArrays");
+        if (ebo_ && pglDeleteBuffers) { std::cout<<"Mesh::DestroyOnRenderer -> deleting ebo="<<ebo_<<std::endl; pglDeleteBuffers(1, &ebo_); ebo_ = 0; }
+        if (vbo_ && pglDeleteBuffers) { std::cout<<"Mesh::DestroyOnRenderer -> deleting vbo="<<vbo_<<std::endl; pglDeleteBuffers(1, &vbo_); vbo_ = 0; }
+        if (vao_ && pglDeleteVertexArrays) { std::cout<<"Mesh::DestroyOnRenderer -> deleting vao="<<vao_<<std::endl; pglDeleteVertexArrays(1, &vao_); vao_ = 0; }
+        uploadKind_ = UploadKind::None;
+        uploaded_ = false;
+        return;
+    }
+}
+
+void Mesh::UploadToRenderer(IGraphicsAPI* renderer) {
+    if (uploaded_) return;
+    if (vertices_.empty() || indices_.empty()) return;
+
+    if (!renderer) return; // nothing to do
+
+    MeshDesc desc{ vertices_, normals_, indices_ };
+    MeshHandle h = renderer->CreateMesh(desc);
+    if (h.IsValid()) {
+        handle_ = h;
+        uploaded_ = true;
+        uploadKind_ = UploadKind::Renderer;
+        std::cout << "Mesh::UploadToRenderer -> uploaded to renderer handle=" << h.id << std::endl;
+    }
+}
+
 void Mesh::Draw() const {
     if (vertices_.empty() || indices_.empty()) return;
+
+    // If this mesh belongs to a non-GL renderer, draw via the renderer API
+    if (uploadKind_ == UploadKind::Renderer && handle_.IsValid()) {
+        IGraphicsAPI* cur = RendererManager::GetRenderer();
+        if (cur) {
+            cur->DrawMesh(handle_);
+            return;
+        }
+    }
 
     const unsigned int GL_TRIANGLES = 0x0004;
     const unsigned int GL_UNSIGNED_INT = 0x1405;

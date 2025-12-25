@@ -7,6 +7,7 @@
 #include "engine/VulkanRenderer.h"
 #include "engine/Scene.h"
 #include "engine/GraphicsFactory.h"
+#include "engine/RendererManager.h"
 #include "engine/SoftwareRenderer.h"
 #include <vector>
 
@@ -41,19 +42,25 @@ int main(int argc, char** argv) {
 // Renderer selection: prefer explicit smoke-test flags, otherwise try a configurable priority order via GraphicsFactory
 #ifdef VULKAN_SMOKE_TEST
     // Explicit Vulkan smoke path
-    std::unique_ptr<Genesis::Engine::IGraphicsAPI> rendererPtr = std::make_unique<Genesis::Engine::VulkanRenderer>();
-    if (!rendererPtr->Init(window.GetSDLWindow(), window.GetGLContext())) {
-        std::cerr << "Vulkan smoke init failed or Vulkan unavailable" << std::endl;
-        // continue so we can observe fallback behavior if desired
+    {
+        std::unique_ptr<Genesis::Engine::IGraphicsAPI> rendererInit = std::make_unique<Genesis::Engine::VulkanRenderer>();
+        if (!rendererInit->Init(window.GetSDLWindow(), window.GetGLContext())) {
+            std::cerr << "Vulkan smoke init failed or Vulkan unavailable" << std::endl;
+            // continue so we can observe fallback behavior if desired
+        }
+        Genesis::Engine::RendererManager::SetRenderer(std::move(rendererInit));
     }
 #elif defined(DIRECTX_SMOKE_TEST)
     // Explicit DirectX smoke path
-    std::unique_ptr<Genesis::Engine::IGraphicsAPI> rendererPtr = std::make_unique<Genesis::Engine::DirectXRenderer>();
-    if (!rendererPtr->Init(window.GetSDLWindow(), window.GetGLContext())) {
-        std::cerr << "DirectX smoke init failed" << std::endl;
-        window.Shutdown();
-        Genesis::Engine::Shutdown();
-        return -1;
+    {
+        std::unique_ptr<Genesis::Engine::IGraphicsAPI> rendererInit = std::make_unique<Genesis::Engine::DirectXRenderer>();
+        if (!rendererInit->Init(window.GetSDLWindow(), window.GetGLContext())) {
+            std::cerr << "DirectX smoke init failed" << std::endl;
+            window.Shutdown();
+            Genesis::Engine::Shutdown();
+            return -1;
+        }
+        Genesis::Engine::RendererManager::SetRenderer(std::move(rendererInit));
     }
 #else
     // Default: use runtime factory which tries Vulkan->DirectX->OpenGL (configurable via --gfx-order)
@@ -97,44 +104,59 @@ int main(int argc, char** argv) {
         }
     }
     // Use factory (gfxStrict enforces swapchain/present capability for Vulkan)
-    std::unique_ptr<Genesis::Engine::IGraphicsAPI> rendererPtr = Genesis::Engine::GraphicsFactory::CreateRenderer(window.GetSDLWindow(), window.GetGLContext(), gfxOrder, gfxStrict);
-    if (!rendererPtr) {
+    std::unique_ptr<Genesis::Engine::IGraphicsAPI> rendererInit = Genesis::Engine::GraphicsFactory::CreateRenderer(window.GetSDLWindow(), window.GetGLContext(), gfxOrder, gfxStrict);
+    if (!rendererInit) {
         std::cerr << "Failed to initialize any renderer" << std::endl;
         window.Shutdown();
         Genesis::Engine::Shutdown();
         return -1;
     }
 
+    // Adopt the renderer into the global manager so resources can be uploaded/destroyed centrally
+    Genesis::Engine::RendererManager::SetRenderer(std::move(rendererInit));
+
     // If the selected renderer is the SoftwareRenderer, create a small secondary window and SDL renderer/texture
     // to present the CPU rasterized buffer so the user can visually confirm the software rendering.
-    Genesis::Engine::SoftwareRenderer* softwareRendererPtr = dynamic_cast<Genesis::Engine::SoftwareRenderer*>(rendererPtr.get());
     SDL_Window* softwareWindow = nullptr;
     SDL_Renderer* softwareSDLRenderer = nullptr;
     SDL_Texture* softwareTexture = nullptr;
     int softwareW = 640;
     int softwareH = 480;
     std::vector<uint8_t> softwarePixels;
-    if (softwareRendererPtr) {
+
+    auto setupSoftwareVisual = [&](Genesis::Engine::IGraphicsAPI* r){
+        // teardown existing
+        if (softwareTexture) { SDL_DestroyTexture(softwareTexture); softwareTexture = nullptr; }
+        if (softwareSDLRenderer) { SDL_DestroyRenderer(softwareSDLRenderer); softwareSDLRenderer = nullptr; }
+        if (softwareWindow) { SDL_DestroyWindow(softwareWindow); softwareWindow = nullptr; }
+        softwarePixels.clear();
+
+        Genesis::Engine::SoftwareRenderer* sr = dynamic_cast<Genesis::Engine::SoftwareRenderer*>(r);
+        if (!sr) return;
+
         std::cout << "SampleGame: software renderer selected; creating visual output window" << std::endl;
         softwareWindow = SDL_CreateWindow("Software Output", SDL_WINDOWPOS_CENTERED + 40, SDL_WINDOWPOS_CENTERED + 40, softwareW, softwareH, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
         if (!softwareWindow) {
             std::cerr << "SampleGame: software visual window creation failed: " << SDL_GetError() << "; will save BMP to disk as fallback" << std::endl;
-        } else {
-            softwareSDLRenderer = SDL_CreateRenderer(softwareWindow, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
-            if (!softwareSDLRenderer) {
-                std::cerr << "SampleGame: SDL_CreateRenderer failed for software output: " << SDL_GetError() << " - falling back to SDL_RENDERER_SOFTWARE\n";
-                softwareSDLRenderer = SDL_CreateRenderer(softwareWindow, -1, SDL_RENDERER_SOFTWARE);
-            }
-            if (softwareSDLRenderer) {
-                softwareTexture = SDL_CreateTexture(softwareSDLRenderer, SDL_PIXELFORMAT_BGRA32, SDL_TEXTUREACCESS_STREAMING, softwareW, softwareH);
-                if (!softwareTexture) {
-                    std::cerr << "SampleGame: SDL_CreateTexture failed for software output: " << SDL_GetError() << std::endl;
-                } else {
-                    softwarePixels.resize(static_cast<size_t>(softwareW) * softwareH * 4);
-                }
+            return;
+        }
+        softwareSDLRenderer = SDL_CreateRenderer(softwareWindow, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+        if (!softwareSDLRenderer) {
+            std::cerr << "SampleGame: SDL_CreateRenderer failed for software output: " << SDL_GetError() << " - falling back to SDL_RENDERER_SOFTWARE\n";
+            softwareSDLRenderer = SDL_CreateRenderer(softwareWindow, -1, SDL_RENDERER_SOFTWARE);
+        }
+        if (softwareSDLRenderer) {
+            softwareTexture = SDL_CreateTexture(softwareSDLRenderer, SDL_PIXELFORMAT_BGRA32, SDL_TEXTUREACCESS_STREAMING, softwareW, softwareH);
+            if (!softwareTexture) {
+                std::cerr << "SampleGame: SDL_CreateTexture failed for software output: " << SDL_GetError() << std::endl;
+            } else {
+                softwarePixels.resize(static_cast<size_t>(softwareW) * softwareH * 4);
             }
         }
-    }
+    };
+
+    // Initial setup based on the currently-selected renderer
+    setupSoftwareVisual(Genesis::Engine::RendererManager::GetRenderer());
 #endif
 
 
@@ -213,7 +235,8 @@ int main(int argc, char** argv) {
         profiler.BeginFrame();
         Genesis::Engine::Stats::Reset();
 
-        rendererPtr->BeginFrame();
+        auto currentRenderer = Genesis::Engine::RendererManager::GetRenderer();
+        if (currentRenderer) currentRenderer->BeginFrame();
 
         // scene update/render
         scene.Update(0.016);
@@ -224,11 +247,11 @@ int main(int argc, char** argv) {
         gui.Render(profiler);
         std::cout << "Main: after gui.Render" << std::endl;
 
-        rendererPtr->EndFrame();
+        if (currentRenderer) currentRenderer->EndFrame();
         std::cout << "Main: after renderer.EndFrame" << std::endl;
 
         // If the renderer is the software CPU renderer, read back the offscreen buffer each frame and present it
-        if (softwareRendererPtr) {
+        if (auto sr = dynamic_cast<Genesis::Engine::SoftwareRenderer*>(Genesis::Engine::RendererManager::GetRenderer())) {
             // Determine display size for software output (secondary window if present, otherwise main window size)
             if (softwareWindow) {
                 int newW = softwareW, newH = softwareH;
@@ -257,7 +280,7 @@ int main(int argc, char** argv) {
 
             if (softwarePixels.empty()) softwarePixels.resize(static_cast<size_t>(softwareW) * softwareH * 4);
 
-            if (softwareRendererPtr->ReadbackOffscreen(static_cast<uint32_t>(softwareW), static_cast<uint32_t>(softwareH), softwarePixels)) {
+            if (sr->ReadbackOffscreen(static_cast<uint32_t>(softwareW), static_cast<uint32_t>(softwareH), softwarePixels)) {
                 if (softwareTexture && softwareSDLRenderer) {
                     SDL_UpdateTexture(softwareTexture, nullptr, softwarePixels.data(), softwareW * 4);
                     SDL_RenderClear(softwareSDLRenderer);
@@ -291,18 +314,42 @@ int main(int argc, char** argv) {
         std::cout << "Main: after profiler.EndFrame" << std::endl;
     };
 
+    Uint32 lastToggleTime = 0;
+
     if (stressMode) {
         if (stressFrames == -1) std::cout << "Stress: running until closed or crash" << std::endl;
         int frames = 0;
         while ((stressFrames == -1 || frames < stressFrames) && window.PollEvents()) {
             runFrame();
             ++frames;
+            // Allow runtime renderer cycling on F2 (debounced)
+            const Uint8* keys = SDL_GetKeyboardState(NULL);
+            Uint32 now = SDL_GetTicks();
+            if (keys[SDL_SCANCODE_F2] && now - lastToggleTime > 300) {
+                lastToggleTime = now;
+                if (Genesis::Engine::RendererManager::CycleRenderer(window.GetSDLWindow(), window.GetGLContext())) {
+                    setupSoftwareVisual(Genesis::Engine::RendererManager::GetRenderer());
+                    std::cout << "SampleGame: cycled renderer (stress)" << std::endl;
+                }
+            }
             // No sleeping in stress mode to increase chance of reproducing intermittent bugs
             if ((frames % 1000) == 0) std::cout << "Stress: completed frames=" << frames << std::endl;
         }
     } else {
         while (window.PollEvents()) {
             runFrame();
+
+            // Allow runtime renderer cycling on F2 (debounced)
+            const Uint8* keys = SDL_GetKeyboardState(NULL);
+            Uint32 now = SDL_GetTicks();
+            if (keys[SDL_SCANCODE_F2] && now - lastToggleTime > 300) {
+                lastToggleTime = now;
+                if (Genesis::Engine::RendererManager::CycleRenderer(window.GetSDLWindow(), window.GetGLContext())) {
+                    setupSoftwareVisual(Genesis::Engine::RendererManager::GetRenderer());
+                    std::cout << "SampleGame: cycled renderer" << std::endl;
+                }
+            }
+
             std::this_thread::sleep_for(std::chrono::milliseconds(16));
         }
     }
@@ -315,7 +362,7 @@ int main(int argc, char** argv) {
     if (softwareSDLRenderer) { SDL_DestroyRenderer(softwareSDLRenderer); softwareSDLRenderer = nullptr; }
     if (softwareWindow) { SDL_DestroyWindow(softwareWindow); softwareWindow = nullptr; }
 
-    rendererPtr->Shutdown();
+    if (auto cur = Genesis::Engine::RendererManager::GetRenderer()) cur->Shutdown();
     window.Shutdown();
     Genesis::Engine::Shutdown();
     return 0;

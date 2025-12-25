@@ -19,6 +19,7 @@ add_executable(UnitTests
     test_core.cpp
     test_wgpu_smoke.cpp
     test_software_smoke.cpp
+    test_renderer_switch.cpp
     ${catch2_SOURCE_DIR}/extras/catch_amalgamated.cpp
 )
 

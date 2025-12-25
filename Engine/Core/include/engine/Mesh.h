@@ -2,6 +2,7 @@
 
 #include <vector>
 #include <cstdint>
+#include "engine/IGraphics.h"
 
 namespace Genesis::Engine {
 
@@ -24,6 +25,10 @@ public:
     // Upload CPU data to GPU (creates VBO/VAO/EBO) when possible.
     void UploadToGPU();
 
+    // Upload/destroy helpers for renderer switching
+    void UploadToRenderer(IGraphicsAPI* renderer);
+    void DestroyOnRenderer(IGraphicsAPI* renderer);
+
     // Draw — uses VAO/VBO path when uploaded, otherwise falls back to client arrays
     void Draw() const;
 
@@ -42,6 +47,11 @@ private:
 
     // Index type used for the element array (GL_UNSIGNED_SHORT or GL_UNSIGNED_INT)
     unsigned int indexType_ = 0;
+
+    // Runtime resource handle for non-GL renderers
+    MeshHandle handle_ = {};
+    enum class UploadKind { None, GL, Renderer };
+    UploadKind uploadKind_ = UploadKind::None;
 };
 
 } // namespace Genesis::Engine

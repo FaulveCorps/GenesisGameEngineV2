@@ -4,6 +4,7 @@
 #include <SDL.h>
 #include <vector>
 #include <cstdint>
+#include <unordered_map>
 
 namespace Genesis::Engine {
 
@@ -20,8 +21,16 @@ public:
     // Render to a BGRA8 buffer of size width x height and return it in 'out'
     bool ReadbackOffscreen(uint32_t width, uint32_t height, std::vector<uint8_t>& out);
 
+    // Mesh API
+    MeshHandle CreateMesh(const MeshDesc& desc) override;
+    void DestroyMesh(const MeshHandle& h) override;
+    void DrawMesh(const MeshHandle& h) override;
+
 private:
     bool m_initialized = false;
+    // Simple software mesh storage: id -> MeshDesc
+    std::unordered_map<uint64_t, MeshDesc> m_meshes;
+    uint64_t m_drawnMesh = 0;
 };
 
 } // namespace Genesis::Engine
