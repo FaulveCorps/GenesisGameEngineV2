@@ -14,11 +14,13 @@ using PFNGLVIEWPORTPROC = void (APIENTRY*)(int, int, int, int);
 using PFNGLCLEARCOLORPROC = void (APIENTRY*)(float, float, float, float);
 using PFNGLENABLEPROC = void (APIENTRY*)(unsigned int);
 using PFNGLCLEARPROC = void (APIENTRY*)(unsigned int);
+using PFNGLBLENDFUNCPROC = void (APIENTRY*)(unsigned int, unsigned int);
 
 static PFNGLVIEWPORTPROC pglViewport = nullptr;
 static PFNGLCLEARCOLORPROC pglClearColor = nullptr;
 static PFNGLENABLEPROC pglEnable = nullptr;
 static PFNGLCLEARPROC pglClear = nullptr;
+static PFNGLBLENDFUNCPROC pglBlendFunc = nullptr;
 
 static bool ResolveGL(void** fnPtr, const char* name) {
     if (*fnPtr) return true;
@@ -32,6 +34,9 @@ static bool ResolveGL(void** fnPtr, const char* name) {
 #define GL_DEPTH_TEST        0x0B71
 #define GL_COLOR_BUFFER_BIT  0x00004000
 #define GL_DEPTH_BUFFER_BIT  0x00000100
+#define GL_BLEND             0x0BE2
+#define GL_SRC_ALPHA         0x0302
+#define GL_ONE_MINUS_SRC_ALPHA 0x0303
 
 namespace Genesis::Engine {
 
@@ -79,6 +84,11 @@ bool OpenGLRenderer::Init(SDL_Window* window, SDL_GLContext glContext) {
         }
     }
     if (pglEnable) pglEnable(GL_DEPTH_TEST);
+    ResolveGL((void**)&pglBlendFunc, "glBlendFunc");
+    if (pglBlendFunc) {
+        pglEnable(GL_BLEND);
+        pglBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    }
     {
         auto addr = (void*)SDL_GL_GetProcAddress("glGetError");
         if (addr) {
@@ -434,6 +444,9 @@ void OpenGLRenderer::BeginFrame() {
             std::cerr << "OpenGLRenderer::DrawTexture -> texture has no GL id" << std::endl;
             return;
         }
+
+        // Activate sprite shader program
+        if (m_spriteShader) m_spriteShader->Use();
 
         // Vertex layout: x,y,u,v (4 verts)
         float verts[16] = {
