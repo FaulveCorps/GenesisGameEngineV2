@@ -31,7 +31,6 @@ add_library(EngineCore STATIC
     src/DirectXRenderer.cpp
     src/VulkanRenderer.cpp
     src/D3D12Renderer.cpp
-    src/BgfxRenderer.cpp
     src/WgpuRenderer.cpp
     src/GraphicsFactory.cpp
     src/Model.cpp
@@ -42,7 +41,7 @@ add_library(EngineCore STATIC
     src/Stats.cpp
     src/ImGuiLayer.cpp
     src/PluginManager.cpp
-)
+) 
 
 target_include_directories(EngineCore PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -66,71 +65,8 @@ else()
   message(STATUS "Vulkan not found; VulkanRenderer will be disabled at runtime")
 endif()
 
-# bgfx (optional) - prefer vcpkg-provided bgfx
-find_path(BGFX_INCLUDE_DIR NAMES bgfx/bgfx.h PATHS "${VCPKG_INSTALLED}/include" NO_DEFAULT_PATH)
-find_library(BGFX_LIBRARY NAMES bgfx PATHS "${VCPKG_INSTALLED}/lib" NO_DEFAULT_PATH)
-if (BGFX_INCLUDE_DIR AND BGFX_LIBRARY)
-  message(STATUS "bgfx found: include=${BGFX_INCLUDE_DIR} lib=${BGFX_LIBRARY}")
-  # Only enable BUILD-level HAVE_BGFX for non-Debug builds (avoids linking release bgfx libs into Debug builds)
-  target_compile_definitions(EngineCore PRIVATE
-    $<$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>,$<CONFIG:MinSizeRel>>:HAVE_BGFX=1>
-  )
-  target_include_directories(EngineCore PRIVATE
-    $<$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>,$<CONFIG:MinSizeRel>>:${BGFX_INCLUDE_DIR}>
-  )
-  # Link bgfx only for non-Debug builds to avoid CRT/iterator mismatches with vcpkg release libs
-  target_link_libraries(EngineCore PRIVATE
-    $<$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>,$<CONFIG:MinSizeRel>>:${BGFX_LIBRARY}>
-  )
-
-  # bgfx has additional dependencies (bx, bimg, and optionally bimg_decode/encode, lodepng, miniz, squish, tinyexr)
-  find_library(BX_LIBRARY NAMES bx PATHS "${VCPKG_INSTALLED}/lib" NO_DEFAULT_PATH)
-  find_library(BIMG_LIBRARY NAMES bimg PATHS "${VCPKG_INSTALLED}/lib" NO_DEFAULT_PATH)
-  find_library(BIMG_DECODE_LIBRARY NAMES bimg_decode PATHS "${VCPKG_INSTALLED}/lib" NO_DEFAULT_PATH)
-  find_library(BIMG_ENCODE_LIBRARY NAMES bimg_encode PATHS "${VCPKG_INSTALLED}/lib" NO_DEFAULT_PATH)
-  find_library(LODEPNG_LIBRARY NAMES lodepng liblodepng lodepng-c PATHS "${VCPKG_INSTALLED}/lib" NO_DEFAULT_PATH)
-  find_library(MINIZ_LIBRARY NAMES miniz PATHS "${VCPKG_INSTALLED}/lib" NO_DEFAULT_PATH)
-  find_library(SQUISH_LIBRARY NAMES squish PATHS "${VCPKG_INSTALLED}/lib" NO_DEFAULT_PATH)
-  find_library(TINYEXR_LIBRARY NAMES tinyexr PATHS "${VCPKG_INSTALLED}/lib" NO_DEFAULT_PATH)
-
-  set(BGFX_DEP_LIBS)
-  if(BX_LIBRARY)
-    list(APPEND BGFX_DEP_LIBS ${BX_LIBRARY})
-  endif()
-  if(BIMG_LIBRARY)
-    list(APPEND BGFX_DEP_LIBS ${BIMG_LIBRARY})
-  endif()
-  if(BIMG_DECODE_LIBRARY)
-    list(APPEND BGFX_DEP_LIBS ${BIMG_DECODE_LIBRARY})
-  endif()
-  if(BIMG_ENCODE_LIBRARY)
-    list(APPEND BGFX_DEP_LIBS ${BIMG_ENCODE_LIBRARY})
-  endif()
-  if(LODEPNG_LIBRARY)
-    list(APPEND BGFX_DEP_LIBS ${LODEPNG_LIBRARY})
-  endif()
-  if(MINIZ_LIBRARY)
-    list(APPEND BGFX_DEP_LIBS ${MINIZ_LIBRARY})
-  endif()
-  if(SQUISH_LIBRARY)
-    list(APPEND BGFX_DEP_LIBS ${SQUISH_LIBRARY})
-  endif()
-  if(TINYEXR_LIBRARY)
-    list(APPEND BGFX_DEP_LIBS ${TINYEXR_LIBRARY})
-  endif()
-
-  if(BGFX_DEP_LIBS)
-    message(STATUS "bgfx dependencies found: ${BGFX_DEP_LIBS}")
-    # Link bgfx dependencies only for non-Debug builds to avoid CRT/iterator mismatches
-    target_link_libraries(EngineCore PRIVATE
-      $<$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>,$<CONFIG:MinSizeRel>>:${BGFX_DEP_LIBS}>
-    )
-
-  endif()
-else()
-  message(STATUS "bgfx not found; BgfxRenderer will be disabled at runtime")
-endif()
-
+# bgfx support intentionally removed from this build (was optional)
+# Previously the project attempted to find and enable bgfx; removal simplifies dependencies and maintenance.
 # MSVC: prevent concurrent PDB write conflicts in parallel builds
 if (MSVC)
   target_compile_options(EngineCore PRIVATE /FS)

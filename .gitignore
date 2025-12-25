@@ -93,3 +93,9 @@ SDL2_MIGRATION.md
 TROUBLESHOOTING.md
 build-ninja-debug/CMakeCache.txt
 build-ninja-debug/CMakeFiles/cmake.check_cache
+list_err.txt
+list_out.txt
+out.txt
+unitstest_out.txt
+vcpkg
+wgpu_test_trace.txt

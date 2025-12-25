@@ -99,30 +99,6 @@ jobs:
         foreach ($p in $libPaths) { if (Test-Path $p) { Write-Host "Found lib: $p"; $foundLib = $true; break } }
         if (-not $foundLib) { Write-Error "Dawn/wgpu libs not found in vcpkg installed tree - ensure dawn:x64-windows is available or pre-cached"; exit 1 }
 
-    - name: Download prebuilt shaderc (fallback)
-      if: matrix.gfx == 'bgfx'
-      shell: powershell
-      continue-on-error: true
-      run: |
-        Write-Host "Attempting to discover shaderc release from GitHub (google/shaderc)..."
-        $api = 'https://api.github.com/repos/google/shaderc/releases/latest'
-        try {
-          $rel = Invoke-RestMethod -UseBasicParsing -Uri $api -ErrorAction Stop
-          $asset = $rel.assets | Where-Object { $_.name -match 'win' -and ($_.name -match '\.zip$' -or $_.name -match '\.7z$' -or $_.name -match '\.tar.gz$') } | Select-Object -First 1
-          if ($asset) {
-            $url = $asset.browser_download_url
-            Write-Host "Found release asset: $($asset.name)"
-            $out = "tools\shaderc_release.zip"
-            Invoke-WebRequest -UseBasicParsing -OutFile $out -Uri $url
-            Write-Host "Downloaded $out; extracting..."
-            Expand-Archive -Path $out -DestinationPath tools\shaderc -Force
-            Write-Host "Extraction complete. Looking for shaderc.exe..."
-            $shadercCandidates = Get-ChildItem -Path tools\shaderc -Recurse -Filter 'shaderc.exe' -ErrorAction SilentlyContinue
-            if ($shadercCandidates) { Write-Host "Found downloaded shaderc: $($shadercCandidates[0].FullName)"; exit 0 }
-            else { Write-Host "Downloaded archive didn't contain shaderc.exe" }
-          } else { Write-Host "No suitable windows asset found in latest release" }
-        } catch { Write-Host "Failed to download prebuilt shaderc: $($_.Exception.Message)" }
-        Write-Host "Download attempt complete (may have failed). The compile step will proceed and may be a no-op if shaderc is unavailable."
 
 
 
