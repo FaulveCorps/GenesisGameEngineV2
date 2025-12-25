@@ -1,7 +1,8 @@
 #pragma once
 
-#include "engine/IGraphics.h"
-#include "engine/Shader.h"
+#include "ENGINE/IGraphics.h"
+#include "ENGINE/Shader.h"
+#include "ENGINE/Texture.h"
 #include <memory>
 
 namespace Genesis::Engine {
@@ -18,10 +19,21 @@ public:
 
     std::string GetName() const override { return std::string("opengl"); }
 
+    // 2D immediate texture draw
+    void DrawTexture(Texture* tex, float x, float y, float w, float h,
+                     float u0 = 0.f, float v0 = 0.f, float u1 = 1.f, float v1 = 1.f,
+                     uint32_t color = 0xFFFFFFFF) override;
+
 private:
     SDL_Window* m_window = nullptr;
     SDL_GLContext m_context = nullptr;
     std::shared_ptr<Shader> m_defaultShader;
+
+    // Sprite shader & buffers
+    std::shared_ptr<Shader> m_spriteShader;
+    unsigned int m_spriteVAO = 0;
+    unsigned int m_spriteVBO = 0;
+    unsigned int m_spriteEBO = 0;
 
     // Debug draw resources
     unsigned int m_debugVAO = 0;

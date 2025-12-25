@@ -2,6 +2,7 @@
 #include "ENGINE/TextureRegistry.h"
 #include <SDL.h>
 #include <iostream>
+#include <cstring>
 
 namespace Genesis::Engine {
 
@@ -44,6 +45,26 @@ std::shared_ptr<Texture> Texture::CreateFromMemory(uint32_t width, uint32_t heig
     t->pixels_ = pixels;
     TextureRegistry::Instance().Register(t.get());
     return t;
+}
+
+std::shared_ptr<Texture> Texture::CreateFromFile(const std::string& path) {
+    SDL_Surface* surf = SDL_LoadBMP(path.c_str());
+    if (!surf) {
+        std::cerr << "Texture::CreateFromFile -> SDL_LoadBMP failed for '" << path << "': " << SDL_GetError() << std::endl;
+        return nullptr;
+    }
+    SDL_Surface* conv = SDL_ConvertSurfaceFormat(surf, SDL_PIXELFORMAT_RGBA32, 0);
+    SDL_FreeSurface(surf);
+    if (!conv) {
+        std::cerr << "Texture::CreateFromFile -> SDL_ConvertSurfaceFormat failed for '" << path << "': " << SDL_GetError() << std::endl;
+        return nullptr;
+    }
+    uint32_t w = static_cast<uint32_t>(conv->w);
+    uint32_t h = static_cast<uint32_t>(conv->h);
+    std::vector<uint8_t> pixels(static_cast<size_t>(w) * h * 4);
+    std::memcpy(pixels.data(), conv->pixels, pixels.size());
+    SDL_FreeSurface(conv);
+    return CreateFromMemory(w, h, pixels);
 }
 
 Texture::~Texture() {

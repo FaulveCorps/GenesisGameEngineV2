@@ -15,6 +15,7 @@ bool SoftwareRenderer::Init(SDL_Window* window, SDL_GLContext /*glContext*/) {
 void SoftwareRenderer::BeginFrame() {
     // Clear per-frame state
     m_drawnMesh = 0;
+    m_sprites.clear();
 }
 
 void SoftwareRenderer::EndFrame() {
@@ -77,6 +78,15 @@ static void rasterizeTriangle(std::vector<uint8_t>& out, uint32_t w, uint32_t h,
     }
 }
 
+void SoftwareRenderer::DrawTexture(Texture* tex, float x, float y, float w, float h, float u0, float v0, float u1, float v1, uint32_t /*color*/) {
+    if (!tex) return;
+    SoftwareRenderer::SWSprite s;
+    s.tex = tex;
+    s.x = x; s.y = y; s.w = w; s.h = h; s.u0 = u0; s.v0 = v0; s.u1 = u1; s.v1 = v1; s.color = 0xFFFFFFFF;
+    m_sprites.push_back(s);
+    std::cout << "SoftwareRenderer: queued sprite tex=" << tex->GetID() << " x=" << x << " y=" << y << " w=" << w << " h=" << h << std::endl;
+}
+
 bool SoftwareRenderer::ReadbackOffscreen(uint32_t width, uint32_t height, std::vector<uint8_t>& out) {
     if (!m_initialized) {
         std::cerr << "SoftwareRenderer: not initialized" << std::endl;
@@ -123,6 +133,59 @@ bool SoftwareRenderer::ReadbackOffscreen(uint32_t width, uint32_t height, std::v
         rasterizeTriangle(out, width, height, tx0, ty0, tx1, ty1, tx2, ty2, 0, 0, 255);
     }
 
-    std::cout << "SoftwareRenderer: rendered offscreen " << width << "x" << height << (m_drawnMesh?" (mesh drawn)":"") << std::endl;
+    // Draw any sprites queued this frame
+    for (const auto& s : m_sprites) {
+        if (!s.tex) continue;
+        if (s.w <= 0 || s.h <= 0) continue;
+        uint32_t texW = s.tex->Width();
+        uint32_t texH = s.tex->Height();
+        if (texW == 0 || texH == 0) continue;
+
+        int x0 = static_cast<int>(std::floor(s.x));
+        int y0 = static_cast<int>(std::floor(s.y));
+        int x1 = static_cast<int>(std::ceil(s.x + s.w));
+        int y1 = static_cast<int>(std::ceil(s.y + s.h));
+
+        // Clamp to target
+        if (x0 < 0) x0 = 0;
+        if (y0 < 0) y0 = 0;
+        if (x1 > (int)width) x1 = (int)width;
+        if (y1 > (int)height) y1 = (int)height;
+
+        for (int yy = y0; yy < y1; ++yy) {
+            for (int xx = x0; xx < x1; ++xx) {
+                float fu = (static_cast<float>(xx) + 0.5f - s.x) / s.w;
+                float fv = (static_cast<float>(yy) + 0.5f - s.y) / s.h;
+                float u = s.u0 + fu * (s.u1 - s.u0);
+                float v = s.v0 + fv * (s.v1 - s.v0);
+                int sx = std::clamp(static_cast<int>(std::floor(u * (texW - 1) + 0.5f)), 0, static_cast<int>(texW) - 1);
+                int sy = std::clamp(static_cast<int>(std::floor(v * (texH - 1) + 0.5f)), 0, static_cast<int>(texH) - 1);
+                size_t sIdx = (static_cast<size_t>(sy) * texW + sx) * 4;
+                const auto& src = s.tex->pixels_;
+                uint8_t sr = src[sIdx + 0];
+                uint8_t sg = src[sIdx + 1];
+                uint8_t sb = src[sIdx + 2];
+                uint8_t sa = src[sIdx + 3];
+
+                size_t idx = (static_cast<size_t>(yy) * width + xx) * 4;
+
+                // Simple alpha blend: out = src * a + dst * (1-a)
+                float alpha = sa / 255.0f;
+                if (alpha >= 0.999f) {
+                    out[idx + 0] = sb;
+                    out[idx + 1] = sg;
+                    out[idx + 2] = sr;
+                    out[idx + 3] = sa;
+                } else {
+                    out[idx + 0] = static_cast<uint8_t>(sb * alpha + out[idx + 0] * (1.0f - alpha));
+                    out[idx + 1] = static_cast<uint8_t>(sg * alpha + out[idx + 1] * (1.0f - alpha));
+                    out[idx + 2] = static_cast<uint8_t>(sr * alpha + out[idx + 2] * (1.0f - alpha));
+                    out[idx + 3] = static_cast<uint8_t>(sa * alpha + out[idx + 3] * (1.0f - alpha));
+                }
+            }
+        }
+    }
+
+    std::cout << "SoftwareRenderer: rendered offscreen " << width << "x" << height << (m_drawnMesh?" (mesh drawn)":"") << (m_sprites.empty()?"":" (sprites drawn)") << std::endl;
     return true;
 }
