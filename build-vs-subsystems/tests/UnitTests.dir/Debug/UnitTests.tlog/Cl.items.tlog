@@ -27,4 +27,5 @@ C:\Users\jpfau\Desktop\Project\GenesisGameEngine\tests\test_mods.cpp;C:\Users\jp
 C:\Users\jpfau\Desktop\Project\GenesisGameEngine\tests\test_scripting.cpp;C:\Users\jpfau\Desktop\Project\GenesisGameEngine\build-vs-subsystems\tests\UnitTests.dir\Debug\test_scripting.obj
 C:\Users\jpfau\Desktop\Project\GenesisGameEngine\tests\test_wasm_runtime.cpp;C:\Users\jpfau\Desktop\Project\GenesisGameEngine\build-vs-subsystems\tests\UnitTests.dir\Debug\test_wasm_runtime.obj
 C:\Users\jpfau\Desktop\Project\GenesisGameEngine\tests\test_wasm_sample_mod.cpp;C:\Users\jpfau\Desktop\Project\GenesisGameEngine\build-vs-subsystems\tests\UnitTests.dir\Debug\test_wasm_sample_mod.obj
+C:\Users\jpfau\Desktop\Project\GenesisGameEngine\tests\test_wasm_mod_file.cpp;C:\Users\jpfau\Desktop\Project\GenesisGameEngine\build-vs-subsystems\tests\UnitTests.dir\Debug\test_wasm_mod_file.obj
 C:\Users\jpfau\Desktop\Project\GenesisGameEngine\build-vs-subsystems\_deps\catch2-src\extras\catch_amalgamated.cpp;C:\Users\jpfau\Desktop\Project\GenesisGameEngine\build-vs-subsystems\tests\UnitTests.dir\Debug\catch_amalgamated.obj

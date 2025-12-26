@@ -33,6 +33,8 @@
 #include <thread>
 #include <chrono>
 #include <filesystem>
+#include <fstream>
+#include <cctype>
 
 int main(int argc, char** argv) {
     if (!Genesis::Engine::Init()) {
@@ -441,6 +443,28 @@ int main(int argc, char** argv) {
             // WASM mods: load any 'mod.wasm' modules if the runtime is available
             for (auto &m : mods) {
                 auto wasm = m.path / "mod.wasm";
+                auto wasmHex = m.path / "mod.wasm.hex";
+                // If only hex file exists, create binary 'mod.wasm' from it for convenience
+                if (!std::filesystem::exists(wasm) && std::filesystem::exists(wasmHex)) {
+                    std::ifstream ifs(wasmHex);
+                    if (ifs) {
+                        std::string hex((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
+                        std::string cleaned;
+                        cleaned.reserve(hex.size());
+                        for (char c : hex) if (!std::isspace(static_cast<unsigned char>(c))) cleaned.push_back(c);
+                        if (cleaned.size() % 2 == 0) {
+                            std::ofstream ofs(wasm, std::ios::binary);
+                            for (size_t i = 0; i < cleaned.size(); i += 2) {
+                                auto hi = cleaned[i];
+                                auto lo = cleaned[i+1];
+                                auto cv = [](char c)->int{ if (c>='0'&&c<='9') return c-'0'; if (c>='a'&&c<='f') return 10 + (c - 'a'); if (c>='A'&&c<='F') return 10 + (c - 'A'); return 0; };
+                                uint8_t byte = static_cast<uint8_t>((cv(hi) << 4) | cv(lo));
+                                ofs.put(static_cast<char>(byte));
+                            }
+                        }
+                    }
+                }
+
                 if (std::filesystem::exists(wasm) && std::filesystem::is_regular_file(wasm)) {
                     if (Genesis::Engine::WasmRuntime::LoadModule(wasm)) std::cout << "Loaded WASM mod: " << wasm.string() << std::endl;
                     else std::cout << "Failed to load WASM mod: " << wasm.string() << std::endl;

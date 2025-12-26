@@ -44,7 +44,9 @@ add_executable(UnitTests
     test_mods.cpp
     test_scripting.cpp
     test_wasm_runtime.cpp
+    test_wasm_runtime.cpp
     test_wasm_sample_mod.cpp
+    test_wasm_mod_file.cpp
     ${catch2_SOURCE_DIR}/extras/catch_amalgamated.cpp
 )
 
@@ -127,6 +129,9 @@ if (WIN32)
       # Optionally include Box2D DLL if present
       if (EXISTS "${VCPKG_INSTALLED}/bin/box2d.dll")
         list(APPEND TEST_RUNTIME_DLLS "${VCPKG_INSTALLED}/bin/box2d.dll")
+      endif()
+      if (EXISTS "${VCPKG_INSTALLED}/bin/wasm3.dll")
+        list(APPEND TEST_RUNTIME_DLLS "${VCPKG_INSTALLED}/bin/wasm3.dll")
       endif()
     endif()
 
