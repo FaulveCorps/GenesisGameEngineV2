@@ -4,6 +4,9 @@
 #include <SDL.h>
 #include <iostream>
 #include <cstring>
+#ifdef HAVE_STB_IMAGE
+#include <stb_image.h>
+#endif
 
 namespace Genesis::Engine {
 
@@ -50,6 +53,18 @@ std::shared_ptr<Texture> Texture::CreateFromMemory(uint32_t width, uint32_t heig
 }
 
 std::shared_ptr<Texture> Texture::CreateFromFile(const std::string& path) {
+#ifdef HAVE_STB_IMAGE
+    int x = 0, y = 0, n = 0;
+    unsigned char* data = stbi_load(path.c_str(), &x, &y, &n, 4);
+    if (data) {
+        size_t sz = static_cast<size_t>(x) * y * 4;
+        std::vector<uint8_t> pixels(sz);
+        std::memcpy(pixels.data(), data, sz);
+        stbi_image_free(data);
+        return CreateFromMemory(static_cast<uint32_t>(x), static_cast<uint32_t>(y), pixels);
+    }
+#endif
+
     SDL_Surface* surf = SDL_LoadBMP(path.c_str());
     if (!surf) {
         std::cerr << "Texture::CreateFromFile -> SDL_LoadBMP failed for '" << path << "': " << SDL_GetError() << std::endl;
@@ -67,7 +82,7 @@ std::shared_ptr<Texture> Texture::CreateFromFile(const std::string& path) {
     std::memcpy(pixels.data(), conv->pixels, pixels.size());
     SDL_FreeSurface(conv);
     return CreateFromMemory(w, h, pixels);
-}
+} 
 
 Texture::~Texture() {
     TextureRegistry::Instance().Unregister(this);

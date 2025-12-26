@@ -52,7 +52,8 @@ add_library(EngineCore STATIC
     SRC/NullAudio.cpp
     SRC/NullShaderSubsystem.cpp
     SRC/GLShaderSubsystem.cpp
-) 
+    SRC/stb_image_impl.cpp
+)  
 
 target_include_directories(EngineCore PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -64,6 +65,19 @@ target_include_directories(EngineCore PUBLIC
 target_compile_features(EngineCore PUBLIC cxx_std_17)
 
 target_link_libraries(EngineCore PRIVATE ${SDL2_LIBRARY} OpenGL::GL ${ASSIMP_LIBRARY})
+
+# stb single-file image library (optional) - fetch via FetchContent
+FetchContent_Declare(
+  stb
+  GIT_REPOSITORY https://github.com/nothings/stb.git
+  GIT_TAG master
+)
+FetchContent_MakeAvailable(stb)
+# Expose the stb headers so we can use stb_image/stb_image_write
+if (stb_SOURCE_DIR)
+  target_include_directories(EngineCore PUBLIC ${stb_SOURCE_DIR})
+  target_compile_definitions(EngineCore PUBLIC HAVE_STB_IMAGE=1)
+endif()
 
 # Vulkan (optional) - prefer system/vcpkg-provided Vulkan
 find_package(Vulkan)
