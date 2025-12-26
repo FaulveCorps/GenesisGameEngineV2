@@ -12,6 +12,7 @@ Key points
   - `WasKeyPressed(int scancode)` / `WasKeyReleased(int scancode)` — edge detection
   - Mouse queries: `GetMousePosition`, `IsMouseButtonDown`, `WasMouseButtonPressed`, `WasMouseButtonReleased`
 - Scancodes use SDL scancode integers (`SDL_SCANCODE_*`).
+- Controller/Gamepad support (SDL_GameController): `GetControllerCount`, `IsControllerConnected`, `IsControllerButtonDown`, `WasControllerButtonPressed`, `WasControllerButtonReleased`, `GetControllerAxis`, and `GetControllerName`.
 
 Usage
 -----
@@ -29,7 +30,7 @@ if (!Genesis::Engine::CreateInputSubsystem("sdl")) {
 
 ```cpp
 if (auto in = Genesis::Engine::GetInputSubsystem()) in->Update(dt);
-if (in && in->WasKeyPressed(SDL_SCANCODE_F2)) { /* handle edge */ }
+if (in && (in->WasKeyPressed(SDL_SCANCODE_F2) || in->WasControllerButtonPressed(0, SDL_CONTROLLER_BUTTON_A))) { /* handle edge */ }
 int mx, my; in->GetMousePosition(mx, my);
 ```
 

@@ -20,6 +20,15 @@ public:
     bool IsMouseButtonDown(int /*button*/) const override { return false; }
     bool WasMouseButtonPressed(int /*button*/) const override { return false; }
     bool WasMouseButtonReleased(int /*button*/) const override { return false; }
+
+    // Controller no-op
+    int GetControllerCount() const override { return 0; }
+    bool IsControllerConnected(int /*controllerId*/) const override { return false; }
+    bool IsControllerButtonDown(int /*controllerId*/, int /*button*/) const override { return false; }
+    bool WasControllerButtonPressed(int /*controllerId*/, int /*button*/) const override { return false; }
+    bool WasControllerButtonReleased(int /*controllerId*/, int /*button*/) const override { return false; }
+    float GetControllerAxis(int /*controllerId*/, int /*axis*/) const override { return 0.0f; }
+    std::string GetControllerName(int /*controllerId*/) const override { return std::string(); }
 };
 
 static bool register_null_input = []() {

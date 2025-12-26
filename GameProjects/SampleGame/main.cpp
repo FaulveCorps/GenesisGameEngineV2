@@ -513,7 +513,7 @@ int main(int argc, char** argv) {
             {
                 auto in = Genesis::Engine::GetInputSubsystem();
                 Uint32 now = SDL_GetTicks();
-                if (in && in->WasKeyPressed(SDL_SCANCODE_F2) && now - lastToggleTime > 300) {
+                if (in && (in->WasKeyPressed(SDL_SCANCODE_F2) || in->WasControllerButtonPressed(0, SDL_CONTROLLER_BUTTON_START)) && now - lastToggleTime > 300) {
                     lastToggleTime = now;
                     if (Genesis::Engine::RendererManager::CycleRenderer(window.GetSDLWindow(), window.GetGLContext())) {
                         setupSoftwareVisual(Genesis::Engine::RendererManager::GetRenderer());
@@ -570,7 +570,7 @@ int main(int argc, char** argv) {
             {
                 auto in = Genesis::Engine::GetInputSubsystem();
                 Uint32 now = SDL_GetTicks();
-                if (in && in->WasKeyPressed(SDL_SCANCODE_F2) && now - lastToggleTime > 300) {
+                if (in && (in->WasKeyPressed(SDL_SCANCODE_F2) || in->WasControllerButtonPressed(0, SDL_CONTROLLER_BUTTON_START)) && now - lastToggleTime > 300) {
                     lastToggleTime = now;
                     if (Genesis::Engine::RendererManager::CycleRenderer(window.GetSDLWindow(), window.GetGLContext())) {
                         setupSoftwareVisual(Genesis::Engine::RendererManager::GetRenderer());

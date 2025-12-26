@@ -2,6 +2,7 @@
 
 #include "engine/ISubsystem.h"
 #include <cstdint>
+#include <string>
 
 namespace Genesis::Engine {
 
@@ -23,6 +24,15 @@ public:
     virtual bool IsMouseButtonDown(int button) const = 0;
     virtual bool WasMouseButtonPressed(int button) const = 0;
     virtual bool WasMouseButtonReleased(int button) const = 0;
+
+    // Controller / Gamepad (SDL_GameController mapping)
+    virtual int GetControllerCount() const = 0;
+    virtual bool IsControllerConnected(int controllerId) const = 0;
+    virtual bool IsControllerButtonDown(int controllerId, int button) const = 0;
+    virtual bool WasControllerButtonPressed(int controllerId, int button) const = 0;
+    virtual bool WasControllerButtonReleased(int controllerId, int button) const = 0;
+    virtual float GetControllerAxis(int controllerId, int axis) const = 0; // returns -1..1
+    virtual std::string GetControllerName(int controllerId) const = 0;
 };
 
 } // namespace Genesis::Engine
