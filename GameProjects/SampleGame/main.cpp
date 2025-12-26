@@ -344,9 +344,20 @@ int main(int argc, char** argv) {
         }
         auto ph = Genesis::Engine::GetPhysicsSubsystem();
         if (ph) {
-            // create a box at y=5 meters (2D systems will ignore z)
-            demoBody = ph->CreateBoxRigidBody(1.0f, 0.0f, 5.0f, 0.0f, 1.0f, 1.0f, 1.0f);
-            if (demoBody != 0) std::cout << "SampleGame: created physics box demo handle=" << demoBody << std::endl;
+            if (ph->Name() == "box2d") {
+                auto a = ph->CreateBoxRigidBody(1.0f, -0.5f, 5.0f, 0.0f, 1.0f, 1.0f, 1.0f);
+                auto b = ph->CreateBoxRigidBody(1.0f, 0.5f, 5.0f, 0.0f, 1.0f, 1.0f, 1.0f);
+                if (a && b) {
+                    auto j = ph->CreateDistanceJoint(a, b, -0.5f, 5.0f, 0.5f, 5.0f);
+                    std::cout << "SampleGame: created 2D joint demo j=" << j << std::endl;
+                }
+                demoBody = a;
+                if (demoBody != 0) std::cout << "SampleGame: created physics box demo handle=" << demoBody << std::endl;
+            } else {
+                // create a box at y=5 meters (3D Bullet or others)
+                demoBody = ph->CreateBoxRigidBody(1.0f, 0.0f, 5.0f, 0.0f, 1.0f, 1.0f, 1.0f);
+                if (demoBody != 0) std::cout << "SampleGame: created physics box demo handle=" << demoBody << std::endl;
+            }
         }
     }
     // Platform-specific extension

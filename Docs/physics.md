@@ -31,7 +31,13 @@ Rigid body API
   - `void DestroyRigidBody(BodyHandle h);`
   - `bool GetRigidBodyPosition(BodyHandle h, float& x, float& y, float& z);`
   - `void ApplyCentralImpulse(BodyHandle h, float ix, float iy, float iz);`
-- The `NullPhysics` backend implements these as no-ops, and the `Bullet` backend implements them using Bullet types when available.
+  - **Joint API (optional):**
+    - `JointHandle CreateDistanceJoint(BodyHandle a, BodyHandle b, float anchorAx, float anchorAy, float anchorBx, float anchorBy);`
+    - `JointHandle CreateRevoluteJoint(BodyHandle a, BodyHandle b, float anchorX, float anchorY);`
+    - `void DestroyJoint(JointHandle j);`
+  - **Contact callbacks:**
+    - `void SetContactCallbacks(ContactCallback onBegin, ContactCallback onEnd);`
+- The `NullPhysics` backend implements these as no-ops. `Box2D` implements joints and contact callbacks; `Bullet` stores callbacks and currently stubs joint creation (future work: map to Bullet constraints).
 
 SampleGame demo
 - You can now run `SampleGame` with `--physics-demo` to spawn a simple box and observe periodic position prints to the console (falls under gravity when using Bullet).

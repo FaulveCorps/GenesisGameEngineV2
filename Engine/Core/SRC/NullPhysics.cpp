@@ -8,8 +8,8 @@ namespace Genesis::Engine {
 class NullPhysics : public IPhysics {
 public:
     bool Init() override { std::cout << "NullPhysics: Init\n"; return true; }
+    void Update(double /*dt*/) override { /* no-op */ }
     void Shutdown() override { std::cout << "NullPhysics: Shutdown\n"; }
-    void Update(double /*dt*/) override {}
     std::string Name() const override { return "null"; }
     void StepSimulation(float /*dt*/, int /*maxSubSteps*/ = 1) override {}
 
@@ -17,6 +17,14 @@ public:
     void DestroyRigidBody(BodyHandle /*h*/) override {}
     bool GetRigidBodyPosition(BodyHandle /*h*/, float& /*x*/, float& /*y*/, float& /*z*/) override { return false; }
     void ApplyCentralImpulse(BodyHandle /*h*/, float /*ix*/, float /*iy*/, float /*iz*/) override {}
+
+    // Joints (no-op)
+    JointHandle CreateDistanceJoint(BodyHandle /*a*/, BodyHandle /*b*/, float /*anchorAx*/, float /*anchorAy*/, float /*anchorBx*/, float /*anchorBy*/) override { return 0; }
+    JointHandle CreateRevoluteJoint(BodyHandle /*a*/, BodyHandle /*b*/, float /*anchorX*/, float /*anchorY*/) override { return 0; }
+    void DestroyJoint(JointHandle /*j*/) override {}
+
+    // Contact callbacks (ignored)
+    void SetContactCallbacks(ContactCallback /*onBegin*/, ContactCallback /*onEnd*/) override {}
 };
 
 static bool register_null_physics = []() {

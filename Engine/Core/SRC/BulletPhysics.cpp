@@ -134,6 +134,15 @@ public:
 #endif
     }
 
+    // Joints: not implemented for Bullet backend yet (stubbed)
+    JointHandle CreateDistanceJoint(BodyHandle /*a*/, BodyHandle /*b*/, float /*anchorAx*/, float /*anchorAy*/, float /*anchorBx*/, float /*anchorBy*/) override { return 0; }
+    JointHandle CreateRevoluteJoint(BodyHandle /*a*/, BodyHandle /*b*/, float /*anchorX*/, float /*anchorY*/) override { return 0; }
+    void DestroyJoint(JointHandle /*j*/) override {}
+    void SetContactCallbacks(ContactCallback onBegin, ContactCallback onEnd) override {
+        m_onBegin = onBegin;
+        m_onEnd = onEnd;
+    }
+
 private:
 #ifdef HAVE_BULLET
     btDefaultCollisionConfiguration* m_collisionConfig = nullptr;
@@ -147,6 +156,8 @@ private:
     std::unordered_map<BodyHandle, btDefaultMotionState*> m_motionStates;
     BodyHandle m_nextHandle = 1;
 #endif
+    std::function<void(BodyHandle,BodyHandle)> m_onBegin;
+    std::function<void(BodyHandle,BodyHandle)> m_onEnd;
 };
 
 static bool register_bullet_physics = []() {

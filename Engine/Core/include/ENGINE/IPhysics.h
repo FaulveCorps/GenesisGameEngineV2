@@ -2,6 +2,7 @@
 
 #include "engine/ISubsystem.h"
 #include <string>
+#include <functional>
 
 namespace Genesis::Engine {
 
@@ -25,6 +26,17 @@ public:
 
     // Apply an impulse to the center of mass of the body.
     virtual void ApplyCentralImpulse(BodyHandle h, float ix, float iy, float iz) = 0;
+
+    // Joints (optional, 2D/3D dependent)
+    using JointHandle = size_t;
+    using ContactCallback = std::function<void(BodyHandle a, BodyHandle b)>;
+
+    virtual JointHandle CreateDistanceJoint(BodyHandle a, BodyHandle b, float anchorAx, float anchorAy, float anchorBx, float anchorBy) = 0;
+    virtual JointHandle CreateRevoluteJoint(BodyHandle a, BodyHandle b, float anchorX, float anchorY) = 0;
+    virtual void DestroyJoint(JointHandle j) = 0;
+
+    // Contact callbacks: onBegin/onEnd called when bodies start/stop touching.
+    virtual void SetContactCallbacks(ContactCallback onBegin, ContactCallback onEnd) = 0;
 };
 
 } // namespace Genesis::Engine
