@@ -1,8 +1,21 @@
 #include "engine/PluginManager.h"
 #include "engine/PluginAPI.h"
+#include "engine/SubsystemRegistry.h"
+#include "engine/ISubsystem.h"
 
 #include <iostream>
 #include <vector>
+
+// Exposed to plugins: registration callback. Plugins call this (C linkage) to register
+// factories for subsystem backends:
+//   void Engine_RegisterFactory(const char* subsystemType, const char* name, void* (*factory)())
+extern "C" void Engine_RegisterFactory(const char* subsystemType, const char* name, void* (*factory)()) {
+    using namespace Genesis::Engine;
+    SubsystemRegistry::Instance().RegisterFactory(subsystemType, name, [factory]() {
+        ISubsystem* p = reinterpret_cast<ISubsystem*>(factory());
+        return std::unique_ptr<ISubsystem>(p);
+    });
+} 
 
 #ifdef _WIN32
 #include <Windows.h>
@@ -48,6 +61,13 @@ bool PluginManager::LoadPlugin(const std::string& path) {
         return false;
     }
     std::cout << "Loaded plugin: " << name() << std::endl;
+
+    // Optional: call plugin's registration callback so it can register additional subsystems
+    auto reg = (Plugin_RegisterSubsystems_Fn)GetProcAddress(h, "Plugin_RegisterSubsystems");
+    if (reg) {
+        reg(&Engine_RegisterFactory);
+    }
+
     m_impl->handles.push_back(h);
     return true;
 #else
@@ -70,6 +90,13 @@ bool PluginManager::LoadPlugin(const std::string& path) {
         return false;
     }
     std::cout << "Loaded plugin: " << name() << std::endl;
+
+    // Optional: call plugin's registration callback so it can register additional subsystems
+    auto reg = (Plugin_RegisterSubsystems_Fn)dlsym(h, "Plugin_RegisterSubsystems");
+    if (reg) {
+        reg(&Engine_RegisterFactory);
+    }
+
     m_impl->handles.push_back(h);
     return true;
 #endif

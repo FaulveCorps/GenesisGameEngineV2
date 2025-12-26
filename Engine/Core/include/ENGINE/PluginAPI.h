@@ -29,6 +29,12 @@ typedef bool (*Plugin_Init_Fn)();
 typedef void (*Plugin_Shutdown_Fn)();
 typedef const char* (*Plugin_Name_Fn)();
 
+// Optional plugin registration hook (extern "C").
+// If present, the engine will call this function after Plugin_Init to allow the
+// plugin to register subsystem factories. Signature:
+//   void Plugin_RegisterSubsystems(void (*engine_register)(const char* subsystemType, const char* name, void* (*factory)()))
+typedef void (*Plugin_RegisterSubsystems_Fn)(void (*engine_register)(const char* subsystemType, const char* name, void* (*factory)()));
+
 #ifdef __cplusplus
 }
 #endif

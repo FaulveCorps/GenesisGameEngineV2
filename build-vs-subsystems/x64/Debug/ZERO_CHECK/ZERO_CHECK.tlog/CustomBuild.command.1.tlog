@@ -1,0 +1,10 @@
+^C:\USERS\JPFAU\DESKTOP\PROJECT\GENESISGAMEENGINE\BUILD-VS-SUBSYSTEMS\CMAKEFILES\55BDCDAC0546D5083228912D49CF8C82\GENERATE.STAMP.RULE
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -SC:/Users/jpfau/Desktop/Project/GenesisGameEngine -BC:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems --check-stamp-list CMakeFiles/generate.stamp.list --vs-solution-file C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/GenesisGameEngine.sln
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd

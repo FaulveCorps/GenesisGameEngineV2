@@ -47,6 +47,9 @@ add_library(EngineCore STATIC
     SRC/Stats.cpp
     SRC/ImGuiLayer.cpp
     SRC/PluginManager.cpp
+    SRC/SubsystemRegistry.cpp
+    SRC/SubsystemManager.cpp
+    SRC/NullAudio.cpp
 ) 
 
 target_include_directories(EngineCore PUBLIC

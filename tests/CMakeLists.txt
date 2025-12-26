@@ -27,6 +27,7 @@ add_executable(UnitTests
     test_2d_sprite_gl_smoke.cpp
     test_2d_sprite_gl_readback.cpp
     test_samplegame_autocycle.cpp
+    test_subsystems.cpp
     ${catch2_SOURCE_DIR}/extras/catch_amalgamated.cpp
 )
 

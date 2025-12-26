@@ -1,6 +1,6 @@
 # Build artifacts & caches
 # General build directories (avoid committing generated build trees)
-/build/
+/build2/
 /build_vs/
 /build-vs/
 /out/
@@ -105,3 +105,4 @@ out.txt
 unitstest_out.txt
 vcpkg
 wgpu_test_trace.txt
+build-ninja-release/CMakeFiles/cmake.check_cache
