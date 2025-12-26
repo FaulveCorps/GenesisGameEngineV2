@@ -383,6 +383,21 @@ int main(int argc, char** argv) {
         std::cout << "SampleGame: File save subsystem created" << std::endl;
     }
 
+    // Mods: scan mods/ directory and display discovered mods
+    {
+        Genesis::Engine::ModManager mm;
+        auto modsDir = std::filesystem::current_path() / "mods";
+        if (mm.Scan(modsDir)) {
+            auto mods = mm.Mods();
+            std::cout << "SampleGame: discovered " << mods.size() << " mods" << std::endl;
+            for (auto &m : mods) {
+                std::cout << "  mod: id='" << m.id << "' name='" << m.name << "' version='" << m.version << "' path='" << m.path.string() << "'" << std::endl;
+            }
+        } else {
+            std::cout << "SampleGame: no mods directory found" << std::endl;
+        }
+    }
+
     auto runFrame = [&](void){
         profiler.BeginFrame();
         // Update input subsystem once per frame after events are polled

@@ -59,6 +59,7 @@ add_library(EngineCore STATIC
     SRC/NullNetwork.cpp
     SRC/NullSave.cpp
     SRC/FileSave.cpp
+    SRC/ModManager.cpp
     SRC/EnetNetwork.cpp
     SRC/MiniaudioAudio.cpp
     SRC/miniaudio_impl.cpp

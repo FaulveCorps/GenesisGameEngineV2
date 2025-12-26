@@ -32,6 +32,7 @@ C:\Users\jpfau\Desktop\Project\GenesisGameEngine\Engine\Core\SRC\SDLInput.cpp;C:
 C:\Users\jpfau\Desktop\Project\GenesisGameEngine\Engine\Core\SRC\NullNetwork.cpp;C:\Users\jpfau\Desktop\Project\GenesisGameEngine\build-vs-subsystems\Engine\Core\EngineCore.dir\Debug\NullNetwork.obj
 C:\Users\jpfau\Desktop\Project\GenesisGameEngine\Engine\Core\SRC\NullSave.cpp;C:\Users\jpfau\Desktop\Project\GenesisGameEngine\build-vs-subsystems\Engine\Core\EngineCore.dir\Debug\NullSave.obj
 C:\Users\jpfau\Desktop\Project\GenesisGameEngine\Engine\Core\SRC\FileSave.cpp;C:\Users\jpfau\Desktop\Project\GenesisGameEngine\build-vs-subsystems\Engine\Core\EngineCore.dir\Debug\FileSave.obj
+C:\Users\jpfau\Desktop\Project\GenesisGameEngine\Engine\Core\SRC\ModManager.cpp;C:\Users\jpfau\Desktop\Project\GenesisGameEngine\build-vs-subsystems\Engine\Core\EngineCore.dir\Debug\ModManager.obj
 C:\Users\jpfau\Desktop\Project\GenesisGameEngine\Engine\Core\SRC\EnetNetwork.cpp;C:\Users\jpfau\Desktop\Project\GenesisGameEngine\build-vs-subsystems\Engine\Core\EngineCore.dir\Debug\EnetNetwork.obj
 C:\Users\jpfau\Desktop\Project\GenesisGameEngine\Engine\Core\SRC\MiniaudioAudio.cpp;C:\Users\jpfau\Desktop\Project\GenesisGameEngine\build-vs-subsystems\Engine\Core\EngineCore.dir\Debug\MiniaudioAudio.obj
 C:\Users\jpfau\Desktop\Project\GenesisGameEngine\Engine\Core\SRC\miniaudio_impl.cpp;C:\Users\jpfau\Desktop\Project\GenesisGameEngine\build-vs-subsystems\Engine\Core\EngineCore.dir\Debug\miniaudio_impl.obj

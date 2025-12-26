@@ -530,6 +530,10 @@ FETCHCONTENT_SOURCE_DIR_ENTT:PATH=
 FETCHCONTENT_SOURCE_DIR_MINIAUDIO:PATH=
 
 //When not empty, overrides where to find pre-populated content
+// for nlohmann_json
+FETCHCONTENT_SOURCE_DIR_NLOHMANN_JSON:PATH=
+
+//When not empty, overrides where to find pre-populated content
 // for stb
 FETCHCONTENT_SOURCE_DIR_STB:PATH=
 
@@ -544,6 +548,9 @@ FETCHCONTENT_UPDATES_DISCONNECTED_ENTT:BOOL=OFF
 
 //Enables UPDATE_DISCONNECTED behavior just for population of miniaudio
 FETCHCONTENT_UPDATES_DISCONNECTED_MINIAUDIO:BOOL=OFF
+
+//Enables UPDATE_DISCONNECTED behavior just for population of nlohmann_json
+FETCHCONTENT_UPDATES_DISCONNECTED_NLOHMANN_JSON:BOOL=OFF
 
 //Enables UPDATE_DISCONNECTED behavior just for population of stb
 FETCHCONTENT_UPDATES_DISCONNECTED_STB:BOOL=OFF
