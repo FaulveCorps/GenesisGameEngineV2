@@ -41,14 +41,36 @@ jobs:
           Write-Host "Installing sdl2 and assimp via vcpkg"
           .\vcpkg\vcpkg.exe install sdl2:x64-windows assimp:x64-windows --disable-metrics
 
-      - name: Configure CMake (Ninja + vcpkg toolchain)
+      - name: Configure CMake (generator selection + vcpkg toolchain)
         shell: powershell
         run: |
-          Write-Host "Configuring CMake (Ninja) using vcpkg toolchain..."
+          Write-Host "Environment diagnostics: cmake, ninja, cl, vswhere"
+          cmake --version
+          if (Get-Command ninja -ErrorAction SilentlyContinue) { ninja --version } else { Write-Host "ninja: NOT FOUND" }
+          if (Get-Command cl -ErrorAction SilentlyContinue) { Write-Host "cl.exe found at:"; where cl } else { Write-Host "cl.exe: NOT FOUND" }
+          if (Test-Path "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe") { & "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath } else { Write-Host "vswhere: NOT FOUND" }
+
           $toolchain = "${{ github.workspace }}\\vcpkg\\scripts\\buildsystems\\vcpkg.cmake"
-          cmake -S . -B build -G "Ninja" -DCMAKE_BUILD_TYPE=Debug -DCMAKE_TOOLCHAIN_FILE="$toolchain" -DVCPKG_TARGET_TRIPLET="x64-windows" 2>&1 | Tee-Object -FilePath cmake_configure.log -Encoding UTF8
+
+          if (Get-Command cl -ErrorAction SilentlyContinue) {
+            Write-Host "Configuring with Visual Studio generator (Visual Studio 17 2022, x64)..."
+            cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_TOOLCHAIN_FILE="$toolchain" -DVCPKG_TARGET_TRIPLET="x64-windows" 2>&1 | Tee-Object -FilePath cmake_configure.log -Encoding UTF8
+          } elseif (Get-Command ninja -ErrorAction SilentlyContinue) {
+            Write-Host "Configuring with Ninja Multi-Config generator..."
+            $ninjaPath = (Get-Command ninja).Source
+            cmake -S . -B build -G "Ninja Multi-Config" -DCMAKE_MAKE_PROGRAM="$ninjaPath" -DCMAKE_TOOLCHAIN_FILE="$toolchain" -DVCPKG_TARGET_TRIPLET="x64-windows" 2>&1 | Tee-Object -FilePath cmake_configure.log -Encoding UTF8
+          } else {
+            Write-Host "No cl nor ninja found; attempting to install Ninja via winget..."
+            winget install --id Ninja-build.Ninja -e --accept-package-agreements --accept-source-agreements
+            $ninjaPath = (Get-Command ninja).Source
+            cmake -S . -B build -G "Ninja Multi-Config" -DCMAKE_MAKE_PROGRAM="$ninjaPath" -DCMAKE_TOOLCHAIN_FILE="$toolchain" -DVCPKG_TARGET_TRIPLET="x64-windows" 2>&1 | Tee-Object -FilePath cmake_configure.log -Encoding UTF8
+          }
+
           if ($LASTEXITCODE -ne 0) {
             Write-Host "CMake configure failed. See cmake_configure.log for details."
+            Write-Host "---- Begin cmake_configure.log ----"
+            if (Test-Path cmake_configure.log) { Get-Content cmake_configure.log -Raw | Write-Host }
+            Write-Host "---- End cmake_configure.log ----"
             Exit $LASTEXITCODE
           }
 
