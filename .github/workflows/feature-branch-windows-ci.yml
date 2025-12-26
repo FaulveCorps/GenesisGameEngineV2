@@ -41,58 +41,71 @@ jobs:
           Write-Host "Installing sdl2 and assimp via vcpkg"
           .\vcpkg\vcpkg.exe install sdl2:x64-windows assimp:x64-windows --disable-metrics
 
-      - name: Configure CMake (generator selection + vcpkg toolchain)
+      - name: Check for MSVC (cl.exe)
+        id: check_cl
         shell: powershell
         run: |
-          Write-Host "Environment diagnostics: cmake, ninja, cl, vswhere"
+          Write-Host "Checking for cl.exe and vswhere..."
+          if (Get-Command cl -ErrorAction SilentlyContinue) {
+            Write-Host "cl.exe found at: $(where cl)"
+            echo "msvc=true" >> $GITHUB_OUTPUT
+          } else {
+            Write-Host "cl.exe: NOT FOUND"
+            echo "msvc=false" >> $GITHUB_OUTPUT
+          }
+          if (Test-Path "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe") { & "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath } else { Write-Host "vswhere: NOT FOUND" }
+          Write-Host "Environment diagnostics: cmake, ninja"
           cmake --version
           if (Get-Command ninja -ErrorAction SilentlyContinue) { ninja --version } else { Write-Host "ninja: NOT FOUND" }
-          if (Get-Command cl -ErrorAction SilentlyContinue) { Write-Host "cl.exe found at:"; where cl } else { Write-Host "cl.exe: NOT FOUND" }
-          if (Test-Path "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe") { & "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath } else { Write-Host "vswhere: NOT FOUND" }
 
+      - name: Configure CMake (Visual Studio 17 2022 + vcpkg toolchain)
+        id: vs_configure
+        if: steps.check_cl.outputs.msvc == 'true'
+        continue-on-error: true
+        shell: powershell
+        run: |
           $toolchain = "${{ github.workspace }}\\vcpkg\\scripts\\buildsystems\\vcpkg.cmake"
-
-          $configured = $false
-
-          # Try Visual Studio generator first (if cl exists)
-          if (Get-Command cl -ErrorAction SilentlyContinue) {
-            Write-Host "Trying Visual Studio generator (Visual Studio 17 2022, x64)..."
-            cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_TOOLCHAIN_FILE="$toolchain" -DVCPKG_TARGET_TRIPLET="x64-windows" 2>&1 | Tee-Object -FilePath cmake_configure_vs.log -Encoding UTF8
-            if ($LASTEXITCODE -eq 0) {
-              Copy-Item -Force cmake_configure_vs.log cmake_configure.log
-              $configured = $true
-            } else {
-              Write-Host "Visual Studio configure failed with exit code $LASTEXITCODE. Will attempt Ninja fallback..."
-            }
+          Write-Host "Attempting Visual Studio generator (Visual Studio 17 2022, x64)..."
+          cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_TOOLCHAIN_FILE="$toolchain" -DVCPKG_TARGET_TRIPLET="x64-windows" 2>&1 | Tee-Object -FilePath cmake_configure_vs.log -Encoding UTF8
+          if ($LASTEXITCODE -eq 0) {
+            Copy-Item -Force cmake_configure_vs.log cmake_configure.log
+            Write-Host "Visual Studio configure succeeded"
+          } else {
+            Write-Host "Visual Studio configure failed with exit code $LASTEXITCODE"
           }
 
-          # If not configured yet, try Ninja
-          if (-not $configured) {
-            if (-Not (Get-Command ninja -ErrorAction SilentlyContinue)) {
-              Write-Host "Ninja not found; installing via winget..."
-              winget install --id Ninja-build.Ninja -e --accept-package-agreements --accept-source-agreements
-            } else {
-              Write-Host "Ninja found: $(ninja --version)"
-            }
-            $ninjaPath = (Get-Command ninja).Source
-            Write-Host "Trying Ninja Multi-Config generator..."
-            cmake -S . -B build -G "Ninja Multi-Config" -DCMAKE_MAKE_PROGRAM="$ninjaPath" -DCMAKE_TOOLCHAIN_FILE="$toolchain" -DVCPKG_TARGET_TRIPLET="x64-windows" 2>&1 | Tee-Object -FilePath cmake_configure_ninja.log -Encoding UTF8
-            if ($LASTEXITCODE -eq 0) {
-              Copy-Item -Force cmake_configure_ninja.log cmake_configure.log
-              $configured = $true
-            } else {
-              Write-Host "Ninja configure failed with exit code $LASTEXITCODE."
-            }
+      - name: Configure CMake (Ninja Multi-Config + vcpkg toolchain)
+        id: ninja_configure
+        if: steps.vs_configure.outcome != 'success'
+        shell: powershell
+        run: |
+          $toolchain = "${{ github.workspace }}\\vcpkg\\scripts\\buildsystems\\vcpkg.cmake"
+          if (-Not (Get-Command ninja -ErrorAction SilentlyContinue)) {
+            Write-Host "Ninja not found; installing via winget..."
+            winget install --id Ninja-build.Ninja -e --accept-package-agreements --accept-source-agreements
+          } else {
+            Write-Host "Ninja found: $(ninja --version)"
+          }
+          $ninjaPath = (Get-Command ninja).Source
+          Write-Host "Attempting Ninja Multi-Config generator..."
+          cmake -S . -B build -G "Ninja Multi-Config" -DCMAKE_MAKE_PROGRAM="$ninjaPath" -DCMAKE_TOOLCHAIN_FILE="$toolchain" -DVCPKG_TARGET_TRIPLET="x64-windows" 2>&1 | Tee-Object -FilePath cmake_configure_ninja.log -Encoding UTF8
+          if ($LASTEXITCODE -eq 0) {
+            Copy-Item -Force cmake_configure_ninja.log cmake_configure.log
+            Write-Host "Ninja configure succeeded"
+          } else {
+            Write-Host "Ninja configure failed with exit code $LASTEXITCODE"
           }
 
-          if (-not $configured) {
-            Write-Host "CMake configure failed with both Visual Studio and Ninja fallback. See logs:"
-            Write-Host "---- cmake_configure_vs.log ----"
-            if (Test-Path cmake_configure_vs.log) { Get-Content cmake_configure_vs.log -Raw | Write-Host } else { Write-Host "cmake_configure_vs.log not found" }
-            Write-Host "---- cmake_configure_ninja.log ----"
-            if (Test-Path cmake_configure_ninja.log) { Get-Content cmake_configure_ninja.log -Raw | Write-Host } else { Write-Host "cmake_configure_ninja.log not found" }
-            Exit 1
-          }
+      - name: Fail if configure failed
+        if: steps.vs_configure.outcome != 'success' && steps.ninja_configure.outcome != 'success'
+        shell: powershell
+        run: |
+          Write-Host "CMake configure failed with both Visual Studio and Ninja fallback. See logs:"
+          Write-Host "---- cmake_configure_vs.log ----"
+          if (Test-Path cmake_configure_vs.log) { Get-Content cmake_configure_vs.log -Raw | Write-Host } else { Write-Host "cmake_configure_vs.log not found" }
+          Write-Host "---- cmake_configure_ninja.log ----"
+          if (Test-Path cmake_configure_ninja.log) { Get-Content cmake_configure_ninja.log -Raw | Write-Host } else { Write-Host "cmake_configure_ninja.log not found" }
+          Exit 1
 
       - name: Dump CMake configure log
         if: always()
@@ -104,7 +117,10 @@ jobs:
           } else {
             Write-Host "cmake_configure.log not found"
           }
-
+          Write-Host "==== cmake_configure_vs.log ===="
+          if (Test-Path cmake_configure_vs.log) { Get-Content cmake_configure_vs.log -Encoding UTF8 | ForEach-Object { Write-Host $_ } } else { Write-Host "cmake_configure_vs.log not found" }
+          Write-Host "==== cmake_configure_ninja.log ===="
+          if (Test-Path cmake_configure_ninja.log) { Get-Content cmake_configure_ninja.log -Encoding UTF8 | ForEach-Object { Write-Host $_ } } else { Write-Host "cmake_configure_ninja.log not found" }
       - name: List files for artifacts
         if: always()
         shell: powershell
