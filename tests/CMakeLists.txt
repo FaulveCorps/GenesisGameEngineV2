@@ -32,6 +32,7 @@ add_executable(UnitTests
     test_audio.cpp
     test_audio_playback.cpp
     test_physics.cpp
+    test_physics_rigidbody.cpp
     test_subsystems.cpp
     ${catch2_SOURCE_DIR}/extras/catch_amalgamated.cpp
 )
@@ -110,4 +111,23 @@ if (WIN32)
         COMMAND ${CMAKE_COMMAND} -E copy_if_different ${TEST_RUNTIME_DLLS} $<TARGET_FILE_DIR:UnitTests>
         COMMENT "Copying runtime DLLs to test output directory"
     )
+
+    # Optionally include Bullet DLLs if present in vcpkg to support runtime tests that rely on dynamic libs
+    if (WIN32)
+      if (EXISTS "${VCPKG_INSTALLED}/bin/BulletDynamics.dll")
+        add_custom_command(TARGET UnitTests POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different "${VCPKG_INSTALLED}/bin/BulletDynamics.dll" $<TARGET_FILE_DIR:UnitTests>
+        )
+      endif()
+      if (EXISTS "${VCPKG_INSTALLED}/bin/BulletCollision.dll")
+        add_custom_command(TARGET UnitTests POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different "${VCPKG_INSTALLED}/bin/BulletCollision.dll" $<TARGET_FILE_DIR:UnitTests>
+        )
+      endif()
+      if (EXISTS "${VCPKG_INSTALLED}/bin/LinearMath.dll")
+        add_custom_command(TARGET UnitTests POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different "${VCPKG_INSTALLED}/bin/LinearMath.dll" $<TARGET_FILE_DIR:UnitTests>
+        )
+      endif()
+    endif()
 endif()

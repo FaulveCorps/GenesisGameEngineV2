@@ -25,6 +25,7 @@
 #include "engine/Shader.h"
 #include "engine/ShaderRegistry.h"
 #include "engine/TextureRegistry.h"
+#include "engine/IPhysics.h"
 #include <thread>
 #include <chrono>
 #include <filesystem>
@@ -235,6 +236,8 @@ int main(int argc, char** argv) {
 
     std::shared_ptr<Genesis::Engine::Texture> demoTex;
 
+    bool doPhysicsDemo = false;
+
     for (int i = 1; i < argc; ++i) {
         std::string a = argv[i];
         if (a == "--stress") {
@@ -254,6 +257,11 @@ int main(int argc, char** argv) {
         if (a == "--2d-demo") {
             do2dDemo = true;
             std::cout << "CLI: 2D demo mode enabled" << std::endl;
+            continue;
+        }
+        if (a == "--physics-demo") {
+            doPhysicsDemo = true;
+            std::cout << "CLI: physics demo enabled" << std::endl;
             continue;
         }
 
@@ -285,6 +293,23 @@ int main(int argc, char** argv) {
 
     // Attempt to load sample plugin (demonstrates plugin API)
     Genesis::Engine::PluginManager pluginManager;
+
+    // If the user requested a physics demo, try to create a bullet physics subsystem and spawn a box
+    Genesis::Engine::IPhysics::BodyHandle demoBody = 0;
+    if (doPhysicsDemo) {
+        if (!Genesis::Engine::CreatePhysicsSubsystem("bullet")) {
+            std::cerr << "SampleGame: Bullet physics subsystem not available; falling back to null physics demo" << std::endl;
+            Genesis::Engine::CreatePhysicsSubsystem("null");
+        }
+        auto ph = Genesis::Engine::GetPhysicsSubsystem();
+        if (ph && ph->Name() == "bullet") {
+            // create a box at y=5 meters
+            demoBody = ph->CreateBoxRigidBody(1.0f, 0.0f, 5.0f, 0.0f, 1.0f, 1.0f, 1.0f);
+            if (demoBody != 0) std::cout << "SampleGame: created physics box demo handle=" << demoBody << std::endl;
+        } else {
+            std::cout << "SampleGame: physics demo not available (using null backend)" << std::endl;
+        }
+    }
     // Platform-specific extension
 #ifdef _WIN32
     pluginManager.LoadPlugin("SamplePlugin.dll");
@@ -348,6 +373,20 @@ int main(int argc, char** argv) {
                 float x = (softwareW - w) * 0.5f;
                 float y = (softwareH - h) * 0.5f;
                 Genesis::Engine::RendererManager::GetRenderer()->DrawTexture(demoTex.get(), x, y, w, h);
+            }
+
+            // If physics demo active, step simulation and occasionally print position
+            if (doPhysicsDemo && demoBody != 0) {
+                auto ph = Genesis::Engine::GetPhysicsSubsystem();
+                if (ph) {
+                    ph->StepSimulation(1.0f/60.0f, 1);
+                    static int counter = 0; counter++;
+                    if ((counter % 60) == 0) {
+                        float px,py,pz; if (ph->GetRigidBodyPosition(demoBody, px,py,pz)) {
+                            std::cout << "Physics demo: body pos=(" << px << "," << py << "," << pz << ")" << std::endl;
+                        }
+                    }
+                }
             }
 
             if (sr->ReadbackOffscreen(static_cast<uint32_t>(softwareW), static_cast<uint32_t>(softwareH), softwarePixels)) {

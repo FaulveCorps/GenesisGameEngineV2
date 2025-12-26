@@ -14,5 +14,6 @@ C:\Users\jpfau\Desktop\Project\GenesisGameEngine\tests\test_shader_subsystem.cpp
 C:\Users\jpfau\Desktop\Project\GenesisGameEngine\tests\test_audio.cpp;C:\Users\jpfau\Desktop\Project\GenesisGameEngine\build-vs-subsystems\tests\UnitTests.dir\Debug\test_audio.obj
 C:\Users\jpfau\Desktop\Project\GenesisGameEngine\tests\test_audio_playback.cpp;C:\Users\jpfau\Desktop\Project\GenesisGameEngine\build-vs-subsystems\tests\UnitTests.dir\Debug\test_audio_playback.obj
 C:\Users\jpfau\Desktop\Project\GenesisGameEngine\tests\test_physics.cpp;C:\Users\jpfau\Desktop\Project\GenesisGameEngine\build-vs-subsystems\tests\UnitTests.dir\Debug\test_physics.obj
+C:\Users\jpfau\Desktop\Project\GenesisGameEngine\tests\test_physics_rigidbody.cpp;C:\Users\jpfau\Desktop\Project\GenesisGameEngine\build-vs-subsystems\tests\UnitTests.dir\Debug\test_physics_rigidbody.obj
 C:\Users\jpfau\Desktop\Project\GenesisGameEngine\tests\test_subsystems.cpp;C:\Users\jpfau\Desktop\Project\GenesisGameEngine\build-vs-subsystems\tests\UnitTests.dir\Debug\test_subsystems.obj
 C:\Users\jpfau\Desktop\Project\GenesisGameEngine\build-vs-subsystems\_deps\catch2-src\extras\catch_amalgamated.cpp;C:\Users\jpfau\Desktop\Project\GenesisGameEngine\build-vs-subsystems\tests\UnitTests.dir\Debug\catch_amalgamated.obj

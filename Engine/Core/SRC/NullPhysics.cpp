@@ -12,6 +12,11 @@ public:
     void Update(double /*dt*/) override {}
     std::string Name() const override { return "null"; }
     void StepSimulation(float /*dt*/, int /*maxSubSteps*/ = 1) override {}
+
+    BodyHandle CreateBoxRigidBody(float /*mass*/, float /*posX*/, float /*posY*/, float /*posZ*/, float /*sizeX*/, float /*sizeY*/, float /*sizeZ*/) override { return 0; }
+    void DestroyRigidBody(BodyHandle /*h*/) override {}
+    bool GetRigidBodyPosition(BodyHandle /*h*/, float& /*x*/, float& /*y*/, float& /*z*/) override { return false; }
+    void ApplyCentralImpulse(BodyHandle /*h*/, float /*ix*/, float /*iy*/, float /*iz*/) override {}
 };
 
 static bool register_null_physics = []() {
