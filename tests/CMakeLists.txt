@@ -30,6 +30,7 @@ add_executable(UnitTests
     test_samplegame_autocycle.cpp
     test_shader_subsystem.cpp
     test_audio.cpp
+    test_audio_playback.cpp
     test_subsystems.cpp
     ${catch2_SOURCE_DIR}/extras/catch_amalgamated.cpp
 )
@@ -82,6 +83,16 @@ if (WIN32)
         "${VCPKG_INSTALLED}/bin/webgpu_dawn.dll"
         "${VCPKG_INSTALLED}/bin/abseil_dll.dll"
     )
+
+    # Optionally include miniaudio runtime DLL if present (some builds produce a DLL)
+    if (WIN32)
+      if (EXISTS "${VCPKG_INSTALLED}/bin/miniaudio.dll")
+        list(APPEND TEST_RUNTIME_DLLS "${VCPKG_INSTALLED}/bin/miniaudio.dll")
+      endif()
+      if (EXISTS "${CMAKE_BINARY_DIR}/_deps/miniaudio-build/Debug/miniaudio.dll")
+        list(APPEND TEST_RUNTIME_DLLS "${CMAKE_BINARY_DIR}/_deps/miniaudio-build/Debug/miniaudio.dll")
+      endif()
+    endif()
 
     # Attempt to include MSVC redistributable CRT DLLs (if present on developer machine)
     if (MSVC)
