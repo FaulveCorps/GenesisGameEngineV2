@@ -50,6 +50,76 @@ void WasmRuntime::Shutdown() {
     g_inited = false;
 }
 
+static M3Result LinkHostFunctions(IM3Module module) {
+    // Link host functions under module namespace 'env'
+    // engine_create_body: i32 create_body(i32 mass_fixed, i32 x_fixed, i32 y_fixed, i32 sx_fixed, i32 sy_fixed)
+    M3Result r = m3_LinkRawFunction(module, "env", "engine_create_body", "i(iiiii)", (void*)&engine_create_body);
+    if (r) return r;
+    // engine_destroy_body: void destroy_body(i32 handle)
+    r = m3_LinkRawFunction(module, "env", "engine_destroy_body", "v(i)", (void*)&engine_destroy_body);
+    if (r) return r;
+    // engine_apply_impulse: void apply_impulse(i32 handle, i32 ix_fixed, i32 iy_fixed)
+    r = m3_LinkRawFunction(module, "env", "engine_apply_impulse", "v(iii)", (void*)&engine_apply_impulse);
+    if (r) return r;
+    // engine_create_distance_joint: i32 create_distance_joint(i32 a, i32 b, i32 ax_fixed, i32 ay_fixed, i32 bx_fixed, i32 by_fixed)
+    r = m3_LinkRawFunction(module, "env", "engine_create_distance_joint", "i(iiiiii)", (void*)&engine_create_distance_joint);
+    return r;
+}
+
+// Host import implementations
+m3ApiRawFunction(engine_create_body) {
+    m3ApiGetArg(int32_t, mass_fixed);
+    m3ApiGetArg(int32_t, x_fixed);
+    m3ApiGetArg(int32_t, y_fixed);
+    m3ApiGetArg(int32_t, sx_fixed);
+    m3ApiGetArg(int32_t, sy_fixed);
+
+    auto ph = Genesis::Engine::GetPhysicsSubsystem();
+    if (!ph) {
+        m3ApiReturn(0);
+    }
+    float mass = mass_fixed / 1000.0f;
+    float x = x_fixed / 1000.0f;
+    float y = y_fixed / 1000.0f;
+    float sx = sx_fixed / 1000.0f;
+    float sy = sy_fixed / 1000.0f;
+    auto h = ph->CreateBoxRigidBody(mass, x, y, 0.0f, sx, sy, 0.0f);
+    m3ApiReturn((uint32_t)h);
+}
+
+m3ApiRawFunction(engine_destroy_body) {
+    m3ApiGetArg(int32_t, h);
+    auto ph = Genesis::Engine::GetPhysicsSubsystem();
+    if (ph) ph->DestroyRigidBody((BodyHandle)h);
+    m3ApiReturn;
+}
+
+m3ApiRawFunction(engine_apply_impulse) {
+    m3ApiGetArg(int32_t, h);
+    m3ApiGetArg(int32_t, ix_fixed);
+    m3ApiGetArg(int32_t, iy_fixed);
+    auto ph = Genesis::Engine::GetPhysicsSubsystem();
+    if (ph) ph->ApplyCentralImpulse((BodyHandle)h, ix_fixed / 1000.0f, iy_fixed / 1000.0f, 0.0f);
+    m3ApiReturn;
+}
+
+m3ApiRawFunction(engine_create_distance_joint) {
+    m3ApiGetArg(int32_t, a);
+    m3ApiGetArg(int32_t, b);
+    m3ApiGetArg(int32_t, ax_fixed);
+    m3ApiGetArg(int32_t, ay_fixed);
+    m3ApiGetArg(int32_t, bx_fixed);
+    m3ApiGetArg(int32_t, by_fixed);
+    auto ph = Genesis::Engine::GetPhysicsSubsystem();
+    if (!ph) { m3ApiReturn(0); }
+    float ax = ax_fixed / 1000.0f;
+    float ay = ay_fixed / 1000.0f;
+    float bx = bx_fixed / 1000.0f;
+    float by = by_fixed / 1000.0f;
+    auto j = ph->CreateDistanceJoint((BodyHandle)a, (BodyHandle)b, ax, ay, bx, by);
+    m3ApiReturn((uint32_t)j);
+}
+
 static bool LoadModuleBytes(const std::string& name, const std::vector<uint8_t>& bytes) {
     std::lock_guard<std::mutex> lk(g_wasmMutex);
     if (!g_inited) {
@@ -60,6 +130,14 @@ static bool LoadModuleBytes(const std::string& name, const std::vector<uint8_t>&
     M3Result r = m3_ParseModule(g_env, &module, bytes.data(), bytes.size());
     if (r) {
         std::cerr << "WasmRuntime: m3_ParseModule failed: " << r << std::endl;
+        return false;
+    }
+
+    // Link host imports
+    r = LinkHostFunctions(module);
+    if (r) {
+        std::cerr << "WasmRuntime: LinkHostFunctions failed: " << r << std::endl;
+        m3_FreeModule(module);
         return false;
     }
 
