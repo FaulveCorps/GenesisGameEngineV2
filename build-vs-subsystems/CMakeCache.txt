@@ -467,6 +467,9 @@ Catch2_SOURCE_DIR:STATIC=C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-
 //Maximum time allowed before CTest will kill the test.
 DART_TESTING_TIMEOUT:STRING=1500
 
+//Path to a file.
+ENET_INCLUDE_DIR:PATH=ENET_INCLUDE_DIR-NOTFOUND
+
 //Enable building with documentation.
 ENTT_BUILD_DOCS:BOOL=OFF
 

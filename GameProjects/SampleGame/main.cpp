@@ -26,6 +26,8 @@
 #include "engine/ShaderRegistry.h"
 #include "engine/TextureRegistry.h"
 #include "engine/IPhysics.h"
+#include "engine/IInput.h"
+#include "engine/INetwork.h"
 #include <thread>
 #include <chrono>
 #include <filesystem>
@@ -41,6 +43,13 @@ int main(int argc, char** argv) {
         std::cerr << "Failed to create window" << std::endl;
         Genesis::Engine::Shutdown();
         return -1;
+    }
+
+    // Try to use SDL-backed input subsystem if available (falls back to null)
+    if (!Genesis::Engine::CreateInputSubsystem("sdl")) {
+        std::cout << "SampleGame: SDL input subsystem not available; using null input" << std::endl;
+    } else {
+        std::cout << "SampleGame: SDL input subsystem created" << std::endl;
     }
 
     // Use OpenGLRenderer for main testing by default. Define VULKAN_SMOKE_TEST or DIRECTX_SMOKE_TEST to try other backends.
@@ -237,6 +246,9 @@ int main(int argc, char** argv) {
     std::shared_ptr<Genesis::Engine::Texture> demoTex;
 
     bool doPhysicsDemo = false;
+    bool doNetHost = false;
+    int netHostPort = 0;
+    std::string netConnectStr;
 
     for (int i = 1; i < argc; ++i) {
         std::string a = argv[i];
@@ -264,6 +276,16 @@ int main(int argc, char** argv) {
             std::cout << "CLI: physics demo enabled" << std::endl;
             continue;
         }
+        if (a == "--net-host" && i + 1 < argc) {
+            try { netHostPort = std::stoi(argv[i+1]); doNetHost = true; } catch (...) { netHostPort = 0; }
+            ++i;
+            continue;
+        }
+        if (a == "--net-connect" && i + 1 < argc) {
+            netConnectStr = argv[i+1];
+            ++i;
+            continue;
+        }
 
     }
 
@@ -275,6 +297,8 @@ int main(int argc, char** argv) {
         std::cout << "  --gfx-strict            Require Vulkan to be present-capable (swapchain + present) to be selected" << std::endl;
         std::cout << "  --vulkan-triangle       Opt-in: have Vulkan present a CPU-rasterized triangle (debug)" << std::endl;
         std::cout << "  --force-vulkan-swapchain Force swapchain creation even when SDL indicates no dynamic Vulkan support (risky)" << std::endl;
+        std::cout << "  --net-host [port]       Host a small ENet server on the specified port" << std::endl;
+        std::cout << "  --net-connect host:port Connect to a remote ENet server (host:port)" << std::endl;
         window.Shutdown();
         Genesis::Engine::Shutdown();
         return 0;
@@ -317,8 +341,43 @@ int main(int argc, char** argv) {
     pluginManager.LoadPlugin("libSamplePlugin.so");
 #endif
 
+    // Networking demo: attempt to create ENet backend and host/connect if requested
+    if (doNetHost || !netConnectStr.empty()) {
+        if (!Genesis::Engine::CreateNetworkSubsystem("enet")) {
+            std::cout << "SampleGame: ENet backend not available; using null network" << std::endl;
+            Genesis::Engine::CreateNetworkSubsystem("null");
+        }
+        auto net = Genesis::Engine::GetNetworkSubsystem();
+        if (net) {
+            if (doNetHost) {
+                if (net->Host(static_cast<uint16_t>(netHostPort))) {
+                    std::cout << "SampleGame: hosting on port " << netHostPort << std::endl;
+                } else {
+                    std::cout << "SampleGame: Host failed" << std::endl;
+                }
+            } else if (!netConnectStr.empty()) {
+                size_t colon = netConnectStr.find(':');
+                std::string host = netConnectStr;
+                int port = 0;
+                if (colon != std::string::npos) {
+                    host = netConnectStr.substr(0, colon);
+                    try { port = std::stoi(netConnectStr.substr(colon + 1)); } catch(...) { port = 0; }
+                }
+                if (net->Connect(host, static_cast<uint16_t>(port))) {
+                    std::cout << "SampleGame: connecting to " << host << ":" << port << std::endl;
+                } else {
+                    std::cout << "SampleGame: connect failed" << std::endl;
+                }
+            }
+        }
+    }
+
     auto runFrame = [&](void){
         profiler.BeginFrame();
+        // Update input subsystem once per frame after events are polled
+        if (auto in = Genesis::Engine::GetInputSubsystem()) in->Update(1.0/60.0);
+        // Poll networking subsystem if present
+        if (auto net = Genesis::Engine::GetNetworkSubsystem()) net->Poll(1.0/60.0);
         Genesis::Engine::Stats::Reset();
 
         auto currentRenderer = Genesis::Engine::RendererManager::GetRenderer();
@@ -451,13 +510,15 @@ int main(int argc, char** argv) {
             runFrame();
             ++frames;
             // Allow runtime renderer cycling on F2 (debounced)
-            const Uint8* keys = SDL_GetKeyboardState(NULL);
-            Uint32 now = SDL_GetTicks();
-            if (keys[SDL_SCANCODE_F2] && now - lastToggleTime > 300) {
-                lastToggleTime = now;
-                if (Genesis::Engine::RendererManager::CycleRenderer(window.GetSDLWindow(), window.GetGLContext())) {
-                    setupSoftwareVisual(Genesis::Engine::RendererManager::GetRenderer());
-                    std::cout << "SampleGame: cycled renderer (stress)" << std::endl;
+            {
+                auto in = Genesis::Engine::GetInputSubsystem();
+                Uint32 now = SDL_GetTicks();
+                if (in && in->WasKeyPressed(SDL_SCANCODE_F2) && now - lastToggleTime > 300) {
+                    lastToggleTime = now;
+                    if (Genesis::Engine::RendererManager::CycleRenderer(window.GetSDLWindow(), window.GetGLContext())) {
+                        setupSoftwareVisual(Genesis::Engine::RendererManager::GetRenderer());
+                        std::cout << "SampleGame: cycled renderer (stress)" << std::endl;
+                    }
                 }
             }
 
@@ -506,13 +567,15 @@ int main(int argc, char** argv) {
             runFrame();
 
             // Allow runtime renderer cycling on F2 (debounced)
-            const Uint8* keys = SDL_GetKeyboardState(NULL);
-            Uint32 now = SDL_GetTicks();
-            if (keys[SDL_SCANCODE_F2] && now - lastToggleTime > 300) {
-                lastToggleTime = now;
-                if (Genesis::Engine::RendererManager::CycleRenderer(window.GetSDLWindow(), window.GetGLContext())) {
-                    setupSoftwareVisual(Genesis::Engine::RendererManager::GetRenderer());
-                    std::cout << "SampleGame: cycled renderer" << std::endl;
+            {
+                auto in = Genesis::Engine::GetInputSubsystem();
+                Uint32 now = SDL_GetTicks();
+                if (in && in->WasKeyPressed(SDL_SCANCODE_F2) && now - lastToggleTime > 300) {
+                    lastToggleTime = now;
+                    if (Genesis::Engine::RendererManager::CycleRenderer(window.GetSDLWindow(), window.GetGLContext())) {
+                        setupSoftwareVisual(Genesis::Engine::RendererManager::GetRenderer());
+                        std::cout << "SampleGame: cycled renderer" << std::endl;
+                    }
                 }
             }
 

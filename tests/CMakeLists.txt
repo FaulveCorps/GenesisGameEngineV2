@@ -34,6 +34,10 @@ add_executable(UnitTests
     test_physics.cpp
     test_physics_rigidbody.cpp
     test_subsystems.cpp
+    test_input.cpp
+    test_input_sdl.cpp
+    test_network.cpp
+    test_network_enet.cpp
     ${catch2_SOURCE_DIR}/extras/catch_amalgamated.cpp
 )
 
@@ -86,13 +90,16 @@ if (WIN32)
         "${VCPKG_INSTALLED}/bin/abseil_dll.dll"
     )
 
-    # Optionally include miniaudio runtime DLL if present (some builds produce a DLL)
+    # Optionally include miniaudio runtime DLL and ENet DLL if present (some builds produce a DLL)
     if (WIN32)
       if (EXISTS "${VCPKG_INSTALLED}/bin/miniaudio.dll")
         list(APPEND TEST_RUNTIME_DLLS "${VCPKG_INSTALLED}/bin/miniaudio.dll")
       endif()
       if (EXISTS "${CMAKE_BINARY_DIR}/_deps/miniaudio-build/Debug/miniaudio.dll")
         list(APPEND TEST_RUNTIME_DLLS "${CMAKE_BINARY_DIR}/_deps/miniaudio-build/Debug/miniaudio.dll")
+      endif()
+      if (EXISTS "${VCPKG_INSTALLED}/bin/enet.dll")
+        list(APPEND TEST_RUNTIME_DLLS "${VCPKG_INSTALLED}/bin/enet.dll")
       endif()
     endif()
 

@@ -3,6 +3,8 @@
 #include "engine/IShaderSubsystem.h"
 #include "engine/IAudio.h"
 #include "engine/IPhysics.h"
+#include "engine/IInput.h"
+#include "engine/INetwork.h"
 #include <iostream>
 
 namespace Genesis::Engine {
@@ -14,6 +16,9 @@ void RegisterGLShaderFactory();
 void RegisterMiniaudioFactory();
 void RegisterNullPhysicsFactory();
 void RegisterBulletFactory();
+void RegisterNullInputFactory();
+void RegisterSDLInputFactory();
+void RegisterNullNetworkFactory();
 
 // Subsystems manager used for created subsystem instances
 static SubsystemManager g_subsystems;
@@ -85,6 +90,51 @@ bool CreatePhysicsSubsystem(const std::string& name) {
 std::shared_ptr<IPhysics> GetPhysicsSubsystem() {
     return g_physicsSubsystem;
 }
+
+// Input subsystem handle (optional; managed by Engine)
+static std::shared_ptr<IInput> g_inputSubsystem;
+
+bool CreateInputSubsystem(const std::string& name) {
+    auto inst = g_subsystems.CreateSubsystem("Input", name);
+    if (!inst) return false;
+    // Try to cast to IInput
+    auto in = std::dynamic_pointer_cast<IInput>(inst);
+    if (!in) {
+        std::cerr << "CreateInputSubsystem: created instance is not IInput" << std::endl;
+        inst->Shutdown();
+        return false;
+    }
+    g_inputSubsystem = in;
+    std::cout << "CreateInputSubsystem: created input subsystem '" << name << "'" << std::endl;
+    return true;
+}
+
+std::shared_ptr<IInput> GetInputSubsystem() {
+    return g_inputSubsystem;
+}
+
+// Network subsystem handle (optional; managed by Engine)
+static std::shared_ptr<INetwork> g_networkSubsystem;
+
+bool CreateNetworkSubsystem(const std::string& name) {
+    auto inst = g_subsystems.CreateSubsystem("Network", name);
+    if (!inst) return false;
+    // Try to cast to INetwork
+    auto net = std::dynamic_pointer_cast<INetwork>(inst);
+    if (!net) {
+        std::cerr << "CreateNetworkSubsystem: created instance is not INetwork" << std::endl;
+        inst->Shutdown();
+        return false;
+    }
+    g_networkSubsystem = net;
+    std::cout << "CreateNetworkSubsystem: created network subsystem '" << name << "'" << std::endl;
+    return true;
+}
+
+std::shared_ptr<INetwork> GetNetworkSubsystem() {
+    return g_networkSubsystem;
+}
+
 bool Init(const std::string& config) {
     // Ensure built-in subsystems are registered
     RegisterNullAudioFactory();
@@ -96,11 +146,18 @@ bool Init(const std::string& config) {
     // Physics
     RegisterNullPhysicsFactory();
     RegisterBulletFactory();
+    // Input
+    RegisterNullInputFactory();
+    RegisterSDLInputFactory();
+    // Network
+    RegisterNullNetworkFactory();
 
     // Create default null subsystems so code that expects them can rely on them.
     CreateShaderSubsystem("null");
     CreateAudioSubsystem("null");
     CreatePhysicsSubsystem("null");
+    CreateInputSubsystem("null");
+    CreateNetworkSubsystem("null");
 
     std::cout << "Genesis Engine initialized (config='" << config << "')" << std::endl;
     return true;

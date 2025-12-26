@@ -54,6 +54,10 @@ add_library(EngineCore STATIC
     SRC/GLShaderSubsystem.cpp
     SRC/NullPhysics.cpp
     SRC/BulletPhysics.cpp
+    SRC/NullInput.cpp
+    SRC/SDLInput.cpp
+    SRC/NullNetwork.cpp
+    SRC/EnetNetwork.cpp
     SRC/MiniaudioAudio.cpp
     SRC/miniaudio_impl.cpp
     SRC/stb_image_impl.cpp
@@ -125,6 +129,22 @@ if (BULLET_INCLUDE_DIR)
   endif()
 else()
   message(STATUS "Bullet not found; BulletPhysics will be disabled at runtime")
+endif()
+
+# ENet (optional) - lightweight UDP-based networking
+find_path(ENET_INCLUDE_DIR NAMES enet/enet.h enet.h PATHS "${VCPKG_INSTALLED}/include" NO_DEFAULT_PATH)
+if (ENET_INCLUDE_DIR)
+  find_library(ENET_LIBRARY NAMES enet PATHS "${VCPKG_INSTALLED}/lib" NO_DEFAULT_PATH)
+  if (ENET_LIBRARY)
+    message(STATUS "ENet found: include=${ENET_INCLUDE_DIR}")
+    target_compile_definitions(EngineCore PRIVATE HAVE_ENET=1)
+    target_include_directories(EngineCore PRIVATE ${ENET_INCLUDE_DIR})
+    target_link_libraries(EngineCore PRIVATE ${ENET_LIBRARY})
+  else()
+    message(STATUS "ENet headers found but library missing; ENet backend will be disabled")
+  endif()
+else()
+  message(STATUS "ENet not found; ENet backend will be disabled at runtime")
 endif()
 
 # bgfx support intentionally removed from this build (was optional)
