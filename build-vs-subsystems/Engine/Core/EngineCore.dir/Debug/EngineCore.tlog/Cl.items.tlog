@@ -23,3 +23,5 @@ C:\Users\jpfau\Desktop\Project\GenesisGameEngine\Engine\Core\SRC\PluginManager.c
 C:\Users\jpfau\Desktop\Project\GenesisGameEngine\Engine\Core\SRC\SubsystemRegistry.cpp;C:\Users\jpfau\Desktop\Project\GenesisGameEngine\build-vs-subsystems\Engine\Core\EngineCore.dir\Debug\SubsystemRegistry.obj
 C:\Users\jpfau\Desktop\Project\GenesisGameEngine\Engine\Core\SRC\SubsystemManager.cpp;C:\Users\jpfau\Desktop\Project\GenesisGameEngine\build-vs-subsystems\Engine\Core\EngineCore.dir\Debug\SubsystemManager.obj
 C:\Users\jpfau\Desktop\Project\GenesisGameEngine\Engine\Core\SRC\NullAudio.cpp;C:\Users\jpfau\Desktop\Project\GenesisGameEngine\build-vs-subsystems\Engine\Core\EngineCore.dir\Debug\NullAudio.obj
+C:\Users\jpfau\Desktop\Project\GenesisGameEngine\Engine\Core\SRC\NullShaderSubsystem.cpp;C:\Users\jpfau\Desktop\Project\GenesisGameEngine\build-vs-subsystems\Engine\Core\EngineCore.dir\Debug\NullShaderSubsystem.obj
+C:\Users\jpfau\Desktop\Project\GenesisGameEngine\Engine\Core\SRC\GLShaderSubsystem.cpp;C:\Users\jpfau\Desktop\Project\GenesisGameEngine\build-vs-subsystems\Engine\Core\EngineCore.dir\Debug\GLShaderSubsystem.obj

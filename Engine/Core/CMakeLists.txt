@@ -50,6 +50,8 @@ add_library(EngineCore STATIC
     SRC/SubsystemRegistry.cpp
     SRC/SubsystemManager.cpp
     SRC/NullAudio.cpp
+    SRC/NullShaderSubsystem.cpp
+    SRC/GLShaderSubsystem.cpp
 ) 
 
 target_include_directories(EngineCore PUBLIC

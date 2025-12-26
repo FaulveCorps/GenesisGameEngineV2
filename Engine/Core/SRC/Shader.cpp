@@ -2,6 +2,8 @@
 #include "engine/ShaderRegistry.h"
 #include "engine/IGraphics.h"
 #include <SDL.h>
+#include "engine/Engine.h"
+#include "engine/IShaderSubsystem.h"
 
 namespace Genesis::Engine {
 
@@ -120,11 +122,34 @@ std::shared_ptr<Shader> Shader::FromSource(const std::string& vertexSrc, const s
 }
 
 void Shader::UploadToRenderer(IGraphicsAPI* /*renderer*/) {
-    // For now, support GL re-creation only. If GL functions are available, compile program from stored sources.
+    // Prefer using an installed shader subsystem when available.
     std::cout << "Shader::UploadToRenderer -> enter (programID_=" << programID_ << ", SDL_GL_GetCurrentContext=" << (void*)SDL_GL_GetCurrentContext() << ")" << std::endl;
     if (programID_) return; // already built
     if (vertexSrcGL_.empty() || fragmentSrcGL_.empty()) return;
 
+    // Try subsystem first
+    auto shaderSub = Genesis::Engine::GetShaderSubsystem();
+    if (!shaderSub) {
+        // If no subsystem is present but a GL context exists, try creating a GL subsystem on-demand
+        if (SDL_GL_GetCurrentContext()) {
+            if (Genesis::Engine::CreateShaderSubsystem("opengl")) {
+                shaderSub = Genesis::Engine::GetShaderSubsystem();
+            }
+        }
+    }
+
+    if (shaderSub) {
+        unsigned int pid = shaderSub->CreateProgramFromSource(vertexSrcGL_, fragmentSrcGL_);
+        if (pid) {
+            programID_ = pid;
+            std::cout << "Shader::UploadToRenderer -> created program via subsystem " << programID_ << std::endl;
+            return;
+        }
+        // if subsystem failed, fall back to legacy GL compile path
+        std::cerr << "Shader::UploadToRenderer -> subsystem failed to create program; falling back" << std::endl;
+    }
+
+    // Fallback: legacy local GL compile (as before)
     unsigned int vs = CompileShader(GL_VERTEX_SHADER, vertexSrcGL_);
     std::cout << "Shader::UploadToRenderer -> vs=" << vs << std::endl;
     if (!vs) return;
@@ -173,26 +198,15 @@ void Shader::UploadToRenderer(IGraphicsAPI* /*renderer*/) {
         return;
     }
 
-    // Resolve detach/delete functions if available
     Resolve((void**)&pglDetachShader, "glDetachShader");
     Resolve((void**)&pglDeleteShader, "glDeleteShader");
-    std::cout << "Shader::UploadToRenderer -> detaching shaders (pglDetachShader=" << (void*)pglDetachShader << ")" << std::endl;
     if (pglDetachShader) {
         pglDetachShader(program, vs);
-        std::cout << "Shader::UploadToRenderer -> detached vs" << std::endl;
         pglDetachShader(program, fs);
-        std::cout << "Shader::UploadToRenderer -> detached fs" << std::endl;
-    } else {
-        std::cerr << "Shader::UploadToRenderer -> glDetachShader not available; skipping detach" << std::endl;
     }
-    std::cout << "Shader::UploadToRenderer -> about to delete shaders (pglDeleteShader=" << (void*)pglDeleteShader << ")" << std::endl;
     if (pglDeleteShader) {
         pglDeleteShader(vs);
-        std::cout << "Shader::UploadToRenderer -> deleted vs" << std::endl;
         pglDeleteShader(fs);
-        std::cout << "Shader::UploadToRenderer -> deleted fs" << std::endl;
-    } else {
-        std::cerr << "Shader::UploadToRenderer -> glDeleteShader not available; skipping delete" << std::endl;
     }
 
     programID_ = program;
@@ -201,7 +215,16 @@ void Shader::UploadToRenderer(IGraphicsAPI* /*renderer*/) {
 
 void Shader::DestroyOnRenderer(IGraphicsAPI* /*renderer*/) {
     if (!programID_) return;
-    // Only attempt GL deletion if a GL context is current
+
+    // If a shader subsystem is available, ask it to destroy the program
+    auto shaderSub = Genesis::Engine::GetShaderSubsystem();
+    if (shaderSub) {
+        shaderSub->DestroyProgram(programID_);
+        programID_ = 0;
+        return;
+    }
+
+    // Legacy path: Only attempt GL deletion if a GL context is current
     if (!SDL_GL_GetCurrentContext()) {
         std::cerr << "Shader::DestroyOnRenderer -> no GL context; deferring deletion of program " << programID_ << std::endl;
         return;
