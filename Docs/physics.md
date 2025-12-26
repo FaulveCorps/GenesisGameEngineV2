@@ -2,7 +2,10 @@
 
 Overview
 - The engine exposes a Physics subsystem via `IPhysics` (a subclass of `ISubsystem`).
-- Two backends are provided: `null` (no-op) and `bullet` (real simulation using Bullet Physics library).
+- Backends:
+  - `null` (no-op)
+  - `bullet` (real simulation using Bullet Physics library)
+  - `box2d` (2D physics using Box2D; optional, enabled when `HAVE_BOX2D` is detected)
 
 How to use
 - At engine init (`Genesis::Engine::Init()`), built-in factories are registered (including `null` and, if available, `bullet`).

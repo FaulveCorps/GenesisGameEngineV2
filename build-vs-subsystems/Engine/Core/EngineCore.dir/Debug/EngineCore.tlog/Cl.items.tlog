@@ -27,6 +27,7 @@ C:\Users\jpfau\Desktop\Project\GenesisGameEngine\Engine\Core\SRC\NullShaderSubsy
 C:\Users\jpfau\Desktop\Project\GenesisGameEngine\Engine\Core\SRC\GLShaderSubsystem.cpp;C:\Users\jpfau\Desktop\Project\GenesisGameEngine\build-vs-subsystems\Engine\Core\EngineCore.dir\Debug\GLShaderSubsystem.obj
 C:\Users\jpfau\Desktop\Project\GenesisGameEngine\Engine\Core\SRC\NullPhysics.cpp;C:\Users\jpfau\Desktop\Project\GenesisGameEngine\build-vs-subsystems\Engine\Core\EngineCore.dir\Debug\NullPhysics.obj
 C:\Users\jpfau\Desktop\Project\GenesisGameEngine\Engine\Core\SRC\BulletPhysics.cpp;C:\Users\jpfau\Desktop\Project\GenesisGameEngine\build-vs-subsystems\Engine\Core\EngineCore.dir\Debug\BulletPhysics.obj
+C:\Users\jpfau\Desktop\Project\GenesisGameEngine\Engine\Core\SRC\Box2DPhysics.cpp;C:\Users\jpfau\Desktop\Project\GenesisGameEngine\build-vs-subsystems\Engine\Core\EngineCore.dir\Debug\Box2DPhysics.obj
 C:\Users\jpfau\Desktop\Project\GenesisGameEngine\Engine\Core\SRC\NullInput.cpp;C:\Users\jpfau\Desktop\Project\GenesisGameEngine\build-vs-subsystems\Engine\Core\EngineCore.dir\Debug\NullInput.obj
 C:\Users\jpfau\Desktop\Project\GenesisGameEngine\Engine\Core\SRC\SDLInput.cpp;C:\Users\jpfau\Desktop\Project\GenesisGameEngine\build-vs-subsystems\Engine\Core\EngineCore.dir\Debug\SDLInput.obj
 C:\Users\jpfau\Desktop\Project\GenesisGameEngine\Engine\Core\SRC\NullNetwork.cpp;C:\Users\jpfau\Desktop\Project\GenesisGameEngine\build-vs-subsystems\Engine\Core\EngineCore.dir\Debug\NullNetwork.obj

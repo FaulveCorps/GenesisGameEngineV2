@@ -277,6 +277,13 @@ int main(int argc, char** argv) {
             std::cout << "CLI: physics demo enabled" << std::endl;
             continue;
         }
+        if (a == "--physics-2d") {
+            doPhysicsDemo = true;
+            std::cout << "CLI: 2D physics demo enabled" << std::endl;
+            // user requested 2D demo
+            // We'll attempt to create Box2D backend when starting the demo
+            continue;
+        }
         if (a == "--net-host" && i + 1 < argc) {
             try { netHostPort = std::stoi(argv[i+1]); doNetHost = true; } catch (...) { netHostPort = 0; }
             ++i;
@@ -324,17 +331,22 @@ int main(int argc, char** argv) {
     // If the user requested a physics demo, try to create a bullet physics subsystem and spawn a box
     Genesis::Engine::IPhysics::BodyHandle demoBody = 0;
     if (doPhysicsDemo) {
-        if (!Genesis::Engine::CreatePhysicsSubsystem("bullet")) {
-            std::cerr << "SampleGame: Bullet physics subsystem not available; falling back to null physics demo" << std::endl;
-            Genesis::Engine::CreatePhysicsSubsystem("null");
+        // Prefer Box2D when 2D demo requested (or if it's available), otherwise try Bullet
+        if (!Genesis::Engine::CreatePhysicsSubsystem("box2d")) {
+            if (!Genesis::Engine::CreatePhysicsSubsystem("bullet")) {
+                std::cerr << "SampleGame: No physics backend available; falling back to null physics demo" << std::endl;
+                Genesis::Engine::CreatePhysicsSubsystem("null");
+            } else {
+                std::cout << "SampleGame: Bullet physics subsystem created" << std::endl;
+            }
+        } else {
+            std::cout << "SampleGame: Box2D physics subsystem created" << std::endl;
         }
         auto ph = Genesis::Engine::GetPhysicsSubsystem();
-        if (ph && ph->Name() == "bullet") {
-            // create a box at y=5 meters
+        if (ph) {
+            // create a box at y=5 meters (2D systems will ignore z)
             demoBody = ph->CreateBoxRigidBody(1.0f, 0.0f, 5.0f, 0.0f, 1.0f, 1.0f, 1.0f);
             if (demoBody != 0) std::cout << "SampleGame: created physics box demo handle=" << demoBody << std::endl;
-        } else {
-            std::cout << "SampleGame: physics demo not available (using null backend)" << std::endl;
         }
     }
     // Platform-specific extension

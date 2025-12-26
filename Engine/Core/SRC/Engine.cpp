@@ -18,6 +18,7 @@ void RegisterGLShaderFactory();
 void RegisterMiniaudioFactory();
 void RegisterNullPhysicsFactory();
 void RegisterBulletFactory();
+void RegisterBox2DFactory();
 void RegisterNullInputFactory();
 void RegisterSDLInputFactory();
 void RegisterNullNetworkFactory();
@@ -195,6 +196,7 @@ bool Init(const std::string& config) {
     // Physics
     RegisterNullPhysicsFactory();
     RegisterBulletFactory();
+    RegisterBox2DFactory();
     // Input
     RegisterNullInputFactory();
     RegisterSDLInputFactory();

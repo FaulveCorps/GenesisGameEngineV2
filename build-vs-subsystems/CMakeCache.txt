@@ -20,6 +20,9 @@ ASSIMP_INCLUDE_DIR:PATH=C:/Users/jpfau/Desktop/Project/GenesisGameEngine/vcpkg/i
 //Path to a library.
 ASSIMP_LIBRARY:FILEPATH=C:/Users/jpfau/Desktop/Project/GenesisGameEngine/vcpkg/installed/x64-windows/lib/assimp-vc143-mt.lib
 
+//Path to a file.
+BOX2D_INCLUDE_DIR:PATH=BOX2D_INCLUDE_DIR-NOTFOUND
+
 //Build the testing tree.
 BUILD_TESTING:BOOL=ON
 

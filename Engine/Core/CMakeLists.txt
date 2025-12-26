@@ -54,6 +54,7 @@ add_library(EngineCore STATIC
     SRC/GLShaderSubsystem.cpp
     SRC/NullPhysics.cpp
     SRC/BulletPhysics.cpp
+    SRC/Box2DPhysics.cpp
     SRC/NullInput.cpp
     SRC/SDLInput.cpp
     SRC/NullNetwork.cpp
@@ -150,6 +151,22 @@ if (LUA_INCLUDE_DIR)
   endif()
 else()
   message(STATUS "Lua not found; Lua backend will be disabled at runtime")
+endif()
+
+# Box2D (optional) - 2D physics
+find_path(BOX2D_INCLUDE_DIR NAMES box2d/box2d.h PATHS "${VCPKG_INSTALLED}/include" NO_DEFAULT_PATH)
+if (BOX2D_INCLUDE_DIR)
+  find_library(BOX2D_LIBRARY NAMES box2d Box2D PATHS "${VCPKG_INSTALLED}/lib" NO_DEFAULT_PATH)
+  if (BOX2D_LIBRARY)
+    message(STATUS "Box2D found: include=${BOX2D_INCLUDE_DIR}")
+    target_include_directories(EngineCore PUBLIC ${BOX2D_INCLUDE_DIR})
+    target_link_libraries(EngineCore PUBLIC ${BOX2D_LIBRARY})
+    target_compile_definitions(EngineCore PUBLIC HAVE_BOX2D=1)
+  else()
+    message(STATUS "Box2D headers found but library missing; Box2D backend will be disabled")
+  endif()
+else()
+  message(STATUS "Box2D not found; Box2D backend will be disabled at runtime")
 endif()
 
 # ENet (optional) - lightweight UDP-based networking

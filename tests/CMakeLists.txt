@@ -33,6 +33,7 @@ add_executable(UnitTests
     test_audio_playback.cpp
     test_physics.cpp
     test_physics_rigidbody.cpp
+    test_physics_box2d.cpp
     test_subsystems.cpp
     test_input.cpp
     test_input_sdl.cpp
@@ -120,6 +121,10 @@ if (WIN32)
       endif()
       if (EXISTS "${VCPKG_INSTALLED}/bin/lua54.dll")
         list(APPEND TEST_RUNTIME_DLLS "${VCPKG_INSTALLED}/bin/lua54.dll")
+      endif()
+      # Optionally include Box2D DLL if present
+      if (EXISTS "${VCPKG_INSTALLED}/bin/box2d.dll")
+        list(APPEND TEST_RUNTIME_DLLS "${VCPKG_INSTALLED}/bin/box2d.dll")
       endif()
     endif()
 

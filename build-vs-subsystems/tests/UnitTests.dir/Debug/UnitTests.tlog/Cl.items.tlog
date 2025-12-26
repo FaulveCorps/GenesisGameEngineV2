@@ -15,6 +15,7 @@ C:\Users\jpfau\Desktop\Project\GenesisGameEngine\tests\test_audio.cpp;C:\Users\j
 C:\Users\jpfau\Desktop\Project\GenesisGameEngine\tests\test_audio_playback.cpp;C:\Users\jpfau\Desktop\Project\GenesisGameEngine\build-vs-subsystems\tests\UnitTests.dir\Debug\test_audio_playback.obj
 C:\Users\jpfau\Desktop\Project\GenesisGameEngine\tests\test_physics.cpp;C:\Users\jpfau\Desktop\Project\GenesisGameEngine\build-vs-subsystems\tests\UnitTests.dir\Debug\test_physics.obj
 C:\Users\jpfau\Desktop\Project\GenesisGameEngine\tests\test_physics_rigidbody.cpp;C:\Users\jpfau\Desktop\Project\GenesisGameEngine\build-vs-subsystems\tests\UnitTests.dir\Debug\test_physics_rigidbody.obj
+C:\Users\jpfau\Desktop\Project\GenesisGameEngine\tests\test_physics_box2d.cpp;C:\Users\jpfau\Desktop\Project\GenesisGameEngine\build-vs-subsystems\tests\UnitTests.dir\Debug\test_physics_box2d.obj
 C:\Users\jpfau\Desktop\Project\GenesisGameEngine\tests\test_subsystems.cpp;C:\Users\jpfau\Desktop\Project\GenesisGameEngine\build-vs-subsystems\tests\UnitTests.dir\Debug\test_subsystems.obj
 C:\Users\jpfau\Desktop\Project\GenesisGameEngine\tests\test_input.cpp;C:\Users\jpfau\Desktop\Project\GenesisGameEngine\build-vs-subsystems\tests\UnitTests.dir\Debug\test_input.obj
 C:\Users\jpfau\Desktop\Project\GenesisGameEngine\tests\test_input_sdl.cpp;C:\Users\jpfau\Desktop\Project\GenesisGameEngine\build-vs-subsystems\tests\UnitTests.dir\Debug\test_input_sdl.obj
