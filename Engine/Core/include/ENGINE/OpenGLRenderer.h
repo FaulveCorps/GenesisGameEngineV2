@@ -19,6 +19,10 @@ public:
 
     std::string GetName() const override { return std::string("opengl"); }
 
+    // Renderer-managed texture lifecycle
+    TextureHandle CreateTexture(uint32_t width, uint32_t height, const uint8_t* pixels) override;
+    void DestroyTexture(const TextureHandle& h) override;
+
     // 2D immediate texture draw
     void DrawTexture(Texture* tex, float x, float y, float w, float h,
                      float u0 = 0.f, float v0 = 0.f, float u1 = 1.f, float v1 = 1.f,

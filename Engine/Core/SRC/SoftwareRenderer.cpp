@@ -3,6 +3,7 @@
 #include <iostream>
 #include <algorithm>
 #include <unordered_map>
+#include <cstring>
 
 using namespace Genesis::Engine;
 
@@ -25,6 +26,7 @@ void SoftwareRenderer::EndFrame() {
 
 void SoftwareRenderer::Shutdown() {
     m_meshes.clear();
+    m_textures.clear();
     m_initialized = false;
     std::cout << "SoftwareRenderer: shutdown" << std::endl;
 }
@@ -35,6 +37,7 @@ struct SWMesh {
 };
 
 static uint64_t s_nextMeshId = 1;
+static uint64_t s_nextTextureId = 1;
 
 MeshHandle SoftwareRenderer::CreateMesh(const MeshDesc& desc) {
     MeshHandle h;
@@ -43,6 +46,29 @@ MeshHandle SoftwareRenderer::CreateMesh(const MeshDesc& desc) {
     std::cout << "SoftwareRenderer: CreateMesh id=" << h.id << " (" << desc.vertices.size() / 3 << " verts, " << desc.indices.size() / 3 << " tris)" << std::endl;
     return h;
 }
+
+IGraphicsAPI::TextureHandle SoftwareRenderer::CreateTexture(uint32_t width, uint32_t height, const uint8_t* pixels) {
+    IGraphicsAPI::TextureHandle h;
+    h.id = s_nextTextureId++;
+    SWTexture t;
+    t.w = width; t.h = height;
+    if (pixels && width > 0 && height > 0) {
+        size_t sz = (size_t)width * height * 4;
+        t.pixels.resize(sz);
+        std::memcpy(t.pixels.data(), pixels, sz);
+    }
+    m_textures.emplace(h.id, std::move(t));
+    std::cout << "SoftwareRenderer: CreateTexture id=" << h.id << " (" << width << "x" << height << ")" << std::endl;
+    return h;
+}
+
+void SoftwareRenderer::DestroyTexture(const TextureHandle& h) {
+    if (!h.IsValid()) return;
+    auto it = m_textures.find(h.id);
+    if (it != m_textures.end()) m_textures.erase(it);
+    std::cout << "SoftwareRenderer: DestroyTexture id=" << h.id << std::endl;
+}
+
 
 void SoftwareRenderer::DestroyMesh(const MeshHandle& h) {
     if (!h.IsValid()) return;

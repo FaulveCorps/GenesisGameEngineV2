@@ -35,6 +35,16 @@ public:
     virtual void DestroyMesh(const MeshHandle& /*h*/) { }
     virtual void DrawMesh(const MeshHandle& /*h*/) { }
 
+    // Texture handle for renderer-managed textures
+    struct TextureHandle {
+        uint64_t id = 0; // renderer-specific id (opaque)
+        bool IsValid() const { return id != 0; }
+    };
+
+    // Optional texture lifecycle hooks (renderer can implement to manage GPU-side resources)
+    virtual TextureHandle CreateTexture(uint32_t /*width*/, uint32_t /*height*/, const uint8_t* /*pixels*/) { return TextureHandle{}; }
+    virtual void DestroyTexture(const TextureHandle& /*h*/) { }
+
     // Immediate-mode 2D texture draw (coordinates in pixels, UV in 0..1, color ARGB)
     virtual void DrawTexture(Texture* /*tex*/, float /*x*/, float /*y*/, float /*w*/, float /*h*/,
                              float /*u0*/ = 0.f, float /*v0*/ = 0.f, float /*u1*/ = 1.f, float /*v1*/ = 1.f,

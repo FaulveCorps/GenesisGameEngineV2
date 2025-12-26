@@ -4,6 +4,7 @@
 #include <memory>
 #include <vector>
 #include <string>
+#include "ENGINE/IGraphics.h"
 
 namespace Genesis::Engine {
 class IGraphicsAPI;
@@ -19,7 +20,10 @@ public:
 
     uint32_t Width() const { return width_; }
     uint32_t Height() const { return height_; }
-    unsigned int GetID() const { return textureID_; }
+    unsigned int GetID() const { 
+        if (rendererHandle_.IsValid() && rendererOwner_ == std::string("opengl")) return static_cast<unsigned int>(rendererHandle_.id);
+        return textureID_; 
+    }
 
     // CPU-side pixel data in RGBA order
     const std::vector<uint8_t>& Pixels() const { return pixels_; }
@@ -31,8 +35,12 @@ private:
     uint32_t height_ = 0;
     std::vector<uint8_t> pixels_;
 
-    // GL texture id (0 == not created)
+    // Legacy GL texture id (0 == not created)
     unsigned int textureID_ = 0;
+
+    // Renderer-managed handle (opaque)
+    IGraphicsAPI::TextureHandle rendererHandle_{};
+    std::string rendererOwner_;
 };
 
 } // namespace Genesis::Engine

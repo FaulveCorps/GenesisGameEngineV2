@@ -1,6 +1,7 @@
 #include "ENGINE/Texture.h"
 #include "ENGINE/TextureRegistry.h"
 #include "ENGINE/IGraphics.h"
+#include "ENGINE/RendererManager.h"
 #include <SDL.h>
 #include <iostream>
 #include <cstring>
@@ -90,16 +91,50 @@ Texture::~Texture() {
 }
 
 void Texture::UploadToRenderer(IGraphicsAPI* renderer) {
-    if (textureID_ != 0) return; // already uploaded
+    // If already uploaded to this renderer, nothing to do
+    if (renderer && rendererHandle_.IsValid() && rendererOwner_ == renderer->GetName()) return;
     if (pixels_.empty() || width_ == 0 || height_ == 0) return;
 
-    // If a non-GL renderer is specified, skip GL upload
+
+    // If a renderer is provided, ask it to create a texture handle
     if (renderer) {
-        if (renderer->GetName() != std::string("opengl")) return;
-    } else {
-        // If renderer==nullptr, only attempt GL upload if a GL context is current
-        if (!SDL_GL_GetCurrentContext()) return;
+        // Destroy any existing handle first
+        if (rendererHandle_.IsValid()) {
+            // If owner matches this renderer, destroy via it
+            if (rendererOwner_ == renderer->GetName()) {
+                renderer->DestroyTexture(rendererHandle_);
+            } else {
+                // Best-effort: try to find the owner renderer in RendererManager and destroy via it
+                if (auto owner = RendererManager::GetRenderer()) {
+                    if (owner->GetName() == rendererOwner_) owner->DestroyTexture(rendererHandle_);
+                }
+            }
+            rendererHandle_ = {};
+            rendererOwner_.clear();
+            textureID_ = 0;
+        }
+
+        auto h = renderer->CreateTexture(width_, height_, pixels_.empty() ? nullptr : pixels_.data());
+        if (h.IsValid()) {
+            rendererHandle_ = h;
+            rendererOwner_ = renderer->GetName();
+            // Maintain legacy GL texture id for compatibility if this is OpenGL
+            if (rendererOwner_ == std::string("opengl")) textureID_ = static_cast<unsigned int>(rendererHandle_.id);
+            else textureID_ = 0; // clear any leftover legacy GL id
+            return;
+        }
+        // If renderer did not create a handle and it is not OpenGL, just skip
+        return;
     }
+
+    // If renderer==nullptr, try to use the currently-installed renderer, or fall back to legacy GL path
+    if (auto cur = RendererManager::GetRenderer()) {
+        return UploadToRenderer(cur);
+    }
+
+    // Legacy path: create a GL texture if a GL context exists
+    if (!SDL_GL_GetCurrentContext()) return;
+    if (textureID_ != 0) return; // already uploaded
 
     ResolveGL((void**)&pglGenTextures, "glGenTextures");
     ResolveGL((void**)&pglBindTexture, "glBindTexture");
@@ -124,7 +159,45 @@ void Texture::UploadToRenderer(IGraphicsAPI* renderer) {
     std::cout << "Texture::UploadToRenderer -> created GL texture " << textureID_ << " (" << width_ << "x" << height_ << ")" << std::endl;
 }
 
-void Texture::DestroyOnRenderer(IGraphicsAPI* /*renderer*/) {
+void Texture::DestroyOnRenderer(IGraphicsAPI* renderer) {
+    // If we have a renderer-managed handle, try to destroy it via the appropriate renderer
+    if (rendererHandle_.IsValid()) {
+        if (renderer) {
+            if (renderer->GetName() == rendererOwner_) {
+                renderer->DestroyTexture(rendererHandle_);
+                rendererHandle_ = {};
+                rendererOwner_.clear();
+                textureID_ = 0;
+                return;
+            }
+        } else {
+            // No renderer passed: attempt to find the owner renderer via RendererManager
+            if (auto owner = RendererManager::GetRenderer()) {
+                if (owner->GetName() == rendererOwner_) {
+                    owner->DestroyTexture(rendererHandle_);
+                    rendererHandle_ = {};
+                    rendererOwner_.clear();
+                    textureID_ = 0;
+                    return;
+                }
+            }
+        }
+        // If we couldn't find the owner renderer, and the owner was OpenGL and a GL context exists, try legacy GL delete
+        if (rendererOwner_ == std::string("opengl") && SDL_GL_GetCurrentContext()) {
+            ResolveGL((void**)&pglDeleteTextures, "glDeleteTextures");
+            if (pglDeleteTextures) {
+                unsigned int id = static_cast<unsigned int>(rendererHandle_.id);
+                pglDeleteTextures(1, &id);
+                std::cout << "Texture::DestroyOnRenderer -> deleted GL texture " << id << " (fallback)" << std::endl;
+            }
+            rendererHandle_ = {};
+            rendererOwner_.clear();
+            textureID_ = 0;
+            return;
+        }
+    }
+
+    // Legacy: if we have a GL texture id, delete it
     if (textureID_) {
         ResolveGL((void**)&pglDeleteTextures, "glDeleteTextures");
         if (pglDeleteTextures) {

@@ -450,8 +450,8 @@ void OpenGLRenderer::BeginFrame() {
             return;
         }
 
-        // Ensure the texture has a GL id
-        tex->UploadToRenderer(nullptr);
+        // Ensure the texture has a GL id (let the renderer create the handle)
+        tex->UploadToRenderer(this);
         unsigned int texId = tex->GetID();
         if (!texId) {
             std::cerr << "OpenGLRenderer::DrawTexture -> texture has no GL id" << std::endl;
@@ -584,6 +584,90 @@ void OpenGLRenderer::Shutdown() {
     m_window = nullptr;
     m_context = nullptr;
     std::cout << "OpenGLRenderer::Shutdown -> exit" << std::endl;
+}
+
+// Renderer-managed texture lifecycle
+IGraphicsAPI::TextureHandle OpenGLRenderer::CreateTexture(uint32_t width, uint32_t height, const uint8_t* pixels) {
+    IGraphicsAPI::TextureHandle h;
+    if (!m_window || !m_context) {
+        std::cerr << "OpenGLRenderer::CreateTexture -> no window/context" << std::endl;
+        return h;
+    }
+
+    if (SDL_GL_MakeCurrent(m_window, m_context) != 0) {
+        std::cerr << "OpenGLRenderer::CreateTexture -> SDL_GL_MakeCurrent failed: " << SDL_GetError() << std::endl;
+        return h;
+    }
+
+    // Resolve required GL functions
+    auto addrGen = (void*)SDL_GL_GetProcAddress("glGenTextures");
+    auto addrBind = (void*)SDL_GL_GetProcAddress("glBindTexture");
+    auto addrTexParam = (void*)SDL_GL_GetProcAddress("glTexParameteri");
+    auto addrTexImage = (void*)SDL_GL_GetProcAddress("glTexImage2D");
+
+    if (!addrGen || !addrBind || !addrTexParam || !addrTexImage) {
+        std::cerr << "OpenGLRenderer::CreateTexture -> GL texture functions not available" << std::endl;
+        return h;
+    }
+
+#ifdef _WIN32
+#define APIENTRY __stdcall
+#endif
+    using PFNGLGENTEXTURESPROC = void (APIENTRY*)(int, unsigned int*);
+    using PFNGLBINDTEXTUREPROC = void (APIENTRY*)(unsigned int, unsigned int);
+    using PFNGLTEXPARAMETERIPROC = void (APIENTRY*)(unsigned int, int, int);
+    using PFNGLTEXIMAGE2DPROC = void (APIENTRY*)(unsigned int, int, int, int, int, int, unsigned int, unsigned int, const void*);
+
+    auto pglGenTextures = (PFNGLGENTEXTURESPROC)addrGen;
+    auto pglBindTexture = (PFNGLBINDTEXTUREPROC)addrBind;
+    auto pglTexParameteri = (PFNGLTEXPARAMETERIPROC)addrTexParam;
+    auto pglTexImage2D = (PFNGLTEXIMAGE2DPROC)addrTexImage;
+
+    const unsigned int GL_TEXTURE_2D = 0x0DE1;
+    const unsigned int GL_RGBA = 0x1908;
+    const unsigned int GL_UNSIGNED_BYTE = 0x1401;
+    const unsigned int GL_NEAREST = 0x2600;
+    const unsigned int GL_TEXTURE_MIN_FILTER = 0x2801;
+    const unsigned int GL_TEXTURE_MAG_FILTER = 0x2800;
+
+    unsigned int id = 0;
+    pglGenTextures(1, &id);
+    pglBindTexture(GL_TEXTURE_2D, id);
+    pglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    pglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+    if (pixels && width > 0 && height > 0) {
+        pglTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, (int)width, (int)height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+    }
+
+    h.id = id;
+    std::cout << "OpenGLRenderer::CreateTexture -> created GL texture " << id << " (" << width << "x" << height << ")" << std::endl;
+    return h;
+}
+
+void OpenGLRenderer::DestroyTexture(const IGraphicsAPI::TextureHandle& h) {
+    if (!h.IsValid()) return;
+    if (!m_window || !m_context) {
+        std::cerr << "OpenGLRenderer::DestroyTexture -> no window/context" << std::endl;
+        return;
+    }
+    if (SDL_GL_MakeCurrent(m_window, m_context) != 0) {
+        std::cerr << "OpenGLRenderer::DestroyTexture -> SDL_GL_MakeCurrent failed: " << SDL_GetError() << std::endl;
+        return;
+    }
+    auto addrDel = (void*)SDL_GL_GetProcAddress("glDeleteTextures");
+    if (!addrDel) {
+        std::cerr << "OpenGLRenderer::DestroyTexture -> glDeleteTextures not available" << std::endl;
+        return;
+    }
+#ifdef _WIN32
+#define APIENTRY __stdcall
+#endif
+    using PFNGLDELETETEXTURESPROC = void (APIENTRY*)(int, const unsigned int*);
+    auto pglDeleteTextures = (PFNGLDELETETEXTURESPROC)addrDel;
+    unsigned int id = static_cast<unsigned int>(h.id);
+    pglDeleteTextures(1, &id);
+    std::cout << "OpenGLRenderer::DestroyTexture -> deleted GL texture " << id << std::endl;
 }
 
 } // namespace Genesis::Engine
