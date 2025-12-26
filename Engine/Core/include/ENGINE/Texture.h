@@ -21,6 +21,9 @@ public:
     uint32_t Height() const { return height_; }
     unsigned int GetID() const { return textureID_; }
 
+    // CPU-side pixel data in RGBA order
+    const std::vector<uint8_t>& Pixels() const { return pixels_; }
+
 private:
     Texture() = default;
 

@@ -41,6 +41,7 @@ static bool ResolveGL(void** fnPtr, const char* name) {
 namespace Genesis::Engine {
 
 bool OpenGLRenderer::Init(SDL_Window* window, SDL_GLContext glContext) {
+    std::cout << "OpenGLRenderer::Init -> enter" << std::endl;
     if (!window || !glContext) {
         std::cerr << "OpenGLRenderer: invalid window or GL context" << std::endl;
         return false;
@@ -54,12 +55,15 @@ bool OpenGLRenderer::Init(SDL_Window* window, SDL_GLContext glContext) {
         std::cerr << "SDL_GL_MakeCurrent failed: " << SDL_GetError() << std::endl;
         return false;
     }
+    std::cout << "OpenGLRenderer::Init -> SDL_GL_MakeCurrent succeeded" << std::endl;
 
     // Resolve core GL functions used
     ResolveGL((void**)&pglViewport, "glViewport");
     ResolveGL((void**)&pglClearColor, "glClearColor");
     ResolveGL((void**)&pglEnable, "glEnable");
     ResolveGL((void**)&pglClear, "glClear");
+
+    std::cout << "OpenGLRenderer::Init -> GL func ptrs: pglViewport=" << (void*)pglViewport << " pglClearColor=" << (void*)pglClearColor << " pglEnable=" << (void*)pglEnable << " pglClear=" << (void*)pglClear << std::endl;
 
     // Basic GL init
     if (pglViewport) pglViewport(0, 0, 1280, 720);
@@ -83,8 +87,9 @@ bool OpenGLRenderer::Init(SDL_Window* window, SDL_GLContext glContext) {
             if (err != 0) std::cerr << "GL error after glClearColor: 0x" << std::hex << err << std::dec << std::endl;
         }
     }
-    if (pglEnable) pglEnable(GL_DEPTH_TEST);
+    if (pglEnable) { pglEnable(GL_DEPTH_TEST); std::cout << "OpenGLRenderer::Init -> enabled depth test" << std::endl; }
     ResolveGL((void**)&pglBlendFunc, "glBlendFunc");
+    std::cout << "OpenGLRenderer::Init -> pglBlendFunc=" << (void*)pglBlendFunc << std::endl;
     if (pglBlendFunc) {
         pglEnable(GL_BLEND);
         pglBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -98,6 +103,8 @@ bool OpenGLRenderer::Init(SDL_Window* window, SDL_GLContext glContext) {
             if (err != 0) std::cerr << "GL error after glEnable: 0x" << std::hex << err << std::dec << std::endl;
         }
     }
+
+    std::cout << "OpenGLRenderer::Init -> about to create default shader" << std::endl;
 
     // Build a simple default shader (fallback embedded sources)
     const std::string defaultVert = R"(
@@ -121,14 +128,17 @@ bool OpenGLRenderer::Init(SDL_Window* window, SDL_GLContext glContext) {
     )";
 
     auto s = Shader::FromSource(defaultVert, defaultFrag);
+    std::cout << "OpenGLRenderer::Init -> Shader::FromSource returned program id=" << (s ? s->GetID() : 0) << std::endl;
     if (!s) {
         std::cerr << "Warning: default shader failed to compile; falling back to fixed-function pipeline" << std::endl;
     } else {
         m_defaultShader = s;
+        std::cout << "OpenGLRenderer::Init -> default shader set" << std::endl;
     }
 
     // Create a simple debug triangle VAO/VBO so we can always draw something for troubleshooting
     {
+        std::cout << "OpenGLRenderer::Init -> entering debug triangle creation" << std::endl;
         // Vertex positions (NDC)
         static const float triVerts[] = {
             0.0f,  0.8f, 0.0f,
@@ -318,6 +328,7 @@ void OpenGLRenderer::BeginFrame() {
     if (m_defaultShader) m_defaultShader->Use();
 
     // Draw debug triangle if present
+    #if 0
     if (m_debugVAO) {
         auto addrDrawArrays = (void*)SDL_GL_GetProcAddress("glDrawArrays");
         if (addrDrawArrays) {
@@ -419,6 +430,8 @@ void OpenGLRenderer::BeginFrame() {
                 }
             }
         }
+    }
+    #endif
     }
 
     // Sprite draw function

@@ -1,4 +1,5 @@
 #include "ENGINE/SoftwareRenderer.h"
+#include "ENGINE/Texture.h"
 #include <iostream>
 #include <algorithm>
 #include <unordered_map>
@@ -161,7 +162,7 @@ bool SoftwareRenderer::ReadbackOffscreen(uint32_t width, uint32_t height, std::v
                 int sx = std::clamp(static_cast<int>(std::floor(u * (texW - 1) + 0.5f)), 0, static_cast<int>(texW) - 1);
                 int sy = std::clamp(static_cast<int>(std::floor(v * (texH - 1) + 0.5f)), 0, static_cast<int>(texH) - 1);
                 size_t sIdx = (static_cast<size_t>(sy) * texW + sx) * 4;
-                const auto& src = s.tex->pixels_;
+                const auto& src = s.tex->Pixels();
                 uint8_t sr = src[sIdx + 0];
                 uint8_t sg = src[sIdx + 1];
                 uint8_t sb = src[sIdx + 2];

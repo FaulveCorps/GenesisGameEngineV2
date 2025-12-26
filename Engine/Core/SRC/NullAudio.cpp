@@ -22,4 +22,12 @@ static bool register_null_audio = []() {
     return true;
 }();
 
+// Explicit registration function to ensure the factory is registered even when
+// the translation unit isn't pulled in by the linker.
+void RegisterNullAudioFactory() {
+    SubsystemRegistry::Instance().RegisterFactory("Audio", "null", []() {
+        return std::make_unique<NullAudio>();
+    });
+}
+
 } // namespace Genesis::Engine

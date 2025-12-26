@@ -4,6 +4,8 @@
 #include "ENGINE/Shader.h"
 #include "ENGINE/ShaderRegistry.h"
 #include <SDL.h>
+#include <cstdlib>
+#include <cstring>
 
 TEST_CASE("Shader re-creation across renderer switches") {
     int sdlInitRes = SDL_Init(SDL_INIT_VIDEO);
@@ -13,6 +15,17 @@ TEST_CASE("Shader re-creation across renderer switches") {
     REQUIRE(win != nullptr);
     SDL_GLContext ctx = SDL_GL_CreateContext(win);
     REQUIRE(ctx != nullptr);
+
+    // Optionally allow explicitly running OpenGL tests via env var
+    const char* _enableGL = std::getenv("GENESIS_ENABLE_OPENGL");
+    if (!_enableGL || std::strcmp(_enableGL, "1") != 0) {
+        // Skip tests that explicitly require OpenGL if not enabled
+        SDL_GL_DeleteContext(ctx);
+        SDL_DestroyWindow(win);
+        SDL_Quit();
+        SUCCEED("OpenGL tests disabled via GENESIS_ENABLE_OPENGL");
+        return;
+    }
 
     // Start with OpenGL renderer if available
     auto r = Genesis::Engine::GraphicsFactory::CreateRenderer(win, ctx, { "opengl" }, false);

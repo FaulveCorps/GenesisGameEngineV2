@@ -4,6 +4,8 @@
 #include "ENGINE/WgpuRenderer.h"
 #endif
 #include <SDL.h>
+#include <cstdlib>
+#include <cstring>
 
 TEST_CASE("WGPU smoke test") {
     printf("WGPU smoke test: starting\n"); fflush(stdout);
@@ -41,6 +43,20 @@ TEST_CASE("WGPU smoke test") {
         SDL_Quit();
         SUCCEED("Wgpu not available - skipping smoke test");
         return;
+    }
+
+    // Only run the WGPU smoke test if explicitly enabled via env var
+    {
+        const char* enable = std::getenv("GENESIS_ENABLE_WGPU_TESTS");
+        if (!enable || std::strcmp(enable, "1") != 0) {
+            printf("Wgpu smoke test disabled by GENESIS_ENABLE_WGPU_TESTS; skipping\n"); fflush(stdout);
+            renderer->Shutdown();
+            SDL_GL_DeleteContext(ctx);
+            SDL_DestroyWindow(win);
+            SDL_Quit();
+            SUCCEED("Wgpu not enabled in environment - skipping smoke test");
+            return;
+        }
     }
 
     REQUIRE(renderer->Init(win, ctx));

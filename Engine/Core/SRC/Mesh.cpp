@@ -295,6 +295,10 @@ void Mesh::DestroyOnRenderer(IGraphicsAPI* renderer) {
 
     // If this mesh has GL resources, delete them now
     if (vao_ || vbo_ || ebo_) {
+        if (!SDL_GL_GetCurrentContext()) {
+            std::cerr << "Mesh::DestroyOnRenderer -> no GL context; deferring deletion of GL resources (vao="<<vao_<<" vbo="<<vbo_<<" ebo="<<ebo_<<")" << std::endl;
+            return;
+        }
         if (!pglDeleteBuffers) ResolveGLFunction((void**)&pglDeleteBuffers, "glDeleteBuffers");
         if (!pglDeleteVertexArrays) ResolveGLFunction((void**)&pglDeleteVertexArrays, "glDeleteVertexArrays");
         if (ebo_ && pglDeleteBuffers) { std::cout<<"Mesh::DestroyOnRenderer -> deleting ebo="<<ebo_<<std::endl; pglDeleteBuffers(1, &ebo_); ebo_ = 0; }

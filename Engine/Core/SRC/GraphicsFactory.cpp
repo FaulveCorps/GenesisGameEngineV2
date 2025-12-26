@@ -7,6 +7,8 @@
 #include "engine/SoftwareRenderer.h"
 #include <algorithm>
 #include <iostream>
+#include <cstdlib>
+#include <cstring>
 
 namespace Genesis::Engine {
 
@@ -21,7 +23,14 @@ std::unique_ptr<IGraphicsAPI> GraphicsFactory::CreateRenderer(SDL_Window* window
 
     // If no order specified, use sensible default: prefer wgpu, then Vulkan, DirectX, OpenGL
     std::vector<std::string> order = priorityOrder;
-    if (order.empty()) order = { "wgpu", "vulkan", "d3d12", "directx", "opengl" };
+    if (order.empty()) {
+        order = { "wgpu", "vulkan", "d3d12", "directx", "opengl" };
+        const char* enableGL = std::getenv("GENESIS_ENABLE_OPENGL");
+        if (!(enableGL && std::strcmp(enableGL, "1") == 0)) {
+            order.erase(std::remove(order.begin(), order.end(), "opengl"), order.end());
+            std::cout << "GraphicsFactory: OpenGL disabled via GENESIS_ENABLE_OPENGL; skipping opengl in default order" << std::endl;
+        }
+    }
 
     for (const auto& entry : order) {
         std::string name = toLower(entry);
@@ -55,13 +64,18 @@ std::unique_ptr<IGraphicsAPI> GraphicsFactory::CreateRenderer(SDL_Window* window
 #endif
         } else if (name == "wgpu") {
 #ifdef HAVE_WGPU
-            auto r = std::make_unique<WgpuRenderer>();
-            if (r->Init(window, glContext)) {
-                std::cout << "GraphicsFactory: selected WgpuRenderer" << std::endl;
-                return r;
+            const char* _env_enable_wgpu = std::getenv("GENESIS_ENABLE_WGPU");
+            if (!_env_enable_wgpu || std::strcmp(_env_enable_wgpu, "1") != 0) {
+                std::cout << "GraphicsFactory: skipping WgpuRenderer (disabled via GENESIS_ENABLE_WGPU)" << std::endl;
+            } else {
+                auto r = std::make_unique<WgpuRenderer>();
+                if (r->Init(window, glContext)) {
+                    std::cout << "GraphicsFactory: selected WgpuRenderer" << std::endl;
+                    return r;
+                }
+                std::cerr << "GraphicsFactory: WgpuRenderer::Init failed; trying next" << std::endl;
+                r->Shutdown();
             }
-            std::cerr << "GraphicsFactory: WgpuRenderer::Init failed; trying next" << std::endl;
-            r->Shutdown();
 #else
             std::cout << "GraphicsFactory: skipping WgpuRenderer (HAVE_WGPU not defined)" << std::endl;
 #endif
@@ -90,8 +104,17 @@ std::unique_ptr<IGraphicsAPI> GraphicsFactory::CreateRenderer(SDL_Window* window
             std::cout << "GraphicsFactory: skipping DirectXRenderer (not _WIN32)" << std::endl;
 #endif
         } else if (name == "opengl" || name == "gl") {
+            std::cout << "GraphicsFactory: creating OpenGLRenderer and calling Init" << std::endl;
+            const char* _env_enable_gl = std::getenv("GENESIS_ENABLE_OPENGL");
+            if (!(_env_enable_gl && std::strcmp(_env_enable_gl, "1") == 0)) {
+                std::cout << "GraphicsFactory: explicit OpenGL request skipped (GENESIS_ENABLE_OPENGL not set)" << std::endl;
+                continue;
+            }
             auto r = std::make_unique<OpenGLRenderer>();
-            if (r->Init(window, glContext)) {
+            std::cout << "GraphicsFactory: OpenGLRenderer::Init -> calling" << std::endl;
+            bool initRes = r->Init(window, glContext);
+            std::cout << "GraphicsFactory: OpenGLRenderer::Init -> returned res=" << initRes << std::endl;
+            if (initRes) {
                 std::cout << "GraphicsFactory: selected OpenGLRenderer" << std::endl;
                 return r;
             }

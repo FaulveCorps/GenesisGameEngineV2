@@ -49,7 +49,7 @@ TEST_CASE("2D sprite smoke (software)") {
     size_t idx = (cy * 64 + cx) * 4;
 
     // Center pixel should not be black
-    REQUIRE(out[idx + 2] >= 10 || out[idx + 1] >= 10 || out[idx + 0] >= 10);
+    REQUIRE((out[idx + 2] >= 10 || out[idx + 1] >= 10 || out[idx + 0] >= 10));
 
     if (auto cur3 = Genesis::Engine::RendererManager::GetRenderer()) cur3->Shutdown();
     SDL_GL_DeleteContext(ctx);

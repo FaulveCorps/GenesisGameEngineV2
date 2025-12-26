@@ -68,7 +68,7 @@ TEST_CASE("2D sprite readback (opengl)") {
     pglReadPixels(cx, readY, 1, 1, 0x1908 /*GL_RGBA*/, 0x1401 /*GL_UNSIGNED_BYTE*/, pix);
 
     // Center pixel should not be black
-    REQUIRE(pix[0] >= 10 || pix[1] >= 10 || pix[2] >= 10);
+    REQUIRE((pix[0] >= 10 || pix[1] >= 10 || pix[2] >= 10));
 
     if (auto cur = Genesis::Engine::RendererManager::GetRenderer()) cur->Shutdown();
     SDL_GL_DeleteContext(ctx);

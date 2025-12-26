@@ -5,6 +5,8 @@
 #include "ENGINE/ShaderRegistry.h"
 #include "ENGINE/TextureRegistry.h"
 #include <iostream>
+#include <cstdlib>
+#include <cstring>
 
 namespace Genesis::Engine {
 
@@ -20,7 +22,14 @@ void RendererManager::SetRenderer(std::unique_ptr<IGraphicsAPI> renderer) {
 
 std::vector<std::string> RendererManager::CandidateRenderers() {
     // Order of preference when cycling (start with software for deterministic tests)
-    return { "software", "wgpu", "vulkan", "d3d12", "directx", "opengl" };
+    std::vector<std::string> order = { "software", "wgpu", "vulkan", "d3d12", "directx" };
+    const char* enableGL = std::getenv("GENESIS_ENABLE_OPENGL");
+    if (enableGL && std::strcmp(enableGL, "1") == 0) {
+        order.push_back("opengl");
+    } else {
+        std::cout << "RendererManager: skipping 'opengl' in CandidateRenderers (set GENESIS_ENABLE_OPENGL=1 to enable)" << std::endl;
+    }
+    return order;
 }
 
 bool RendererManager::SwitchRendererByName(const std::string& name, SDL_Window* window, SDL_GLContext ctx) {
@@ -33,6 +42,15 @@ bool RendererManager::SwitchRendererByName(const std::string& name, SDL_Window* 
     }
 
     IGraphicsAPI* old = GetRenderer();
+    // Ensure GL context is current so destroying GL resources is safe
+    if (window && ctx) {
+        if (SDL_GL_MakeCurrent(window, ctx) != 0) {
+            std::cerr << "RendererManager: SDL_GL_MakeCurrent failed before destroying old resources: " << SDL_GetError() << std::endl;
+        } else {
+            std::cout << "RendererManager: SDL_GL_MakeCurrent succeeded before destroying old resources" << std::endl;
+        }
+    }
+
     // Destroy resources on the old renderer first
     MeshRegistry::Instance().DestroyAllOnRenderer(old);
     ShaderRegistry::Instance().DestroyAllOnRenderer(old);
@@ -48,6 +66,15 @@ bool RendererManager::SwitchRendererByName(const std::string& name, SDL_Window* 
 
     // Replace renderer
     SetRenderer(std::move(newRenderer));
+
+    // Ensure GL context is current for resource uploads (some uploads call GL functions)
+    if (window && ctx) {
+        if (SDL_GL_MakeCurrent(window, ctx) != 0) {
+            std::cerr << "RendererManager: SDL_GL_MakeCurrent failed after switch: " << SDL_GetError() << std::endl;
+        } else {
+            std::cout << "RendererManager: SDL_GL_MakeCurrent succeeded after switch" << std::endl;
+        }
+    }
 
     // Upload resources into new renderer
     MeshRegistry::Instance().UploadAllToRenderer(GetRenderer());

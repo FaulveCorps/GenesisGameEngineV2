@@ -1,5 +1,6 @@
 #include "ENGINE/Texture.h"
 #include "ENGINE/TextureRegistry.h"
+#include "ENGINE/IGraphics.h"
 #include <SDL.h>
 #include <iostream>
 #include <cstring>
@@ -39,7 +40,8 @@ static bool ResolveGL(void** fnPtr, const char* name) {
 #define GL_TEXTURE_MAG_FILTER 0x2800
 
 std::shared_ptr<Texture> Texture::CreateFromMemory(uint32_t width, uint32_t height, const std::vector<uint8_t>& pixels) {
-    auto t = std::make_shared<Texture>();
+    // Use direct new here so private constructor access is honored
+    auto t = std::shared_ptr<Texture>(new Texture());
     t->width_ = width;
     t->height_ = height;
     t->pixels_ = pixels;
@@ -72,9 +74,17 @@ Texture::~Texture() {
     DestroyOnRenderer(nullptr);
 }
 
-void Texture::UploadToRenderer(IGraphicsAPI* /*renderer*/) {
+void Texture::UploadToRenderer(IGraphicsAPI* renderer) {
     if (textureID_ != 0) return; // already uploaded
     if (pixels_.empty() || width_ == 0 || height_ == 0) return;
+
+    // If a non-GL renderer is specified, skip GL upload
+    if (renderer) {
+        if (renderer->GetName() != std::string("opengl")) return;
+    } else {
+        // If renderer==nullptr, only attempt GL upload if a GL context is current
+        if (!SDL_GL_GetCurrentContext()) return;
+    }
 
     ResolveGL((void**)&pglGenTextures, "glGenTextures");
     ResolveGL((void**)&pglBindTexture, "glBindTexture");
