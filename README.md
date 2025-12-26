@@ -2,6 +2,8 @@
 
 Genesis is a modular, cross-platform C++ game engine prototype. This repository contains the engine core, renderers, tools, and a sample game used for verification.
 
+Project governance artifacts (agent manifests, ADRs, and policies) are stored in the `Agenda/` directory to support Agenda+ workflows.
+
 ## Getting started (initial skeleton)
 Requirements:
 - CMake >= 3.16
