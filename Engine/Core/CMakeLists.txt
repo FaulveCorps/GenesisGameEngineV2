@@ -52,6 +52,8 @@ add_library(EngineCore STATIC
     SRC/NullAudio.cpp
     SRC/NullShaderSubsystem.cpp
     SRC/GLShaderSubsystem.cpp
+    SRC/NullPhysics.cpp
+    SRC/BulletPhysics.cpp
     SRC/MiniaudioAudio.cpp
     SRC/miniaudio_impl.cpp
     SRC/stb_image_impl.cpp
@@ -103,6 +105,26 @@ if (Vulkan_FOUND)
   target_link_libraries(EngineCore PRIVATE Vulkan::Vulkan)
 else()
   message(STATUS "Vulkan not found; VulkanRenderer will be disabled at runtime")
+endif()
+
+# Bullet (optional) - physics library
+find_path(BULLET_INCLUDE_DIR NAMES btBulletDynamicsCommon.h PATHS "${VCPKG_INSTALLED}/include" NO_DEFAULT_PATH)
+if (BULLET_INCLUDE_DIR)
+  # Try to find common Bullet libs (BulletDynamics, BulletCollision, LinearMath)
+  find_library(BULLET_DYNAMICS_LIB NAMES BulletDynamics PATHS "${VCPKG_INSTALLED}/lib" NO_DEFAULT_PATH)
+  find_library(BULLET_COLLISION_LIB NAMES BulletCollision PATHS "${VCPKG_INSTALLED}/lib" NO_DEFAULT_PATH)
+  find_library(BULLET_LINEARMATH_LIB NAMES LinearMath PATHS "${VCPKG_INSTALLED}/lib" NO_DEFAULT_PATH)
+
+  if (BULLET_DYNAMICS_LIB AND BULLET_COLLISION_LIB AND BULLET_LINEARMATH_LIB)
+    message(STATUS "Bullet found: include=${BULLET_INCLUDE_DIR}")
+    target_compile_definitions(EngineCore PRIVATE HAVE_BULLET=1)
+    target_include_directories(EngineCore PRIVATE ${BULLET_INCLUDE_DIR})
+    target_link_libraries(EngineCore PRIVATE ${BULLET_DYNAMICS_LIB} ${BULLET_COLLISION_LIB} ${BULLET_LINEARMATH_LIB})
+  else()
+    message(STATUS "Bullet headers found but libraries missing; Bullet backend will be disabled")
+  endif()
+else()
+  message(STATUS "Bullet not found; BulletPhysics will be disabled at runtime")
 endif()
 
 # bgfx support intentionally removed from this build (was optional)

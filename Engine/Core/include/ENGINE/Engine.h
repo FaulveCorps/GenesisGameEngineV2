@@ -8,6 +8,7 @@ namespace Genesis::Engine {
 class SubsystemManager;
 class IShaderSubsystem;
 class IAudio;
+class IPhysics;
 
 bool Init(const std::string& config = "");
 void Shutdown();
@@ -22,5 +23,9 @@ std::shared_ptr<IShaderSubsystem> GetShaderSubsystem();
 // Audio subsystem helpers
 bool CreateAudioSubsystem(const std::string& name);
 std::shared_ptr<IAudio> GetAudioSubsystem();
+
+// Physics subsystem helpers
+bool CreatePhysicsSubsystem(const std::string& name);
+std::shared_ptr<IPhysics> GetPhysicsSubsystem();
 
 }

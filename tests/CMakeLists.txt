@@ -31,6 +31,7 @@ add_executable(UnitTests
     test_shader_subsystem.cpp
     test_audio.cpp
     test_audio_playback.cpp
+    test_physics.cpp
     test_subsystems.cpp
     ${catch2_SOURCE_DIR}/extras/catch_amalgamated.cpp
 )

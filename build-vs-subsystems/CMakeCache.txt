@@ -23,6 +23,9 @@ ASSIMP_LIBRARY:FILEPATH=C:/Users/jpfau/Desktop/Project/GenesisGameEngine/vcpkg/i
 //Build the testing tree.
 BUILD_TESTING:BOOL=ON
 
+//Path to a file.
+BULLET_INCLUDE_DIR:PATH=BULLET_INCLUDE_DIR-NOTFOUND
+
 //Read docs/configuration.md for details
 CATCH_CONFIG_ANDROID_LOGWRITE:BOOL=OFF
 
