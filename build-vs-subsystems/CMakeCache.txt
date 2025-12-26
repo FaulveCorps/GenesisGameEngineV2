@@ -520,6 +520,10 @@ FETCHCONTENT_SOURCE_DIR_CATCH2:PATH=
 FETCHCONTENT_SOURCE_DIR_ENTT:PATH=
 
 //When not empty, overrides where to find pre-populated content
+// for miniaudio
+FETCHCONTENT_SOURCE_DIR_MINIAUDIO:PATH=
+
+//When not empty, overrides where to find pre-populated content
 // for stb
 FETCHCONTENT_SOURCE_DIR_STB:PATH=
 
@@ -531,6 +535,9 @@ FETCHCONTENT_UPDATES_DISCONNECTED_CATCH2:BOOL=OFF
 
 //Enables UPDATE_DISCONNECTED behavior just for population of entt
 FETCHCONTENT_UPDATES_DISCONNECTED_ENTT:BOOL=OFF
+
+//Enables UPDATE_DISCONNECTED behavior just for population of miniaudio
+FETCHCONTENT_UPDATES_DISCONNECTED_MINIAUDIO:BOOL=OFF
 
 //Enables UPDATE_DISCONNECTED behavior just for population of stb
 FETCHCONTENT_UPDATES_DISCONNECTED_STB:BOOL=OFF
@@ -565,6 +572,177 @@ MEMORYCHECK_COMMAND:FILEPATH=MEMORYCHECK_COMMAND-NOTFOUND
 //File that contains suppressions for the memory checker
 MEMORYCHECK_SUPPRESSIONS_FILE:FILEPATH=
 
+//Build miniaudio examples
+MINIAUDIO_BUILD_EXAMPLES:BOOL=OFF
+
+//Build miniaudio tests
+MINIAUDIO_BUILD_TESTS:BOOL=OFF
+
+//Build miniaudio development tools. Leave this disabled unless
+// you know what you're doing. If you enable this and you get build
+// errors, you clearly do not know what you're doing and yet you
+// still enabled this option. Why would you do that?
+MINIAUDIO_BUILD_TOOLS:BOOL=OFF
+
+//Enable stdout debug output
+MINIAUDIO_DEBUG_OUTPUT:BOOL=OFF
+
+//Enable the AAudio backend
+MINIAUDIO_ENABLE_AAUDIO:BOOL=OFF
+
+//Enable the ALSA backend
+MINIAUDIO_ENABLE_ALSA:BOOL=OFF
+
+//Enable the audio(4) backend
+MINIAUDIO_ENABLE_AUDIO4:BOOL=OFF
+
+//Enable the CoreAudio backend
+MINIAUDIO_ENABLE_COREAUDIO:BOOL=OFF
+
+//Enable support for custom backends
+MINIAUDIO_ENABLE_CUSTOM:BOOL=OFF
+
+//Enable the DirectSound backend
+MINIAUDIO_ENABLE_DSOUND:BOOL=OFF
+
+//Enable the JACK backend
+MINIAUDIO_ENABLE_JACK:BOOL=OFF
+
+//Enable the null backend
+MINIAUDIO_ENABLE_NULL:BOOL=OFF
+
+//Only enable specific backends. Backends can be enabled with MINIAUDIO_ENABLE_[BACKEND].
+MINIAUDIO_ENABLE_ONLY_SPECIFIC_BACKENDS:BOOL=OFF
+
+//Enable the OpenSL|ES backend
+MINIAUDIO_ENABLE_OPENSL:BOOL=OFF
+
+//Enable the OSS backend
+MINIAUDIO_ENABLE_OSS:BOOL=OFF
+
+//Enable the PulseAudio backend
+MINIAUDIO_ENABLE_PULSEAUDIO:BOOL=OFF
+
+//Enable the sndio backend
+MINIAUDIO_ENABLE_SNDIO:BOOL=OFF
+
+//Enable the WASAPI backend
+MINIAUDIO_ENABLE_WASAPI:BOOL=OFF
+
+//Enable the Web Audio backend
+MINIAUDIO_ENABLE_WEBAUDIO:BOOL=OFF
+
+//Enable the WinMM backend
+MINIAUDIO_ENABLE_WINMM:BOOL=OFF
+
+//Force compilation as C89
+MINIAUDIO_FORCE_C89:BOOL=OFF
+
+//Force compilation as C++
+MINIAUDIO_FORCE_CXX:BOOL=OFF
+
+//Disable the AAudio backend
+MINIAUDIO_NO_AAUDIO:BOOL=OFF
+
+//Disable the ALSA backend
+MINIAUDIO_NO_ALSA:BOOL=OFF
+
+//Disable the audio(4) backend
+MINIAUDIO_NO_AUDIO4:BOOL=OFF
+
+//Disable AVX2 optimizations
+MINIAUDIO_NO_AVX2:BOOL=OFF
+
+//Disable the CoreAudio backend
+MINIAUDIO_NO_COREAUDIO:BOOL=OFF
+
+//Disable support for custom backends
+MINIAUDIO_NO_CUSTOM:BOOL=OFF
+
+//Disable decoding APIs
+MINIAUDIO_NO_DECODING:BOOL=OFF
+
+//Disable audio playback and capture
+MINIAUDIO_NO_DEVICEIO:BOOL=OFF
+
+//Disable the DirectSound backend
+MINIAUDIO_NO_DSOUND:BOOL=OFF
+
+//Disable encoding APIs
+MINIAUDIO_NO_ENCODING:BOOL=OFF
+
+//Disable the high-level engine API
+MINIAUDIO_NO_ENGINE:BOOL=OFF
+
+//Do not build extra node graph nodes
+MINIAUDIO_NO_EXTRA_NODES:BOOL=OFF
+
+//Disable the built-in FLAC decoder
+MINIAUDIO_NO_FLAC:BOOL=OFF
+
+//Disable generation APIs such as ma_waveform and ma_noise
+MINIAUDIO_NO_GENERATION:BOOL=OFF
+
+//Disable the JACK backend
+MINIAUDIO_NO_JACK:BOOL=OFF
+
+//Disable miniaudio_libopus
+MINIAUDIO_NO_LIBOPUS:BOOL=OFF
+
+//Disable miniaudio_libvorbis
+MINIAUDIO_NO_LIBVORBIS:BOOL=OFF
+
+//Disable the built-in MP3 decoder
+MINIAUDIO_NO_MP3:BOOL=OFF
+
+//Disable NEON optimizations
+MINIAUDIO_NO_NEON:BOOL=OFF
+
+//Disable the node graph API
+MINIAUDIO_NO_NODE_GRAPH:BOOL=OFF
+
+//Disable the null backend
+MINIAUDIO_NO_NULL:BOOL=OFF
+
+//Disable the OpenSL|ES backend
+MINIAUDIO_NO_OPENSL:BOOL=OFF
+
+//Disable the OSS backend
+MINIAUDIO_NO_OSS:BOOL=OFF
+
+//Disable the PulseAudio backend
+MINIAUDIO_NO_PULSEAUDIO:BOOL=OFF
+
+//Disable the resource manager API
+MINIAUDIO_NO_RESOURCE_MANAGER:BOOL=OFF
+
+//Disable runtime linking
+MINIAUDIO_NO_RUNTIME_LINKING:BOOL=OFF
+
+//Disable the sndio backend
+MINIAUDIO_NO_SNDIO:BOOL=OFF
+
+//Disable SSE2 optimizations
+MINIAUDIO_NO_SSE2:BOOL=OFF
+
+//Disable threading. Must be used with MINIAUDIO_NO_DEVICEIO.
+MINIAUDIO_NO_THREADING:BOOL=OFF
+
+//Disable the WASAPI backend
+MINIAUDIO_NO_WASAPI:BOOL=OFF
+
+//Disable the built-in WAV decoder
+MINIAUDIO_NO_WAV:BOOL=OFF
+
+//Disable the Web Audio backend
+MINIAUDIO_NO_WEBAUDIO:BOOL=OFF
+
+//Disable the WinMM backend
+MINIAUDIO_NO_WINMM:BOOL=OFF
+
+//Use <stdint.h> for sized types
+MINIAUDIO_USE_STDINT:BOOL=OFF
+
 //Path to a file.
 MSVC_REDIST_DIR:PATH=C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Redist/MSVC/14.44.35112
 
@@ -574,11 +752,20 @@ OPENGL_gl_LIBRARY:STRING=opengl32
 //GLU library for win32
 OPENGL_glu_LIBRARY:STRING=glu32
 
+//Arguments to supply to pkg-config
+PKG_CONFIG_ARGN:STRING=
+
+//pkg-config executable
+PKG_CONFIG_EXECUTABLE:FILEPATH=PKG_CONFIG_EXECUTABLE-NOTFOUND
+
 //Path to a library.
 SDL2_LIBRARY:FILEPATH=C:/Users/jpfau/Desktop/Project/GenesisGameEngine/vcpkg/installed/x64-windows/lib/SDL2.lib
 
 //Name of the computer/site where compile is being run
 SITE:STRING=COMLAB1-41
+
+//Path to a library.
+STEAMAUDIO_LIBRARY:FILEPATH=STEAMAUDIO_LIBRARY-NOTFOUND
 
 //Value Computed by CMake
 SampleGame_BINARY_DIR:STATIC=C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/GameProjects/SampleGame
@@ -636,6 +823,15 @@ asset_packer_IS_TOP_LEVEL:STATIC=OFF
 
 //Value Computed by CMake
 asset_packer_SOURCE_DIR:STATIC=C:/Users/jpfau/Desktop/Project/GenesisGameEngine/Tools/asset_packer
+
+//Value Computed by CMake
+miniaudio_BINARY_DIR:STATIC=C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/miniaudio-build
+
+//Value Computed by CMake
+miniaudio_IS_TOP_LEVEL:STATIC=OFF
+
+//Value Computed by CMake
+miniaudio_SOURCE_DIR:STATIC=C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/miniaudio-src
 
 //Value Computed by CMake
 shader_compiler_BINARY_DIR:STATIC=C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/Tools/shader_compiler
@@ -767,7 +963,7 @@ CMAKE_MODULE_LINKER_FLAGS_RELWITHDEBINFO-ADVANCED:INTERNAL=1
 //ADVANCED property for variable: CMAKE_MT
 CMAKE_MT-ADVANCED:INTERNAL=1
 //number of local generators
-CMAKE_NUMBER_OF_MAKEFILES:INTERNAL=11
+CMAKE_NUMBER_OF_MAKEFILES:INTERNAL=12
 //Platform information initialized
 CMAKE_PLATFORM_INFO_INITIALIZED:INTERNAL=1
 //noop for ranlib
@@ -849,6 +1045,10 @@ MSVC_REDIST_DIR-ADVANCED:INTERNAL=1
 OPENGL_gl_LIBRARY-ADVANCED:INTERNAL=1
 //ADVANCED property for variable: OPENGL_glu_LIBRARY
 OPENGL_glu_LIBRARY-ADVANCED:INTERNAL=1
+//ADVANCED property for variable: PKG_CONFIG_ARGN
+PKG_CONFIG_ARGN-ADVANCED:INTERNAL=1
+//ADVANCED property for variable: PKG_CONFIG_EXECUTABLE
+PKG_CONFIG_EXECUTABLE-ADVANCED:INTERNAL=1
 //ADVANCED property for variable: SITE
 SITE-ADVANCED:INTERNAL=1
 //ADVANCED property for variable: Vulkan_GLSLANG_VALIDATOR_EXECUTABLE

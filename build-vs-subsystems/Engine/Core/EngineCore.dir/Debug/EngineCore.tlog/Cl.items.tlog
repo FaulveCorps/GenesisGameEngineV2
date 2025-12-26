@@ -25,4 +25,6 @@ C:\Users\jpfau\Desktop\Project\GenesisGameEngine\Engine\Core\SRC\SubsystemManage
 C:\Users\jpfau\Desktop\Project\GenesisGameEngine\Engine\Core\SRC\NullAudio.cpp;C:\Users\jpfau\Desktop\Project\GenesisGameEngine\build-vs-subsystems\Engine\Core\EngineCore.dir\Debug\NullAudio.obj
 C:\Users\jpfau\Desktop\Project\GenesisGameEngine\Engine\Core\SRC\NullShaderSubsystem.cpp;C:\Users\jpfau\Desktop\Project\GenesisGameEngine\build-vs-subsystems\Engine\Core\EngineCore.dir\Debug\NullShaderSubsystem.obj
 C:\Users\jpfau\Desktop\Project\GenesisGameEngine\Engine\Core\SRC\GLShaderSubsystem.cpp;C:\Users\jpfau\Desktop\Project\GenesisGameEngine\build-vs-subsystems\Engine\Core\EngineCore.dir\Debug\GLShaderSubsystem.obj
+C:\Users\jpfau\Desktop\Project\GenesisGameEngine\Engine\Core\SRC\MiniaudioAudio.cpp;C:\Users\jpfau\Desktop\Project\GenesisGameEngine\build-vs-subsystems\Engine\Core\EngineCore.dir\Debug\MiniaudioAudio.obj
+C:\Users\jpfau\Desktop\Project\GenesisGameEngine\Engine\Core\SRC\miniaudio_impl.cpp;C:\Users\jpfau\Desktop\Project\GenesisGameEngine\build-vs-subsystems\Engine\Core\EngineCore.dir\Debug\miniaudio_impl.obj
 C:\Users\jpfau\Desktop\Project\GenesisGameEngine\Engine\Core\SRC\stb_image_impl.cpp;C:\Users\jpfau\Desktop\Project\GenesisGameEngine\build-vs-subsystems\Engine\Core\EngineCore.dir\Debug\stb_image_impl.obj

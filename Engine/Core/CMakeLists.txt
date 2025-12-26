@@ -52,6 +52,8 @@ add_library(EngineCore STATIC
     SRC/NullAudio.cpp
     SRC/NullShaderSubsystem.cpp
     SRC/GLShaderSubsystem.cpp
+    SRC/MiniaudioAudio.cpp
+    SRC/miniaudio_impl.cpp
     SRC/stb_image_impl.cpp
 )  
 
@@ -77,6 +79,19 @@ FetchContent_MakeAvailable(stb)
 if (stb_SOURCE_DIR)
   target_include_directories(EngineCore PUBLIC ${stb_SOURCE_DIR})
   target_compile_definitions(EngineCore PUBLIC HAVE_STB_IMAGE=1)
+endif()
+
+# Miniaudio (optional) - single-header audio library for simple playback
+FetchContent_Declare(
+  miniaudio
+  GIT_REPOSITORY https://github.com/mackron/miniaudio.git
+  GIT_TAG master
+)
+FetchContent_MakeAvailable(miniaudio)
+# Expose miniaudio header and mark availability
+if (miniaudio_SOURCE_DIR)
+  target_include_directories(EngineCore PUBLIC ${miniaudio_SOURCE_DIR})
+  target_compile_definitions(EngineCore PUBLIC HAVE_MINIAUDIO=1)
 endif()
 
 # Vulkan (optional) - prefer system/vcpkg-provided Vulkan

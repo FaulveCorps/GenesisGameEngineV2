@@ -1,0 +1,32 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project>
+  <ProjectOutputs>
+    <ProjectOutput>
+      <FullPath>C:\Users\jpfau\Desktop\Project\GenesisGameEngine\build-vs-subsystems\x64\Debug\ZERO_CHECK</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>C:\Users\jpfau\Desktop\Project\GenesisGameEngine\build-vs-subsystems\Plugins\SamplePlugin\Debug\SamplePlugin.dll</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>C:\Users\jpfau\Desktop\Project\GenesisGameEngine\build-vs-subsystems\GameProjects\SampleGame\Debug\SampleGame.exe</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>C:\Users\jpfau\Desktop\Project\GenesisGameEngine\build-vs-subsystems\tests\Debug\UnitTests.exe</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>C:\Users\jpfau\Desktop\Project\GenesisGameEngine\build-vs-subsystems\Tools\asset_packer\Debug\asset_packer.exe</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>C:\Users\jpfau\Desktop\Project\GenesisGameEngine\build-vs-subsystems\tests\Debug\gl_vaorepro.exe</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>C:\Users\jpfau\Desktop\Project\GenesisGameEngine\build-vs-subsystems\Tools\shader_compiler\Debug\shader_compiler.exe</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>C:\Users\jpfau\Desktop\Project\GenesisGameEngine\build-vs-subsystems\x64\Debug\ALL_BUILD</FullPath>
+    </ProjectOutput>
+  </ProjectOutputs>
+  <ContentFiles />
+  <SatelliteDlls />
+  <NonRecipeFileRefs />
+</Project>

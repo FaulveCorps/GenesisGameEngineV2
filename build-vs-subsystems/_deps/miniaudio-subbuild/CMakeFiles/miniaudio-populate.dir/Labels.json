@@ -1,0 +1,46 @@
+{
+	"sources" : 
+	[
+		{
+			"file" : "C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/miniaudio-subbuild/CMakeFiles/miniaudio-populate"
+		},
+		{
+			"file" : "C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/miniaudio-subbuild/CMakeFiles/b9a3283342d299e45a7c76831f0477ff/miniaudio-populate.rule"
+		},
+		{
+			"file" : "C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/miniaudio-subbuild/CMakeFiles/4dc685002bed88de2386884269b4e42e/miniaudio-populate-complete.rule"
+		},
+		{
+			"file" : "C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/miniaudio-subbuild/CMakeFiles/391bfb2f01aa9c5f1653633b85ee223e/miniaudio-populate-build.rule"
+		},
+		{
+			"file" : "C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/miniaudio-subbuild/CMakeFiles/391bfb2f01aa9c5f1653633b85ee223e/miniaudio-populate-configure.rule"
+		},
+		{
+			"file" : "C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/miniaudio-subbuild/CMakeFiles/391bfb2f01aa9c5f1653633b85ee223e/miniaudio-populate-download.rule"
+		},
+		{
+			"file" : "C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/miniaudio-subbuild/CMakeFiles/391bfb2f01aa9c5f1653633b85ee223e/miniaudio-populate-install.rule"
+		},
+		{
+			"file" : "C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/miniaudio-subbuild/CMakeFiles/391bfb2f01aa9c5f1653633b85ee223e/miniaudio-populate-mkdir.rule"
+		},
+		{
+			"file" : "C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/miniaudio-subbuild/CMakeFiles/391bfb2f01aa9c5f1653633b85ee223e/miniaudio-populate-patch.rule"
+		},
+		{
+			"file" : "C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/miniaudio-subbuild/CMakeFiles/391bfb2f01aa9c5f1653633b85ee223e/miniaudio-populate-test.rule"
+		},
+		{
+			"file" : "C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/miniaudio-subbuild/CMakeFiles/391bfb2f01aa9c5f1653633b85ee223e/miniaudio-populate-update.rule"
+		}
+	],
+	"target" : 
+	{
+		"labels" : 
+		[
+			"miniaudio-populate"
+		],
+		"name" : "miniaudio-populate"
+	}
+}

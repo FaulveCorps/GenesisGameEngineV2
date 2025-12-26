@@ -12,6 +12,16 @@ C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/entt-
 C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/entt-build/CMakeFiles/RUN_TESTS.dir
 C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/entt-build/CMakeFiles/INSTALL.dir
 C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/entt-build/CMakeFiles/ALL_BUILD.dir
+C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/miniaudio-build/CMakeFiles/miniaudio.dir
+C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/miniaudio-build/CMakeFiles/miniaudio_channel_combiner_node.dir
+C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/miniaudio-build/CMakeFiles/miniaudio_channel_separator_node.dir
+C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/miniaudio-build/CMakeFiles/miniaudio_ltrim_node.dir
+C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/miniaudio-build/CMakeFiles/miniaudio_reverb_node.dir
+C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/miniaudio-build/CMakeFiles/miniaudio_vocoder_node.dir
+C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/miniaudio-build/CMakeFiles/PACKAGE.dir
+C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/miniaudio-build/CMakeFiles/RUN_TESTS.dir
+C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/miniaudio-build/CMakeFiles/INSTALL.dir
+C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/miniaudio-build/CMakeFiles/ALL_BUILD.dir
 C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/GameProjects/SampleGame/CMakeFiles/SampleGame.dir
 C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/GameProjects/SampleGame/CMakeFiles/PACKAGE.dir
 C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/GameProjects/SampleGame/CMakeFiles/RUN_TESTS.dir

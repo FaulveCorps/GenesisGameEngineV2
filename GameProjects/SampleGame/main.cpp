@@ -24,6 +24,7 @@
 #include "engine/Stats.h"
 #include "engine/Shader.h"
 #include "engine/ShaderRegistry.h"
+#include "engine/TextureRegistry.h"
 #include <thread>
 #include <chrono>
 #include <filesystem>
@@ -220,13 +221,6 @@ int main(int argc, char** argv) {
     }
 #endif
 
-    // 2D demo texture (in-memory) if requested
-    std::shared_ptr<Genesis::Engine::Texture> demoTex;
-    if (do2dDemo) {
-        std::vector<uint8_t> pixels = { 255,0,0,255, 0,255,0,255, 0,0,255,255, 255,255,0,255 };
-        demoTex = Genesis::Engine::Texture::CreateFromMemory(2, 2, pixels);
-        if (demoTex) Genesis::Engine::TextureRegistry::Instance().UploadAllToRenderer(Genesis::Engine::RendererManager::GetRenderer());
-    }
 
     // Setup profiler and ImGui
     Genesis::Engine::Profiler profiler;
@@ -238,6 +232,9 @@ int main(int argc, char** argv) {
     int stressFrames = 0; // 0 == disabled, -1 == infinite
     bool showHelp = false;
     bool do2dDemo = false;
+
+    std::shared_ptr<Genesis::Engine::Texture> demoTex;
+
     for (int i = 1; i < argc; ++i) {
         std::string a = argv[i];
         if (a == "--stress") {
@@ -273,6 +270,13 @@ int main(int argc, char** argv) {
         window.Shutdown();
         Genesis::Engine::Shutdown();
         return 0;
+    }
+
+    // 2D demo texture (in-memory) if requested
+    if (do2dDemo) {
+        std::vector<uint8_t> pixels = { 255,0,0,255, 0,255,0,255, 0,0,255,255, 255,255,0,255 };
+        demoTex = Genesis::Engine::Texture::CreateFromMemory(2, 2, pixels);
+        if (demoTex) Genesis::Engine::TextureRegistry::Instance().UploadAllToRenderer(Genesis::Engine::RendererManager::GetRenderer());
     }
 
 #ifdef DIRECTX_SMOKE_TEST
