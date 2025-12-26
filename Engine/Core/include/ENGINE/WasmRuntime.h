@@ -16,6 +16,9 @@ public:
     // Load a module from a wasm file; returns true on success
     static bool LoadModule(const std::filesystem::path& modulePath);
 
+    // Load a module from raw wasm bytes (useful for tests and embedded modules)
+    static bool LoadModuleFromBytes(const std::string& moduleName, const std::vector<uint8_t>& bytes);
+
     // Call exported function by name with optional string args (uses runtime's CallArgv mechanism)
     static bool CallExported(const std::string& moduleName, const std::string& funcName, const std::vector<std::string>& args = {});
 

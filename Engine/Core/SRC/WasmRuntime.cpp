@@ -182,6 +182,15 @@ bool WasmRuntime::LoadModule(const std::filesystem::path& modulePath) {
     return true;
 }
 
+bool WasmRuntime::LoadModuleFromBytes(const std::string& moduleName, const std::vector<uint8_t>& bytes) {
+    if (!LoadModuleBytes(moduleName, bytes)) return false;
+    // Call mod_init if exported
+    if (!CallExported(moduleName, "mod_init")) {
+        // not an error; module may not export mod_init
+    }
+    return true;
+}
+
 bool WasmRuntime::CallExported(const std::string& moduleName, const std::string& funcName, const std::vector<std::string>& args) {
     std::lock_guard<std::mutex> lk(g_wasmMutex);
     auto it = g_modules.find(moduleName);
