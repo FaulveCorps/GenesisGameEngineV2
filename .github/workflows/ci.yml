@@ -36,9 +36,9 @@ jobs:
       - name: Install dependencies with vcpkg
         run: |
           if [ "${{ matrix.os }}" = "windows-latest" ]; then
-            .\vcpkg\vcpkg.exe install sdl3 assimp --triplet ${{ matrix.triplet }}
+            .\vcpkg\vcpkg.exe install sdl3 assimp lua --triplet ${{ matrix.triplet }}
           else
-            ./vcpkg/vcpkg install sdl3 assimp --triplet ${{ matrix.triplet }}
+            ./vcpkg/vcpkg install sdl3 assimp lua --triplet ${{ matrix.triplet }}
           fi
         shell: bash
 
