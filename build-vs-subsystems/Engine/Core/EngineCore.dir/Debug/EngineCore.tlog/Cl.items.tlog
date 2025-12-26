@@ -40,3 +40,4 @@ C:\Users\jpfau\Desktop\Project\GenesisGameEngine\Engine\Core\SRC\EnetNetwork.cpp
 C:\Users\jpfau\Desktop\Project\GenesisGameEngine\Engine\Core\SRC\MiniaudioAudio.cpp;C:\Users\jpfau\Desktop\Project\GenesisGameEngine\build-vs-subsystems\Engine\Core\EngineCore.dir\Debug\MiniaudioAudio.obj
 C:\Users\jpfau\Desktop\Project\GenesisGameEngine\Engine\Core\SRC\miniaudio_impl.cpp;C:\Users\jpfau\Desktop\Project\GenesisGameEngine\build-vs-subsystems\Engine\Core\EngineCore.dir\Debug\miniaudio_impl.obj
 C:\Users\jpfau\Desktop\Project\GenesisGameEngine\Engine\Core\SRC\stb_image_impl.cpp;C:\Users\jpfau\Desktop\Project\GenesisGameEngine\build-vs-subsystems\Engine\Core\EngineCore.dir\Debug\stb_image_impl.obj
+C:\Users\jpfau\Desktop\Project\GenesisGameEngine\Engine\Core\SRC\WasmRuntime.cpp;C:\Users\jpfau\Desktop\Project\GenesisGameEngine\build-vs-subsystems\Engine\Core\EngineCore.dir\Debug\WasmRuntime.obj

@@ -48,6 +48,7 @@ C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/Plugins/Sam
 C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/Plugins/SamplePlugin/CMakeFiles/ALL_BUILD.dir
 C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/tests/CMakeFiles/UnitTests.dir
 C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/tests/CMakeFiles/gl_vaorepro.dir
+C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/tests/CMakeFiles/WasmE2ESmoke.dir
 C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/tests/CMakeFiles/Experimental.dir
 C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/tests/CMakeFiles/Nightly.dir
 C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/tests/CMakeFiles/Continuous.dir
