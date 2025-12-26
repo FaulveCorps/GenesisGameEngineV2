@@ -25,6 +25,11 @@ public:
         return textureID_; 
     }
 
+    // Accessors for renderer-managed handles (for tests/debug)
+    const IGraphicsAPI::TextureHandle& GetRendererHandle() const { return rendererHandle_; }
+    const std::string& GetRendererOwner() const { return rendererOwner_; }
+    IGraphicsAPI* GetRendererOwnerPtr() const { return rendererOwnerPtr_; }
+
     // CPU-side pixel data in RGBA order
     const std::vector<uint8_t>& Pixels() const { return pixels_; }
 
@@ -41,6 +46,7 @@ private:
     // Renderer-managed handle (opaque)
     IGraphicsAPI::TextureHandle rendererHandle_{};
     std::string rendererOwner_;
+    IGraphicsAPI* rendererOwnerPtr_ = nullptr;
 };
 
 } // namespace Genesis::Engine

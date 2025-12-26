@@ -92,25 +92,28 @@ Texture::~Texture() {
 
 void Texture::UploadToRenderer(IGraphicsAPI* renderer) {
     // If already uploaded to this renderer, nothing to do
-    if (renderer && rendererHandle_.IsValid() && rendererOwner_ == renderer->GetName()) return;
+    if (renderer && rendererHandle_.IsValid() && rendererOwnerPtr_ == renderer) return;
     if (pixels_.empty() || width_ == 0 || height_ == 0) return;
-
 
     // If a renderer is provided, ask it to create a texture handle
     if (renderer) {
-        // Destroy any existing handle first
+        // If we have an existing handle, try to destroy it via its owner first
         if (rendererHandle_.IsValid()) {
-            // If owner matches this renderer, destroy via it
-            if (rendererOwner_ == renderer->GetName()) {
-                renderer->DestroyTexture(rendererHandle_);
-            } else {
-                // Best-effort: try to find the owner renderer in RendererManager and destroy via it
-                if (auto owner = RendererManager::GetRenderer()) {
-                    if (owner->GetName() == rendererOwner_) owner->DestroyTexture(rendererHandle_);
+            if (rendererOwnerPtr_) {
+                if (rendererOwnerPtr_ == renderer) {
+                    rendererOwnerPtr_->DestroyTexture(rendererHandle_);
+                } else {
+                    // Best-effort: if the owner is still available use it
+                    if (auto owner = RendererManager::GetRenderer()) {
+                        if (owner == rendererOwnerPtr_) owner->DestroyTexture(rendererHandle_);
+                    }
                 }
+                // Unregister the old handle
+                TextureRegistry::Instance().UnregisterHandle(this, rendererOwnerPtr_, rendererHandle_);
             }
             rendererHandle_ = {};
             rendererOwner_.clear();
+            rendererOwnerPtr_ = nullptr;
             textureID_ = 0;
         }
 
@@ -118,6 +121,8 @@ void Texture::UploadToRenderer(IGraphicsAPI* renderer) {
         if (h.IsValid()) {
             rendererHandle_ = h;
             rendererOwner_ = renderer->GetName();
+            rendererOwnerPtr_ = renderer;
+            TextureRegistry::Instance().RegisterHandle(this, renderer, h);
             // Maintain legacy GL texture id for compatibility if this is OpenGL
             if (rendererOwner_ == std::string("opengl")) textureID_ = static_cast<unsigned int>(rendererHandle_.id);
             else textureID_ = 0; // clear any leftover legacy GL id
@@ -162,26 +167,42 @@ void Texture::UploadToRenderer(IGraphicsAPI* renderer) {
 void Texture::DestroyOnRenderer(IGraphicsAPI* renderer) {
     // If we have a renderer-managed handle, try to destroy it via the appropriate renderer
     if (rendererHandle_.IsValid()) {
+        // If caller provided the renderer and it matches owner, use it
         if (renderer) {
-            if (renderer->GetName() == rendererOwner_) {
+            if (renderer == rendererOwnerPtr_ || renderer->GetName() == rendererOwner_) {
                 renderer->DestroyTexture(rendererHandle_);
+                TextureRegistry::Instance().UnregisterHandle(this, rendererOwnerPtr_, rendererHandle_);
                 rendererHandle_ = {};
                 rendererOwner_.clear();
+                rendererOwnerPtr_ = nullptr;
                 textureID_ = 0;
                 return;
             }
         } else {
-            // No renderer passed: attempt to find the owner renderer via RendererManager
+            // No renderer passed: if we have an owner pointer, call through it
+            if (rendererOwnerPtr_) {
+                rendererOwnerPtr_->DestroyTexture(rendererHandle_);
+                TextureRegistry::Instance().UnregisterHandle(this, rendererOwnerPtr_, rendererHandle_);
+                rendererHandle_ = {};
+                rendererOwner_.clear();
+                rendererOwnerPtr_ = nullptr;
+                textureID_ = 0;
+                return;
+            }
+            // Fallback by trying to match owner by name
             if (auto owner = RendererManager::GetRenderer()) {
                 if (owner->GetName() == rendererOwner_) {
                     owner->DestroyTexture(rendererHandle_);
+                    TextureRegistry::Instance().UnregisterHandle(this, owner, rendererHandle_);
                     rendererHandle_ = {};
                     rendererOwner_.clear();
+                    rendererOwnerPtr_ = nullptr;
                     textureID_ = 0;
                     return;
                 }
             }
         }
+
         // If we couldn't find the owner renderer, and the owner was OpenGL and a GL context exists, try legacy GL delete
         if (rendererOwner_ == std::string("opengl") && SDL_GL_GetCurrentContext()) {
             ResolveGL((void**)&pglDeleteTextures, "glDeleteTextures");
@@ -190,8 +211,10 @@ void Texture::DestroyOnRenderer(IGraphicsAPI* renderer) {
                 pglDeleteTextures(1, &id);
                 std::cout << "Texture::DestroyOnRenderer -> deleted GL texture " << id << " (fallback)" << std::endl;
             }
+            TextureRegistry::Instance().UnregisterHandle(this, nullptr, rendererHandle_);
             rendererHandle_ = {};
             rendererOwner_.clear();
+            rendererOwnerPtr_ = nullptr;
             textureID_ = 0;
             return;
         }

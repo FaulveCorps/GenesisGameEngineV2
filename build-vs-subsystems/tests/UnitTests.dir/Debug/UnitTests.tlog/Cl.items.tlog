@@ -5,6 +5,7 @@ C:\Users\jpfau\Desktop\Project\GenesisGameEngine\tests\test_renderer_switch.cpp;
 C:\Users\jpfau\Desktop\Project\GenesisGameEngine\tests\test_shader_recreate.cpp;C:\Users\jpfau\Desktop\Project\GenesisGameEngine\build-vs-subsystems\tests\UnitTests.dir\Debug\test_shader_recreate.obj
 C:\Users\jpfau\Desktop\Project\GenesisGameEngine\tests\test_texture_recreate.cpp;C:\Users\jpfau\Desktop\Project\GenesisGameEngine\build-vs-subsystems\tests\UnitTests.dir\Debug\test_texture_recreate.obj
 C:\Users\jpfau\Desktop\Project\GenesisGameEngine\tests\test_texture_file.cpp;C:\Users\jpfau\Desktop\Project\GenesisGameEngine\build-vs-subsystems\tests\UnitTests.dir\Debug\test_texture_file.obj
+C:\Users\jpfau\Desktop\Project\GenesisGameEngine\tests\test_texture_registry.cpp;C:\Users\jpfau\Desktop\Project\GenesisGameEngine\build-vs-subsystems\tests\UnitTests.dir\Debug\test_texture_registry.obj
 C:\Users\jpfau\Desktop\Project\GenesisGameEngine\tests\test_2d_sprite_smoke.cpp;C:\Users\jpfau\Desktop\Project\GenesisGameEngine\build-vs-subsystems\tests\UnitTests.dir\Debug\test_2d_sprite_smoke.obj
 C:\Users\jpfau\Desktop\Project\GenesisGameEngine\tests\test_2d_sprite_gl_smoke.cpp;C:\Users\jpfau\Desktop\Project\GenesisGameEngine\build-vs-subsystems\tests\UnitTests.dir\Debug\test_2d_sprite_gl_smoke.obj
 C:\Users\jpfau\Desktop\Project\GenesisGameEngine\tests\test_2d_sprite_gl_readback.cpp;C:\Users\jpfau\Desktop\Project\GenesisGameEngine\build-vs-subsystems\tests\UnitTests.dir\Debug\test_2d_sprite_gl_readback.obj

@@ -23,6 +23,7 @@ add_executable(UnitTests
     test_shader_recreate.cpp
     test_texture_recreate.cpp
     test_texture_file.cpp
+    test_texture_registry.cpp
     test_2d_sprite_smoke.cpp
     test_2d_sprite_gl_smoke.cpp
     test_2d_sprite_gl_readback.cpp
