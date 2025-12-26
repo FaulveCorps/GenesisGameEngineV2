@@ -33,15 +33,11 @@ void ShaderRegistry::DestroyAllOnRenderer(IGraphicsAPI* renderer) {
 
 void ShaderRegistry::UploadAllToRenderer(IGraphicsAPI* renderer) {
     std::lock_guard<std::mutex> lk(m_mutex);
-    std::cout << "ShaderRegistry::UploadAllToRenderer -> enter (count=" << m_shaders.size() << ")" << std::endl;
     for (auto* s : m_shaders) {
         if (s) {
-            std::cout << "ShaderRegistry: uploading shader ptr=" << s << " before programID=" << s->GetID() << std::endl;
             s->UploadToRenderer(renderer);
-            std::cout << "ShaderRegistry: after upload shader ptr=" << s << " programID=" << s->GetID() << std::endl;
         }
     }
-    std::cout << "ShaderRegistry::UploadAllToRenderer -> exit" << std::endl;
-}
+} 
 
 } // namespace Genesis::Engine

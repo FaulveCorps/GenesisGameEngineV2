@@ -6,14 +6,13 @@ namespace Genesis::Engine {
 
 class NullShaderSubsystem : public IShaderSubsystem {
 public:
-    bool Init() override { std::cout << "NullShader: Init\n"; return true; }
+    bool Init() override { return true; }
     void Update(double /*dt*/) override {}
-    void Shutdown() override { std::cout << "NullShader: Shutdown\n"; }
+    void Shutdown() override {}
     std::string Name() const override { return "null"; }
 
     unsigned int CreateProgramFromSource(const std::string& /*vertexSrc*/, const std::string& /*fragmentSrc*/) override {
         // Null backend: pretend compilation succeeded but return 0 to indicate "no program"
-        std::cout << "NullShader: CreateProgramFromSource -> returning 0 (no-op)" << std::endl;
         return 0;
     }
 

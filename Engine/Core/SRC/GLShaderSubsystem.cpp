@@ -58,7 +58,6 @@ static bool Resolve(void** fnPtr, const char* name) {
 #endif
 
 static unsigned int CompileShaderInternal(unsigned int type, const std::string& source) {
-    std::cout << "GLShaderSubsystem::CompileShader -> type=" << type << " src_len=" << source.size() << std::endl;
     Resolve((void**)&pglCreateShader, "glCreateShader");
     Resolve((void**)&pglShaderSource, "glShaderSource");
     Resolve((void**)&pglCompileShader, "glCompileShader");
@@ -94,11 +93,10 @@ class GLShaderSubsystem : public IShaderSubsystem {
 public:
     bool Init() override {
         // Ensure there's a current GL context; otherwise Init can still succeed but CreateProgram will fail until context available
-        std::cout << "GLShader: Init (SDL_GL_GetCurrentContext=" << (void*)SDL_GL_GetCurrentContext() << ")" << std::endl;
         return true;
     }
     void Update(double /*dt*/) override {}
-    void Shutdown() override { std::cout << "GLShader: Shutdown" << std::endl; }
+    void Shutdown() override {}
     std::string Name() const override { return "opengl"; }
 
     unsigned int CreateProgramFromSource(const std::string& vertexSrc, const std::string& fragmentSrc) override {
@@ -151,7 +149,6 @@ public:
         if (pglDetachShader) { pglDetachShader(program, vs); pglDetachShader(program, fs); }
         if (pglDeleteShader) { pglDeleteShader(vs); pglDeleteShader(fs); }
 
-        std::cout << "GLShader: created program " << program << std::endl;
         return program;
     }
 
@@ -161,7 +158,6 @@ public:
         Resolve((void**)&pglDeleteProgram, "glDeleteProgram");
         if (pglDeleteProgram) {
             pglDeleteProgram(programID);
-            std::cout << "GLShader: deleted program " << programID << std::endl;
         } else {
             std::cerr << "GLShader: glDeleteProgram not available" << std::endl;
         }

@@ -64,7 +64,6 @@ static bool Resolve(void** fnPtr, const char* name) {
 #endif
 
 static unsigned int CompileShader(unsigned int type, const std::string& source) {
-    std::cout << "CompileShader -> type=" << type << " source_len=" << source.size() << std::endl;
     Resolve((void**)&pglCreateShader, "glCreateShader");
     Resolve((void**)&pglShaderSource, "glShaderSource");
     Resolve((void**)&pglCompileShader, "glCompileShader");
@@ -72,22 +71,18 @@ static unsigned int CompileShader(unsigned int type, const std::string& source) 
     Resolve((void**)&pglGetShaderInfoLog, "glGetShaderInfoLog");
     Resolve((void**)&pglDeleteShader, "glDeleteShader");
 
-    std::cout << "CompileShader -> ptrs: pglCreateShader=" << (void*)pglCreateShader << " pglShaderSource=" << (void*)pglShaderSource << " pglCompileShader=" << (void*)pglCompileShader << std::endl;
-
     if (!pglCreateShader || !pglShaderSource || !pglCompileShader || !pglGetShaderiv || !pglGetShaderInfoLog || !pglDeleteShader) {
         std::cerr << "GL shader functions not available" << std::endl;
         return 0;
     }
 
     unsigned int id = pglCreateShader(type);
-    std::cout << "CompileShader -> glCreateShader id=" << id << std::endl;
     const char* src = source.c_str();
     pglShaderSource(id, 1, &src, nullptr);
     pglCompileShader(id);
 
     int result = 0;
     pglGetShaderiv(id, GL_COMPILE_STATUS, &result);
-    std::cout << "CompileShader -> compile status=" << result << std::endl;
     if (result == GL_FALSE) {
         int length = 0;
         pglGetShaderiv(id, GL_INFO_LOG_LENGTH, &length);
@@ -123,7 +118,6 @@ std::shared_ptr<Shader> Shader::FromSource(const std::string& vertexSrc, const s
 
 void Shader::UploadToRenderer(IGraphicsAPI* /*renderer*/) {
     // Prefer using an installed shader subsystem when available.
-    std::cout << "Shader::UploadToRenderer -> enter (programID_=" << programID_ << ", SDL_GL_GetCurrentContext=" << (void*)SDL_GL_GetCurrentContext() << ")" << std::endl;
     if (programID_) return; // already built
     if (vertexSrcGL_.empty() || fragmentSrcGL_.empty()) return;
 
@@ -142,7 +136,6 @@ void Shader::UploadToRenderer(IGraphicsAPI* /*renderer*/) {
         unsigned int pid = shaderSub->CreateProgramFromSource(vertexSrcGL_, fragmentSrcGL_);
         if (pid) {
             programID_ = pid;
-            std::cout << "Shader::UploadToRenderer -> created program via subsystem " << programID_ << std::endl;
             return;
         }
         // if subsystem failed, fall back to legacy GL compile path
@@ -151,10 +144,8 @@ void Shader::UploadToRenderer(IGraphicsAPI* /*renderer*/) {
 
     // Fallback: legacy local GL compile (as before)
     unsigned int vs = CompileShader(GL_VERTEX_SHADER, vertexSrcGL_);
-    std::cout << "Shader::UploadToRenderer -> vs=" << vs << std::endl;
     if (!vs) return;
     unsigned int fs = CompileShader(GL_FRAGMENT_SHADER, fragmentSrcGL_);
-    std::cout << "Shader::UploadToRenderer -> fs=" << fs << std::endl;
     if (!fs) { if (vs) pglDeleteShader(vs); return; }
 
     Resolve((void**)&pglCreateProgram, "glCreateProgram");
@@ -173,7 +164,6 @@ void Shader::UploadToRenderer(IGraphicsAPI* /*renderer*/) {
     }
 
     unsigned int program = pglCreateProgram();
-    std::cout << "Shader::UploadToRenderer -> created program handle=" << program << std::endl;
     pglAttachShader(program, vs);
     pglAttachShader(program, fs);
 
@@ -185,7 +175,6 @@ void Shader::UploadToRenderer(IGraphicsAPI* /*renderer*/) {
 
     int linked = 0;
     pglGetProgramiv(program, GL_LINK_STATUS, &linked);
-    std::cout << "Shader::UploadToRenderer -> link status=" << linked << std::endl;
     if (!linked) {
         int length = 0;
         pglGetProgramiv(program, GL_INFO_LOG_LENGTH, &length);
@@ -210,8 +199,7 @@ void Shader::UploadToRenderer(IGraphicsAPI* /*renderer*/) {
     }
 
     programID_ = program;
-    std::cout << "Shader::UploadToRenderer -> created GL program " << programID_ << std::endl;
-}
+} 
 
 void Shader::DestroyOnRenderer(IGraphicsAPI* /*renderer*/) {
     if (!programID_) return;
@@ -232,7 +220,6 @@ void Shader::DestroyOnRenderer(IGraphicsAPI* /*renderer*/) {
     Resolve((void**)&pglDeleteProgram, "glDeleteProgram");
     if (pglDeleteProgram) {
         pglDeleteProgram(programID_);
-        std::cout << "Shader::DestroyOnRenderer -> deleted GL program " << programID_ << std::endl;
     } else {
         std::cerr << "Shader::DestroyOnRenderer -> glDeleteProgram not available" << std::endl;
     }
@@ -244,12 +231,11 @@ void Shader::Use() const {
         Resolve((void**)&pglUseProgram, "glUseProgram");
         if (pglUseProgram) {
             pglUseProgram(programID_);
-            std::cout << "Shader::Use -> program " << programID_ << " bound" << std::endl;
         } else {
             std::cerr << "Shader::Use -> glUseProgram not available" << std::endl;
         }
     }
-}
+} 
 
 Shader::~Shader() {
     // Ensure removal from registry and cleanup
