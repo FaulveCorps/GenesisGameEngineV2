@@ -59,6 +59,8 @@ add_library(EngineCore STATIC
     SRC/NullNetwork.cpp
     SRC/NullSave.cpp
     SRC/FileSave.cpp
+    SRC/NullScripting.cpp
+    SRC/LuaScripting.cpp
     SRC/ModManager.cpp
     SRC/EnetNetwork.cpp
     SRC/MiniaudioAudio.cpp
@@ -132,6 +134,22 @@ if (BULLET_INCLUDE_DIR)
   endif()
 else()
   message(STATUS "Bullet not found; BulletPhysics will be disabled at runtime")
+endif()
+
+# Lua (optional) - scripting backend
+find_path(LUA_INCLUDE_DIR NAMES lua.hpp lua.h PATHS "${VCPKG_INSTALLED}/include" NO_DEFAULT_PATH)
+if (LUA_INCLUDE_DIR)
+  find_library(LUA_LIBRARY NAMES lua53 lua54 lua lua5.3 lua5.4 PATHS "${VCPKG_INSTALLED}/lib" NO_DEFAULT_PATH)
+  if (LUA_LIBRARY)
+    message(STATUS "Lua found: include=${LUA_INCLUDE_DIR} library=${LUA_LIBRARY}")
+    target_include_directories(EngineCore PRIVATE ${LUA_INCLUDE_DIR})
+    target_link_libraries(EngineCore PRIVATE ${LUA_LIBRARY})
+    target_compile_definitions(EngineCore PRIVATE HAVE_LUA=1)
+  else()
+    message(STATUS "Lua headers found but library missing; Lua backend will be disabled")
+  endif()
+else()
+  message(STATUS "Lua not found; Lua backend will be disabled at runtime")
 endif()
 
 # ENet (optional) - lightweight UDP-based networking

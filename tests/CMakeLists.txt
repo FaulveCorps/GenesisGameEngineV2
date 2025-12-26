@@ -41,6 +41,7 @@ add_executable(UnitTests
     test_network_enet.cpp
     test_save.cpp
     test_mods.cpp
+    test_scripting.cpp
     ${catch2_SOURCE_DIR}/extras/catch_amalgamated.cpp
 )
 

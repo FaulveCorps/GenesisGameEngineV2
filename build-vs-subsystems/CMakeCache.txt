@@ -576,6 +576,9 @@ GenesisTools_IS_TOP_LEVEL:STATIC=OFF
 //Value Computed by CMake
 GenesisTools_SOURCE_DIR:STATIC=C:/Users/jpfau/Desktop/Project/GenesisGameEngine/Tools
 
+//Path to a file.
+LUA_INCLUDE_DIR:PATH=LUA_INCLUDE_DIR-NOTFOUND
+
 //Command to build the project
 MAKECOMMAND:STRING="C:\Program Files\CMake\bin\cmake.exe" --build . --config "${CTEST_CONFIGURATION_TYPE}"
 

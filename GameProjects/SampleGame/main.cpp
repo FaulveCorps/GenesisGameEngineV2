@@ -383,6 +383,14 @@ int main(int argc, char** argv) {
         std::cout << "SampleGame: File save subsystem created" << std::endl;
     }
 
+    // Scripting: try Lua backend, fall back to null
+    if (!Genesis::Engine::CreateScriptingSubsystem("lua")) {
+        std::cout << "SampleGame: Lua scripting backend not available; using null scripting" << std::endl;
+        Genesis::Engine::CreateScriptingSubsystem("null");
+    } else {
+        std::cout << "SampleGame: Lua scripting subsystem created" << std::endl;
+    }
+
     // Mods: scan mods/ directory and display discovered mods
     {
         Genesis::Engine::ModManager mm;
@@ -392,6 +400,18 @@ int main(int argc, char** argv) {
             std::cout << "SampleGame: discovered " << mods.size() << " mods" << std::endl;
             for (auto &m : mods) {
                 std::cout << "  mod: id='" << m.id << "' name='" << m.name << "' version='" << m.version << "' path='" << m.path.string() << "'" << std::endl;
+            }
+
+            // If we have a scripting backend available, attempt to execute a 'mod.lua' in each mod folder
+            auto sc = Genesis::Engine::GetScriptingSubsystem();
+            if (sc && sc->Name() != "null") {
+                for (auto &m : mods) {
+                    auto script = m.path / "mod.lua";
+                    if (std::filesystem::exists(script) && std::filesystem::is_regular_file(script)) {
+                        if (sc->ExecuteFile(script.string())) std::cout << "Executed mod script: " << script.string() << std::endl;
+                        else std::cout << "Failed to execute mod script: " << script.string() << std::endl;
+                    }
+                }
             }
         } else {
             std::cout << "SampleGame: no mods directory found" << std::endl;

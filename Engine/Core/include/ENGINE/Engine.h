@@ -12,6 +12,7 @@ class IPhysics;
 class IInput;
 class INetwork;
 class ISave;
+class IScripting;
 
 bool Init(const std::string& config = "");
 void Shutdown();
@@ -42,5 +43,9 @@ std::shared_ptr<INetwork> GetNetworkSubsystem();
 // Save subsystem helpers
 bool CreateSaveSubsystem(const std::string& name);
 std::shared_ptr<ISave> GetSaveSubsystem();
+
+// Scripting subsystem helpers
+bool CreateScriptingSubsystem(const std::string& name);
+std::shared_ptr<IScripting> GetScriptingSubsystem();
 
 }

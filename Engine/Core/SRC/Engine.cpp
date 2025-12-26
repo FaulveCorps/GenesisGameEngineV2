@@ -6,6 +6,7 @@
 #include "engine/IInput.h"
 #include "engine/INetwork.h"
 #include "engine/ISave.h"
+#include "engine/IScripting.h"
 #include <iostream>
 
 namespace Genesis::Engine {
@@ -22,6 +23,8 @@ void RegisterSDLInputFactory();
 void RegisterNullNetworkFactory();
 void RegisterNullSaveFactory();
 void RegisterFileSaveFactory();
+void RegisterNullScriptingFactory();
+void RegisterLuaScriptingFactory();
 
 // Subsystems manager used for created subsystem instances
 static SubsystemManager g_subsystems;
@@ -122,6 +125,9 @@ static std::shared_ptr<INetwork> g_networkSubsystem;
 // Save subsystem handle (optional; managed by Engine)
 static std::shared_ptr<ISave> g_saveSubsystem;
 
+// Scripting subsystem handle (optional; managed by Engine)
+static std::shared_ptr<IScripting> g_scriptingSubsystem;
+
 bool CreateNetworkSubsystem(const std::string& name) {
     auto inst = g_subsystems.CreateSubsystem("Network", name);
     if (!inst) return false;
@@ -141,6 +147,24 @@ std::shared_ptr<INetwork> GetNetworkSubsystem() {
     return g_networkSubsystem;
 }
 
+bool CreateScriptingSubsystem(const std::string& name) {
+    auto inst = g_subsystems.CreateSubsystem("Scripting", name);
+    if (!inst) return false;
+    // Try to cast to IScripting
+    auto sc = std::dynamic_pointer_cast<IScripting>(inst);
+    if (!sc) {
+        std::cerr << "CreateScriptingSubsystem: created instance is not IScripting" << std::endl;
+        inst->Shutdown();
+        return false;
+    }
+    g_scriptingSubsystem = sc;
+    std::cout << "CreateScriptingSubsystem: created scripting subsystem '" << name << "'" << std::endl;
+    return true;
+}
+
+std::shared_ptr<IScripting> GetScriptingSubsystem() {
+    return g_scriptingSubsystem;
+}
 bool CreateSaveSubsystem(const std::string& name) {
     auto inst = g_subsystems.CreateSubsystem("Save", name);
     if (!inst) return false;
@@ -179,6 +203,9 @@ bool Init(const std::string& config) {
     // Save
     RegisterNullSaveFactory();
     RegisterFileSaveFactory();
+    // Scripting
+    RegisterNullScriptingFactory();
+    RegisterLuaScriptingFactory();
 
     // Create default null subsystems so code that expects them can rely on them.
     CreateShaderSubsystem("null");
@@ -187,6 +214,7 @@ bool Init(const std::string& config) {
     CreateInputSubsystem("null");
     CreateNetworkSubsystem("null");
     CreateSaveSubsystem("null");
+    CreateScriptingSubsystem("null");
 
     std::cout << "Genesis Engine initialized (config='" << config << "')" << std::endl;
     return true;
