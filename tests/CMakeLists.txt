@@ -39,6 +39,7 @@ add_executable(UnitTests
     test_input_gamepad.cpp
     test_network.cpp
     test_network_enet.cpp
+    test_save.cpp
     ${catch2_SOURCE_DIR}/extras/catch_amalgamated.cpp
 )
 

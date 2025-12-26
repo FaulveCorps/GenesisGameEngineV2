@@ -28,6 +28,7 @@
 #include "engine/IPhysics.h"
 #include "engine/IInput.h"
 #include "engine/INetwork.h"
+#include "engine/ISave.h"
 #include <thread>
 #include <chrono>
 #include <filesystem>
@@ -299,6 +300,8 @@ int main(int argc, char** argv) {
         std::cout << "  --force-vulkan-swapchain Force swapchain creation even when SDL indicates no dynamic Vulkan support (risky)" << std::endl;
         std::cout << "  --net-host [port]       Host a small ENet server on the specified port" << std::endl;
         std::cout << "  --net-connect host:port Connect to a remote ENet server (host:port)" << std::endl;
+        std::cout << "  F5                      Save to 'autosave' slot\n" << std::endl;
+        std::cout << "  F6                      Load from 'autosave' slot\n" << std::endl;
         window.Shutdown();
         Genesis::Engine::Shutdown();
         return 0;
@@ -372,6 +375,14 @@ int main(int argc, char** argv) {
         }
     }
 
+    // Save subsystem: try file backend, fall back to null
+    if (!Genesis::Engine::CreateSaveSubsystem("file")) {
+        std::cout << "SampleGame: File save backend not available; using null save" << std::endl;
+        Genesis::Engine::CreateSaveSubsystem("null");
+    } else {
+        std::cout << "SampleGame: File save subsystem created" << std::endl;
+    }
+
     auto runFrame = [&](void){
         profiler.BeginFrame();
         // Update input subsystem once per frame after events are polled
@@ -394,6 +405,27 @@ int main(int argc, char** argv) {
 
         if (currentRenderer) currentRenderer->EndFrame();
         std::cout << "Main: after renderer.EndFrame" << std::endl;
+
+        // Save/load hotkeys
+        if (auto in = Genesis::Engine::GetInputSubsystem()) {
+            if (in->WasKeyPressed(SDL_SCANCODE_F5)) {
+                auto sv = Genesis::Engine::GetSaveSubsystem();
+                if (sv) {
+                    auto now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+                    std::string data = "Saved at: " + std::to_string(now);
+                    if (sv->Save("autosave", data)) std::cout << "Saved autosave slot" << std::endl;
+                    else std::cout << "Save failed" << std::endl;
+                }
+            }
+            if (in->WasKeyPressed(SDL_SCANCODE_F6)) {
+                auto sv = Genesis::Engine::GetSaveSubsystem();
+                if (sv) {
+                    std::string data;
+                    if (sv->Load("autosave", data)) std::cout << "Loaded autosave: " << data << std::endl;
+                    else std::cout << "No autosave present" << std::endl;
+                }
+            }
+        }
 
         // If the renderer is the software CPU renderer, read back the offscreen buffer each frame and present it
         if (auto sr = dynamic_cast<Genesis::Engine::SoftwareRenderer*>(Genesis::Engine::RendererManager::GetRenderer())) {

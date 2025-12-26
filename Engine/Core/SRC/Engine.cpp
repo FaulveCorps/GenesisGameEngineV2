@@ -5,6 +5,7 @@
 #include "engine/IPhysics.h"
 #include "engine/IInput.h"
 #include "engine/INetwork.h"
+#include "engine/ISave.h"
 #include <iostream>
 
 namespace Genesis::Engine {
@@ -19,6 +20,8 @@ void RegisterBulletFactory();
 void RegisterNullInputFactory();
 void RegisterSDLInputFactory();
 void RegisterNullNetworkFactory();
+void RegisterNullSaveFactory();
+void RegisterFileSaveFactory();
 
 // Subsystems manager used for created subsystem instances
 static SubsystemManager g_subsystems;
@@ -116,6 +119,9 @@ std::shared_ptr<IInput> GetInputSubsystem() {
 // Network subsystem handle (optional; managed by Engine)
 static std::shared_ptr<INetwork> g_networkSubsystem;
 
+// Save subsystem handle (optional; managed by Engine)
+static std::shared_ptr<ISave> g_saveSubsystem;
+
 bool CreateNetworkSubsystem(const std::string& name) {
     auto inst = g_subsystems.CreateSubsystem("Network", name);
     if (!inst) return false;
@@ -135,6 +141,25 @@ std::shared_ptr<INetwork> GetNetworkSubsystem() {
     return g_networkSubsystem;
 }
 
+bool CreateSaveSubsystem(const std::string& name) {
+    auto inst = g_subsystems.CreateSubsystem("Save", name);
+    if (!inst) return false;
+    // Try to cast to ISave
+    auto sv = std::dynamic_pointer_cast<ISave>(inst);
+    if (!sv) {
+        std::cerr << "CreateSaveSubsystem: created instance is not ISave" << std::endl;
+        inst->Shutdown();
+        return false;
+    }
+    g_saveSubsystem = sv;
+    std::cout << "CreateSaveSubsystem: created save subsystem '" << name << "'" << std::endl;
+    return true;
+}
+
+std::shared_ptr<ISave> GetSaveSubsystem() {
+    return g_saveSubsystem;
+}
+
 bool Init(const std::string& config) {
     // Ensure built-in subsystems are registered
     RegisterNullAudioFactory();
@@ -151,6 +176,9 @@ bool Init(const std::string& config) {
     RegisterSDLInputFactory();
     // Network
     RegisterNullNetworkFactory();
+    // Save
+    RegisterNullSaveFactory();
+    RegisterFileSaveFactory();
 
     // Create default null subsystems so code that expects them can rely on them.
     CreateShaderSubsystem("null");
@@ -158,6 +186,7 @@ bool Init(const std::string& config) {
     CreatePhysicsSubsystem("null");
     CreateInputSubsystem("null");
     CreateNetworkSubsystem("null");
+    CreateSaveSubsystem("null");
 
     std::cout << "Genesis Engine initialized (config='" << config << "')" << std::endl;
     return true;

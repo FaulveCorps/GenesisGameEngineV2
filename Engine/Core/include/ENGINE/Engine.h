@@ -11,6 +11,7 @@ class IAudio;
 class IPhysics;
 class IInput;
 class INetwork;
+class ISave;
 
 bool Init(const std::string& config = "");
 void Shutdown();
@@ -37,5 +38,9 @@ std::shared_ptr<IInput> GetInputSubsystem();
 // Network subsystem helpers
 bool CreateNetworkSubsystem(const std::string& name);
 std::shared_ptr<INetwork> GetNetworkSubsystem();
+
+// Save subsystem helpers
+bool CreateSaveSubsystem(const std::string& name);
+std::shared_ptr<ISave> GetSaveSubsystem();
 
 }
