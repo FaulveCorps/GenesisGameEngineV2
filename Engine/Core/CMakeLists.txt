@@ -169,6 +169,23 @@ else()
   message(STATUS "Box2D not found; Box2D backend will be disabled at runtime")
 endif()
 
+# wasm3 (optional) - lightweight WASM runtime for sandboxed mods
+# Prefer vcpkg-provided wasm3 if available; otherwise WASM mod support will be disabled.
+find_path(WASM3_INCLUDE_DIR NAMES wasm3.h PATHS "${VCPKG_INSTALLED}/include" NO_DEFAULT_PATH)
+if (WASM3_INCLUDE_DIR)
+  find_library(WASM3_LIBRARY NAMES wasm3 PATHS "${VCPKG_INSTALLED}/lib" NO_DEFAULT_PATH)
+  if (WASM3_LIBRARY)
+    message(STATUS "wasm3 found: include=${WASM3_INCLUDE_DIR} lib=${WASM3_LIBRARY}")
+    target_include_directories(EngineCore PUBLIC ${WASM3_INCLUDE_DIR})
+    target_link_libraries(EngineCore PUBLIC ${WASM3_LIBRARY})
+    target_compile_definitions(EngineCore PUBLIC HAVE_WASM3=1)
+  else()
+    message(STATUS "wasm3 headers found but library missing; WASM mod support disabled")
+  endif()
+else()
+  message(STATUS "wasm3 not found; WASM-based mod support will be disabled")
+endif()
+
 # ENet (optional) - lightweight UDP-based networking
 find_path(ENET_INCLUDE_DIR NAMES enet/enet.h enet.h PATHS "${VCPKG_INSTALLED}/include" NO_DEFAULT_PATH)
 if (ENET_INCLUDE_DIR)

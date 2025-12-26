@@ -1,0 +1,14 @@
+# Target labels
+ uvwasi-populate
+# Source files and their labels
+C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/uvwasi-subbuild/CMakeFiles/uvwasi-populate
+C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/uvwasi-subbuild/CMakeFiles/75356f83f655acf626874415c2153b5d/uvwasi-populate.rule
+C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/uvwasi-subbuild/CMakeFiles/829a2b70964edeeb6b2bc87e92aab5ff/uvwasi-populate-complete.rule
+C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/uvwasi-subbuild/CMakeFiles/e237dae3cde03c737407aa24d2199df5/uvwasi-populate-build.rule
+C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/uvwasi-subbuild/CMakeFiles/e237dae3cde03c737407aa24d2199df5/uvwasi-populate-configure.rule
+C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/uvwasi-subbuild/CMakeFiles/e237dae3cde03c737407aa24d2199df5/uvwasi-populate-download.rule
+C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/uvwasi-subbuild/CMakeFiles/e237dae3cde03c737407aa24d2199df5/uvwasi-populate-install.rule
+C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/uvwasi-subbuild/CMakeFiles/e237dae3cde03c737407aa24d2199df5/uvwasi-populate-mkdir.rule
+C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/uvwasi-subbuild/CMakeFiles/e237dae3cde03c737407aa24d2199df5/uvwasi-populate-patch.rule
+C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/uvwasi-subbuild/CMakeFiles/e237dae3cde03c737407aa24d2199df5/uvwasi-populate-test.rule
+C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/uvwasi-subbuild/CMakeFiles/e237dae3cde03c737407aa24d2199df5/uvwasi-populate-update.rule

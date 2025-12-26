@@ -29,6 +29,7 @@
 #include "engine/IInput.h"
 #include "engine/INetwork.h"
 #include "engine/ISave.h"
+#include "engine/WasmRuntime.h"
 #include <thread>
 #include <chrono>
 #include <filesystem>
@@ -435,6 +436,20 @@ int main(int argc, char** argv) {
                         else std::cout << "Failed to execute mod script: " << script.string() << std::endl;
                     }
                 }
+            }
+
+            // WASM mods: load any 'mod.wasm' modules if the runtime is available
+            for (auto &m : mods) {
+                auto wasm = m.path / "mod.wasm";
+                if (std::filesystem::exists(wasm) && std::filesystem::is_regular_file(wasm)) {
+                    if (Genesis::Engine::WasmRuntime::LoadModule(wasm)) std::cout << "Loaded WASM mod: " << wasm.string() << std::endl;
+                    else std::cout << "Failed to load WASM mod: " << wasm.string() << std::endl;
+                }
+            }
+
+            // If physics subsystem is present, register WASM contact forwarders
+            if (auto ph = Genesis::Engine::GetPhysicsSubsystem()) {
+                Genesis::Engine::WasmRuntime::RegisterPhysicsCallbacks(ph);
             }
         } else {
             std::cout << "SampleGame: no mods directory found" << std::endl;

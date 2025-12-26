@@ -12,6 +12,8 @@ struct ModInfo {
     std::string version;
     std::string description;
     std::filesystem::path path;
+    // optional language hint: "lua", "wasm", "cpp"
+    std::string language;
 };
 
 class ModManager {

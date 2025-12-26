@@ -43,6 +43,7 @@ add_executable(UnitTests
     test_save.cpp
     test_mods.cpp
     test_scripting.cpp
+    test_wasm_runtime.cpp
     ${catch2_SOURCE_DIR}/extras/catch_amalgamated.cpp
 )
 

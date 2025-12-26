@@ -1,0 +1,10 @@
+^C:\USERS\JPFAU\DESKTOP\PROJECT\GENESISGAMEENGINE\BUILD-VS-SUBSYSTEMS\_DEPS\WASM3-SUBBUILD\CMAKEFILES\0B4036F7B8FBE2BD9471F841BC796076\GENERATE.STAMP.RULE
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -SC:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/wasm3-subbuild -BC:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/wasm3-subbuild --check-stamp-list CMakeFiles/generate.stamp.list --vs-solution-file C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/wasm3-subbuild/wasm3-populate.sln
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd

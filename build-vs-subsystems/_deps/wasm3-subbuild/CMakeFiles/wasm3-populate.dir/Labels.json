@@ -1,0 +1,46 @@
+{
+	"sources" : 
+	[
+		{
+			"file" : "C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/wasm3-subbuild/CMakeFiles/wasm3-populate"
+		},
+		{
+			"file" : "C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/wasm3-subbuild/CMakeFiles/0b4036f7b8fbe2bd9471f841bc796076/wasm3-populate.rule"
+		},
+		{
+			"file" : "C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/wasm3-subbuild/CMakeFiles/2f47a1d5dcfa0560b58204726d596862/wasm3-populate-complete.rule"
+		},
+		{
+			"file" : "C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/wasm3-subbuild/CMakeFiles/c8d0fcfa493b60a6baf4f2c0ff5c6584/wasm3-populate-build.rule"
+		},
+		{
+			"file" : "C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/wasm3-subbuild/CMakeFiles/c8d0fcfa493b60a6baf4f2c0ff5c6584/wasm3-populate-configure.rule"
+		},
+		{
+			"file" : "C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/wasm3-subbuild/CMakeFiles/c8d0fcfa493b60a6baf4f2c0ff5c6584/wasm3-populate-download.rule"
+		},
+		{
+			"file" : "C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/wasm3-subbuild/CMakeFiles/c8d0fcfa493b60a6baf4f2c0ff5c6584/wasm3-populate-install.rule"
+		},
+		{
+			"file" : "C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/wasm3-subbuild/CMakeFiles/c8d0fcfa493b60a6baf4f2c0ff5c6584/wasm3-populate-mkdir.rule"
+		},
+		{
+			"file" : "C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/wasm3-subbuild/CMakeFiles/c8d0fcfa493b60a6baf4f2c0ff5c6584/wasm3-populate-patch.rule"
+		},
+		{
+			"file" : "C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/wasm3-subbuild/CMakeFiles/c8d0fcfa493b60a6baf4f2c0ff5c6584/wasm3-populate-test.rule"
+		},
+		{
+			"file" : "C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/wasm3-subbuild/CMakeFiles/c8d0fcfa493b60a6baf4f2c0ff5c6584/wasm3-populate-update.rule"
+		}
+	],
+	"target" : 
+	{
+		"labels" : 
+		[
+			"wasm3-populate"
+		],
+		"name" : "wasm3-populate"
+	}
+}

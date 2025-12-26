@@ -1,0 +1,46 @@
+{
+	"sources" : 
+	[
+		{
+			"file" : "C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/libuv-subbuild/CMakeFiles/libuv-populate"
+		},
+		{
+			"file" : "C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/libuv-subbuild/CMakeFiles/a0832c77706942c6e1da80559a733e81/libuv-populate.rule"
+		},
+		{
+			"file" : "C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/libuv-subbuild/CMakeFiles/07c37da0e6d1864ac26bd726ed53814c/libuv-populate-complete.rule"
+		},
+		{
+			"file" : "C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/libuv-subbuild/CMakeFiles/70ca9c26b44d7620a63e53588fe3b24e/libuv-populate-build.rule"
+		},
+		{
+			"file" : "C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/libuv-subbuild/CMakeFiles/70ca9c26b44d7620a63e53588fe3b24e/libuv-populate-configure.rule"
+		},
+		{
+			"file" : "C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/libuv-subbuild/CMakeFiles/70ca9c26b44d7620a63e53588fe3b24e/libuv-populate-download.rule"
+		},
+		{
+			"file" : "C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/libuv-subbuild/CMakeFiles/70ca9c26b44d7620a63e53588fe3b24e/libuv-populate-install.rule"
+		},
+		{
+			"file" : "C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/libuv-subbuild/CMakeFiles/70ca9c26b44d7620a63e53588fe3b24e/libuv-populate-mkdir.rule"
+		},
+		{
+			"file" : "C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/libuv-subbuild/CMakeFiles/70ca9c26b44d7620a63e53588fe3b24e/libuv-populate-patch.rule"
+		},
+		{
+			"file" : "C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/libuv-subbuild/CMakeFiles/70ca9c26b44d7620a63e53588fe3b24e/libuv-populate-test.rule"
+		},
+		{
+			"file" : "C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/libuv-subbuild/CMakeFiles/70ca9c26b44d7620a63e53588fe3b24e/libuv-populate-update.rule"
+		}
+	],
+	"target" : 
+	{
+		"labels" : 
+		[
+			"libuv-populate"
+		],
+		"name" : "libuv-populate"
+	}
+}

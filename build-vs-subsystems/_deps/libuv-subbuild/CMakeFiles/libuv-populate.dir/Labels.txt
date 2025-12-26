@@ -1,0 +1,14 @@
+# Target labels
+ libuv-populate
+# Source files and their labels
+C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/libuv-subbuild/CMakeFiles/libuv-populate
+C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/libuv-subbuild/CMakeFiles/a0832c77706942c6e1da80559a733e81/libuv-populate.rule
+C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/libuv-subbuild/CMakeFiles/07c37da0e6d1864ac26bd726ed53814c/libuv-populate-complete.rule
+C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/libuv-subbuild/CMakeFiles/70ca9c26b44d7620a63e53588fe3b24e/libuv-populate-build.rule
+C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/libuv-subbuild/CMakeFiles/70ca9c26b44d7620a63e53588fe3b24e/libuv-populate-configure.rule
+C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/libuv-subbuild/CMakeFiles/70ca9c26b44d7620a63e53588fe3b24e/libuv-populate-download.rule
+C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/libuv-subbuild/CMakeFiles/70ca9c26b44d7620a63e53588fe3b24e/libuv-populate-install.rule
+C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/libuv-subbuild/CMakeFiles/70ca9c26b44d7620a63e53588fe3b24e/libuv-populate-mkdir.rule
+C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/libuv-subbuild/CMakeFiles/70ca9c26b44d7620a63e53588fe3b24e/libuv-populate-patch.rule
+C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/libuv-subbuild/CMakeFiles/70ca9c26b44d7620a63e53588fe3b24e/libuv-populate-test.rule
+C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/libuv-subbuild/CMakeFiles/70ca9c26b44d7620a63e53588fe3b24e/libuv-populate-update.rule

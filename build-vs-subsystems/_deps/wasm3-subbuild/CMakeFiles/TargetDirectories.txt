@@ -1,0 +1,3 @@
+C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/wasm3-subbuild/CMakeFiles/wasm3-populate.dir
+C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/wasm3-subbuild/CMakeFiles/ALL_BUILD.dir
+C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/wasm3-subbuild/CMakeFiles/ZERO_CHECK.dir

@@ -23,8 +23,14 @@ ASSIMP_LIBRARY:FILEPATH=C:/Users/jpfau/Desktop/Project/GenesisGameEngine/vcpkg/i
 //Path to a file.
 BOX2D_INCLUDE_DIR:PATH=BOX2D_INCLUDE_DIR-NOTFOUND
 
+//Build with machine-specific optimisations
+BUILD_NATIVE:BOOL=ON
+
 //Build the testing tree.
 BUILD_TESTING:BOOL=ON
+
+//WASI implementation
+BUILD_WASI:STRING=uvwasi
 
 //Path to a file.
 BULLET_INCLUDE_DIR:PATH=BULLET_INCLUDE_DIR-NOTFOUND
@@ -529,6 +535,10 @@ FETCHCONTENT_SOURCE_DIR_CATCH2:PATH=
 FETCHCONTENT_SOURCE_DIR_ENTT:PATH=
 
 //When not empty, overrides where to find pre-populated content
+// for libuv
+FETCHCONTENT_SOURCE_DIR_LIBUV:PATH=
+
+//When not empty, overrides where to find pre-populated content
 // for miniaudio
 FETCHCONTENT_SOURCE_DIR_MINIAUDIO:PATH=
 
@@ -540,6 +550,14 @@ FETCHCONTENT_SOURCE_DIR_NLOHMANN_JSON:PATH=
 // for stb
 FETCHCONTENT_SOURCE_DIR_STB:PATH=
 
+//When not empty, overrides where to find pre-populated content
+// for uvwasi
+FETCHCONTENT_SOURCE_DIR_UVWASI:PATH=
+
+//When not empty, overrides where to find pre-populated content
+// for wasm3
+FETCHCONTENT_SOURCE_DIR_WASM3:PATH=
+
 //Enables UPDATE_DISCONNECTED behavior for all content population
 FETCHCONTENT_UPDATES_DISCONNECTED:BOOL=OFF
 
@@ -549,6 +567,9 @@ FETCHCONTENT_UPDATES_DISCONNECTED_CATCH2:BOOL=OFF
 //Enables UPDATE_DISCONNECTED behavior just for population of entt
 FETCHCONTENT_UPDATES_DISCONNECTED_ENTT:BOOL=OFF
 
+//Enables UPDATE_DISCONNECTED behavior just for population of libuv
+FETCHCONTENT_UPDATES_DISCONNECTED_LIBUV:BOOL=OFF
+
 //Enables UPDATE_DISCONNECTED behavior just for population of miniaudio
 FETCHCONTENT_UPDATES_DISCONNECTED_MINIAUDIO:BOOL=OFF
 
@@ -557,6 +578,12 @@ FETCHCONTENT_UPDATES_DISCONNECTED_NLOHMANN_JSON:BOOL=OFF
 
 //Enables UPDATE_DISCONNECTED behavior just for population of stb
 FETCHCONTENT_UPDATES_DISCONNECTED_STB:BOOL=OFF
+
+//Enables UPDATE_DISCONNECTED behavior just for population of uvwasi
+FETCHCONTENT_UPDATES_DISCONNECTED_UVWASI:BOOL=OFF
+
+//Enables UPDATE_DISCONNECTED behavior just for population of wasm3
+FETCHCONTENT_UPDATES_DISCONNECTED_WASM3:BOOL=OFF
 
 //Git command line client
 GIT_EXECUTABLE:FILEPATH=C:/Program Files/Git/cmd/git.exe
@@ -829,10 +856,16 @@ Vulkan_INCLUDE_DIR:PATH=C:/VulkanSDK/New/include
 Vulkan_LIBRARY:FILEPATH=C:/VulkanSDK/New/Lib/vulkan-1.lib
 
 //Path to a file.
+WASM3_INCLUDE_DIR:PATH=WASM3_INCLUDE_DIR-NOTFOUND
+
+//Path to a file.
 WGPU_INCLUDE_DIR:PATH=WGPU_INCLUDE_DIR-NOTFOUND
 
 //Path to a library.
 WGPU_LIBRARY:FILEPATH=C:/Users/jpfau/Desktop/Project/GenesisGameEngine/vcpkg/installed/x64-windows/lib/webgpu_dawn.lib
+
+//Link to a system libuv library instead of bundling
+WITH_SYSTEM_LIBUV:BOOL=OFF
 
 //Value Computed by CMake
 asset_packer_BINARY_DIR:STATIC=C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/Tools/asset_packer
@@ -861,11 +894,31 @@ shader_compiler_IS_TOP_LEVEL:STATIC=OFF
 //Value Computed by CMake
 shader_compiler_SOURCE_DIR:STATIC=C:/Users/jpfau/Desktop/Project/GenesisGameEngine/Tools/shader_compiler
 
+//Value Computed by CMake
+uvwasi_BINARY_DIR:STATIC=C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/uvwasi-build
+
+//Value Computed by CMake
+uvwasi_IS_TOP_LEVEL:STATIC=OFF
+
+//Value Computed by CMake
+uvwasi_SOURCE_DIR:STATIC=C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/uvwasi-src
+
+//Value Computed by CMake
+wasm3_BINARY_DIR:STATIC=C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/wasm3-build
+
+//Value Computed by CMake
+wasm3_IS_TOP_LEVEL:STATIC=OFF
+
+//Value Computed by CMake
+wasm3_SOURCE_DIR:STATIC=C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/wasm3-src
+
 
 ########################
 # INTERNAL cache entries
 ########################
 
+//STRINGS property for variable: BUILD_WASI
+BUILD_WASI-STRINGS:INTERNAL=none;simple;uvwasi;metawasi
 //ADVANCED property for variable: CMAKE_AR
 CMAKE_AR-ADVANCED:INTERNAL=1
 //This is the directory where this CMakeCache.txt was created

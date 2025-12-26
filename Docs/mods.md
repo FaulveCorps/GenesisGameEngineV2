@@ -26,6 +26,8 @@ How to use
   - `engine.create_distance_joint(a, b, ax, ay, bx, by)` — create a distance joint between two bodies
   - `engine.apply_impulse(handle, ix, iy)` — apply a 2D impulse to a body (z ignored)
 
+- WASM mods: if `mod.wasm` is present in a mod folder and the engine is built with `wasm3` support, the engine will attempt to load the module at startup and call its exported `mod_init()` function (if present). If the module exports `on_contact_begin` and/or `on_contact_end` the engine will invoke them when physics contact events occur (two integer arguments, body handles). WASM modules should export simple functions with integer parameters for compatibility with the initial runtime.
+
 Example `mod.lua` snippet:
 ```lua
 -- create a Box2D backend (if available) and spawn two boxes connected by a joint

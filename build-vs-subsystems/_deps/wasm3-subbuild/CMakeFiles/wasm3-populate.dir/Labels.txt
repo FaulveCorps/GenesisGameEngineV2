@@ -1,0 +1,14 @@
+# Target labels
+ wasm3-populate
+# Source files and their labels
+C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/wasm3-subbuild/CMakeFiles/wasm3-populate
+C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/wasm3-subbuild/CMakeFiles/0b4036f7b8fbe2bd9471f841bc796076/wasm3-populate.rule
+C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/wasm3-subbuild/CMakeFiles/2f47a1d5dcfa0560b58204726d596862/wasm3-populate-complete.rule
+C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/wasm3-subbuild/CMakeFiles/c8d0fcfa493b60a6baf4f2c0ff5c6584/wasm3-populate-build.rule
+C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/wasm3-subbuild/CMakeFiles/c8d0fcfa493b60a6baf4f2c0ff5c6584/wasm3-populate-configure.rule
+C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/wasm3-subbuild/CMakeFiles/c8d0fcfa493b60a6baf4f2c0ff5c6584/wasm3-populate-download.rule
+C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/wasm3-subbuild/CMakeFiles/c8d0fcfa493b60a6baf4f2c0ff5c6584/wasm3-populate-install.rule
+C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/wasm3-subbuild/CMakeFiles/c8d0fcfa493b60a6baf4f2c0ff5c6584/wasm3-populate-mkdir.rule
+C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/wasm3-subbuild/CMakeFiles/c8d0fcfa493b60a6baf4f2c0ff5c6584/wasm3-populate-patch.rule
+C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/wasm3-subbuild/CMakeFiles/c8d0fcfa493b60a6baf4f2c0ff5c6584/wasm3-populate-test.rule
+C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/wasm3-subbuild/CMakeFiles/c8d0fcfa493b60a6baf4f2c0ff5c6584/wasm3-populate-update.rule

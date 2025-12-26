@@ -1,0 +1,3 @@
+C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/libuv-subbuild/CMakeFiles/libuv-populate.dir
+C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/libuv-subbuild/CMakeFiles/ALL_BUILD.dir
+C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/libuv-subbuild/CMakeFiles/ZERO_CHECK.dir

@@ -47,6 +47,7 @@ bool ModManager::Scan(const std::filesystem::path& modsDir) {
                     if (j.contains("name")) info.name = j["name"].get<std::string>();
                     if (j.contains("version")) info.version = j["version"].get<std::string>();
                     if (j.contains("description")) info.description = j["description"].get<std::string>();
+                    if (j.contains("language")) info.language = j["language"].get<std::string>();
                 } catch (...) {
                     std::cerr << "ModManager: failed to parse manifest " << manifest.string() << std::endl;
                 }
@@ -69,6 +70,7 @@ bool ModManager::Scan(const std::filesystem::path& modsDir) {
                 auto name = find_str("name"); if (!name.empty()) info.name = name;
                 auto version = find_str("version"); if (!version.empty()) info.version = version;
                 auto desc = find_str("description"); if (!desc.empty()) info.description = desc;
+                auto lang = find_str("language"); if (!lang.empty()) info.language = lang;
 #endif
             }
             m_mods.push_back(info);
