@@ -41,19 +41,34 @@ jobs:
           Write-Host "Installing sdl2 and assimp via vcpkg"
           .\vcpkg\vcpkg.exe install sdl2:x64-windows assimp:x64-windows --disable-metrics
 
-      - name: Configure CMake (Visual Studio 17 2022 + vcpkg toolchain)
+      - name: Configure CMake (Ninja + vcpkg toolchain)
         shell: powershell
         run: |
-          Write-Host "Configuring CMake (Visual Studio 17 2022, x64) using vcpkg toolchain..."
+          Write-Host "Configuring CMake (Ninja) using vcpkg toolchain..."
           $toolchain = "${{ github.workspace }}\\vcpkg\\scripts\\buildsystems\\vcpkg.cmake"
-          cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Debug -DCMAKE_TOOLCHAIN_FILE="$toolchain" -DVCPKG_TARGET_TRIPLET="x64-windows" 2>&1 | Tee-Object -FilePath cmake_configure.log -Encoding UTF8
-          Write-Host "---- Begin cmake_configure.log ----"
-          Get-Content cmake_configure.log -Raw
-          Write-Host "---- End cmake_configure.log ----"
+          cmake -S . -B build -G "Ninja" -DCMAKE_BUILD_TYPE=Debug -DCMAKE_TOOLCHAIN_FILE="$toolchain" -DVCPKG_TARGET_TRIPLET="x64-windows" 2>&1 | Tee-Object -FilePath cmake_configure.log -Encoding UTF8
           if ($LASTEXITCODE -ne 0) {
             Write-Host "CMake configure failed. See cmake_configure.log for details."
             Exit $LASTEXITCODE
           }
+
+      - name: Dump CMake configure log
+        if: always()
+        shell: powershell
+        run: |
+          Write-Host "==== cmake_configure.log contents ===="
+          if (Test-Path cmake_configure.log) {
+            Get-Content cmake_configure.log -Encoding UTF8 | ForEach-Object { Write-Host $_ }
+          } else {
+            Write-Host "cmake_configure.log not found"
+          }
+
+      - name: List files for artifacts
+        if: always()
+        shell: powershell
+        run: |
+          Write-Host "==== Listing workspace files (for artifact upload) ===="
+          Get-ChildItem -Recurse -File | ForEach-Object { Write-Host "$($_.FullName) - $($_.Length) bytes" }
 
       - name: Build SampleGame
         shell: powershell
