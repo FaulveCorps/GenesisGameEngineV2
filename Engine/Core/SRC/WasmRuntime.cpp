@@ -257,6 +257,8 @@ void WasmRuntime::RegisterPhysicsCallbacks(std::shared_ptr<IPhysics> phys) {
 bool WasmRuntime::Init() { std::cout << "WasmRuntime: wasm3 not available; runtime disabled" << std::endl; return false; }
 void WasmRuntime::Shutdown() {}
 bool WasmRuntime::LoadModule(const std::filesystem::path& /*modulePath*/) { return false; }
+// Load from bytes: no-op when wasm3 not available
+bool WasmRuntime::LoadModuleFromBytes(const std::string& /*moduleName*/, const std::vector<uint8_t>& /*bytes*/) { return false; }
 bool WasmRuntime::CallExported(const std::string& /*moduleName*/, const std::string& /*funcName*/, const std::vector<std::string>& /*args*/) { return false; }
 void WasmRuntime::RegisterPhysicsCallbacks(std::shared_ptr<IPhysics> /*phys*/) { }
 std::vector<std::string> WasmRuntime::LoadedModules() { return {}; }

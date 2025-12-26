@@ -1,8 +1,15 @@
 cmake_minimum_required(VERSION 3.16)
 project(EngineCore LANGUAGES CXX)
 
-# Manually set paths to vcpkg-installed packages
-set(VCPKG_INSTALLED "${CMAKE_SOURCE_DIR}/vcpkg/installed/x64-windows" CACHE PATH "vcpkg installed directory")
+# Determine vcpkg installed directory based on the selected triplet or environment
+if (NOT DEFINED VCPKG_INSTALLED)
+  if (DEFINED VCPKG_TARGET_TRIPLET)
+    set(VCPKG_INSTALLED "${CMAKE_SOURCE_DIR}/vcpkg/installed/${VCPKG_TARGET_TRIPLET}" CACHE PATH "vcpkg installed directory")
+  else()
+    # Default to x64-windows for local development convenience when not otherwise specified
+    set(VCPKG_INSTALLED "${CMAKE_SOURCE_DIR}/vcpkg/installed/x64-windows" CACHE PATH "vcpkg installed directory")
+  endif()
+endif()
 
 # SDL2 - headers under include/SDL2; code uses <SDL.h>
 set(SDL2_INCLUDE_DIR "${VCPKG_INSTALLED}/include/SDL2")
@@ -67,6 +74,7 @@ add_library(EngineCore STATIC
     SRC/MiniaudioAudio.cpp
     SRC/miniaudio_impl.cpp
     SRC/stb_image_impl.cpp
+    SRC/WasmRuntime.cpp
 )  
 
 target_include_directories(EngineCore PUBLIC

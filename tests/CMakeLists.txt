@@ -63,6 +63,22 @@ target_link_libraries(gl_vaorepro PRIVATE EngineCore)
 
 target_compile_features(gl_vaorepro PUBLIC cxx_std_17)
 
+# Small smoke executable to validate WASM e2e on CI (runs independently of UnitTests)
+add_executable(WasmE2ESmoke
+    wasm_e2e_check.cpp
+)
+
+target_include_directories(WasmE2ESmoke PRIVATE
+  ${CMAKE_SOURCE_DIR}/Engine/Core/include
+)
+
+target_link_libraries(WasmE2ESmoke PRIVATE EngineCore)
+
+target_compile_features(WasmE2ESmoke PUBLIC cxx_std_17)
+# Provide PROJECT_SOURCE_DIR to the smoke executable so it can locate sample mod files
+target_compile_definitions(WasmE2ESmoke PRIVATE PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+add_test(NAME WasmE2ESmoke COMMAND WasmE2ESmoke)
+
 target_include_directories(UnitTests PRIVATE
   ${CMAKE_SOURCE_DIR}/Engine/Core/include
   ${CMAKE_SOURCE_DIR}/tests/include
@@ -81,93 +97,108 @@ target_compile_definitions(UnitTests PRIVATE PROJECT_SOURCE_DIR="${CMAKE_SOURCE_
 include(CTest)
 add_test(NAME UnitTests COMMAND UnitTests)
 
-# Copy runtime DLLs to test output directory on Windows
-if (WIN32)
-    if (NOT DEFINED VCPKG_INSTALLED)
-        set(VCPKG_INSTALLED "${CMAKE_SOURCE_DIR}/vcpkg/installed/x64-windows" CACHE PATH "vcpkg installed directory")
+# Ensure the vcpkg installed directory is known (works across platforms and CI triplets)
+if (NOT DEFINED VCPKG_INSTALLED)
+  if (DEFINED VCPKG_TARGET_TRIPLET)
+    set(VCPKG_INSTALLED "${CMAKE_SOURCE_DIR}/vcpkg/installed/${VCPKG_TARGET_TRIPLET}" CACHE PATH "vcpkg installed directory")
+  else()
+    set(VCPKG_INSTALLED "${CMAKE_SOURCE_DIR}/vcpkg/installed/x64-windows" CACHE PATH "vcpkg installed directory")
+  endif()
+endif()
+
+# Collect runtime libraries (platform-specific names) that should be copied into the test output directory
+set(TEST_RUNTIME_LIBS
+    "${VCPKG_INSTALLED}/bin/SDL2.dll"
+    "${VCPKG_INSTALLED}/bin/assimp-vc143-mt.dll"
+    "${VCPKG_INSTALLED}/bin/draco.dll"
+    "${VCPKG_INSTALLED}/bin/kubazip.dll"
+    "${VCPKG_INSTALLED}/bin/minizip.dll"
+    "${VCPKG_INSTALLED}/bin/poly2tri.dll"
+    "${VCPKG_INSTALLED}/bin/pugixml.dll"
+    "${VCPKG_INSTALLED}/bin/zlib1.dll"
+    "${VCPKG_INSTALLED}/bin/webgpu_dawn.dll"
+    "${VCPKG_INSTALLED}/bin/abseil_dll.dll"
+)
+
+# Optional Windows DLLs
+if (EXISTS "${VCPKG_INSTALLED}/bin/miniaudio.dll")
+  list(APPEND TEST_RUNTIME_LIBS "${VCPKG_INSTALLED}/bin/miniaudio.dll")
+endif()
+if (EXISTS "${CMAKE_BINARY_DIR}/_deps/miniaudio-build/Debug/miniaudio.dll")
+  list(APPEND TEST_RUNTIME_LIBS "${CMAKE_BINARY_DIR}/_deps/miniaudio-build/Debug/miniaudio.dll")
+endif()
+if (EXISTS "${VCPKG_INSTALLED}/bin/enet.dll")
+  list(APPEND TEST_RUNTIME_LIBS "${VCPKG_INSTALLED}/bin/enet.dll")
+endif()
+# Optional Lua DLLs
+if (EXISTS "${VCPKG_INSTALLED}/bin/lua.dll")
+  list(APPEND TEST_RUNTIME_LIBS "${VCPKG_INSTALLED}/bin/lua.dll")
+endif()
+if (EXISTS "${VCPKG_INSTALLED}/bin/lua5.3.dll")
+  list(APPEND TEST_RUNTIME_LIBS "${VCPKG_INSTALLED}/bin/lua5.3.dll")
+endif()
+if (EXISTS "${VCPKG_INSTALLED}/bin/lua5.4.dll")
+  list(APPEND TEST_RUNTIME_LIBS "${VCPKG_INSTALLED}/bin/lua5.4.dll")
+endif()
+if (EXISTS "${VCPKG_INSTALLED}/bin/lua53.dll")
+  list(APPEND TEST_RUNTIME_LIBS "${VCPKG_INSTALLED}/bin/lua53.dll")
+endif()
+if (EXISTS "${VCPKG_INSTALLED}/bin/lua54.dll")
+  list(APPEND TEST_RUNTIME_LIBS "${VCPKG_INSTALLED}/bin/lua54.dll")
+endif()
+if (EXISTS "${VCPKG_INSTALLED}/bin/box2d.dll")
+  list(APPEND TEST_RUNTIME_LIBS "${VCPKG_INSTALLED}/bin/box2d.dll")
+endif()
+if (EXISTS "${VCPKG_INSTALLED}/bin/wasm3.dll")
+  list(APPEND TEST_RUNTIME_LIBS "${VCPKG_INSTALLED}/bin/wasm3.dll")
+endif()
+
+# Non-Windows: pick up shared libraries if present (lib*.so or *.dylib)
+if (EXISTS "${VCPKG_INSTALLED}/lib/libwasm3.so")
+  list(APPEND TEST_RUNTIME_LIBS "${VCPKG_INSTALLED}/lib/libwasm3.so")
+endif()
+if (EXISTS "${VCPKG_INSTALLED}/lib/libwasm3.dylib")
+  list(APPEND TEST_RUNTIME_LIBS "${VCPKG_INSTALLED}/lib/libwasm3.dylib")
+endif()
+if (EXISTS "${VCPKG_INSTALLED}/lib/libbox2d.so")
+  list(APPEND TEST_RUNTIME_LIBS "${VCPKG_INSTALLED}/lib/libbox2d.so")
+endif()
+if (EXISTS "${VCPKG_INSTALLED}/lib/libbox2d.dylib")
+  list(APPEND TEST_RUNTIME_LIBS "${VCPKG_INSTALLED}/lib/libbox2d.dylib")
+endif()
+
+# Attempt to include MSVC redistributable CRT DLLs (if present on developer machine)
+if (MSVC)
+    if (DEFINED ENV{ProgramFiles})
+        file(GLOB VCRUNTIME_DIRS "$ENV{ProgramFiles}/Microsoft Visual Studio/2022/*/VC/Redist/MSVC/*/x64/Microsoft.VC143.CRT")
+        foreach(d ${VCRUNTIME_DIRS})
+            file(GLOB CRT_DLLS "${d}/*.dll")
+            list(APPEND TEST_RUNTIME_LIBS ${CRT_DLLS})
+        endforeach()
     endif()
+endif()
 
-    set(TEST_RUNTIME_DLLS
-        "${VCPKG_INSTALLED}/bin/SDL2.dll"
-        "${VCPKG_INSTALLED}/bin/assimp-vc143-mt.dll"
-        "${VCPKG_INSTALLED}/bin/draco.dll"
-        "${VCPKG_INSTALLED}/bin/kubazip.dll"
-        "${VCPKG_INSTALLED}/bin/minizip.dll"
-        "${VCPKG_INSTALLED}/bin/poly2tri.dll"
-        "${VCPKG_INSTALLED}/bin/pugixml.dll"
-        "${VCPKG_INSTALLED}/bin/zlib1.dll"
-        "${VCPKG_INSTALLED}/bin/webgpu_dawn.dll"
-        "${VCPKG_INSTALLED}/bin/abseil_dll.dll"
-    )
-
-    # Optionally include miniaudio runtime DLL and ENet DLL if present (some builds produce a DLL)
-    if (WIN32)
-      if (EXISTS "${VCPKG_INSTALLED}/bin/miniaudio.dll")
-        list(APPEND TEST_RUNTIME_DLLS "${VCPKG_INSTALLED}/bin/miniaudio.dll")
-      endif()
-      if (EXISTS "${CMAKE_BINARY_DIR}/_deps/miniaudio-build/Debug/miniaudio.dll")
-        list(APPEND TEST_RUNTIME_DLLS "${CMAKE_BINARY_DIR}/_deps/miniaudio-build/Debug/miniaudio.dll")
-      endif()
-      if (EXISTS "${VCPKG_INSTALLED}/bin/enet.dll")
-        list(APPEND TEST_RUNTIME_DLLS "${VCPKG_INSTALLED}/bin/enet.dll")
-      endif()
-      # Optionally include Lua DLLs if present
-      if (EXISTS "${VCPKG_INSTALLED}/bin/lua.dll")
-        list(APPEND TEST_RUNTIME_DLLS "${VCPKG_INSTALLED}/bin/lua.dll")
-      endif()
-      if (EXISTS "${VCPKG_INSTALLED}/bin/lua5.3.dll")
-        list(APPEND TEST_RUNTIME_DLLS "${VCPKG_INSTALLED}/bin/lua5.3.dll")
-      endif()
-      if (EXISTS "${VCPKG_INSTALLED}/bin/lua5.4.dll")
-        list(APPEND TEST_RUNTIME_DLLS "${VCPKG_INSTALLED}/bin/lua5.4.dll")
-      endif()
-      if (EXISTS "${VCPKG_INSTALLED}/bin/lua53.dll")
-        list(APPEND TEST_RUNTIME_DLLS "${VCPKG_INSTALLED}/bin/lua53.dll")
-      endif()
-      if (EXISTS "${VCPKG_INSTALLED}/bin/lua54.dll")
-        list(APPEND TEST_RUNTIME_DLLS "${VCPKG_INSTALLED}/bin/lua54.dll")
-      endif()
-      # Optionally include Box2D DLL if present
-      if (EXISTS "${VCPKG_INSTALLED}/bin/box2d.dll")
-        list(APPEND TEST_RUNTIME_DLLS "${VCPKG_INSTALLED}/bin/box2d.dll")
-      endif()
-      if (EXISTS "${VCPKG_INSTALLED}/bin/wasm3.dll")
-        list(APPEND TEST_RUNTIME_DLLS "${VCPKG_INSTALLED}/bin/wasm3.dll")
-      endif()
-    endif()
-
-    # Attempt to include MSVC redistributable CRT DLLs (if present on developer machine)
-    if (MSVC)
-        if (DEFINED ENV{ProgramFiles})
-            file(GLOB VCRUNTIME_DIRS "$ENV{ProgramFiles}/Microsoft Visual Studio/2022/*/VC/Redist/MSVC/*/x64/Microsoft.VC143.CRT")
-            foreach(d ${VCRUNTIME_DIRS})
-                file(GLOB CRT_DLLS "${d}/*.dll")
-                list(APPEND TEST_RUNTIME_DLLS ${CRT_DLLS})
-            endforeach()
-        endif()
-    endif()
-
+# Copy any discovered runtime libs into the UnitTests output directory
+if (TEST_RUNTIME_LIBS)
     add_custom_command(TARGET UnitTests POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${TEST_RUNTIME_DLLS} $<TARGET_FILE_DIR:UnitTests>
-        COMMENT "Copying runtime DLLs to test output directory"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${TEST_RUNTIME_LIBS} $<TARGET_FILE_DIR:UnitTests>
+        COMMENT "Copying runtime libs to test output directory"
     )
+endif()
 
-    # Optionally include Bullet DLLs if present in vcpkg to support runtime tests that rely on dynamic libs
-    if (WIN32)
-      if (EXISTS "${VCPKG_INSTALLED}/bin/BulletDynamics.dll")
-        add_custom_command(TARGET UnitTests POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different "${VCPKG_INSTALLED}/bin/BulletDynamics.dll" $<TARGET_FILE_DIR:UnitTests>
-        )
-      endif()
-      if (EXISTS "${VCPKG_INSTALLED}/bin/BulletCollision.dll")
-        add_custom_command(TARGET UnitTests POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different "${VCPKG_INSTALLED}/bin/BulletCollision.dll" $<TARGET_FILE_DIR:UnitTests>
-        )
-      endif()
-      if (EXISTS "${VCPKG_INSTALLED}/bin/LinearMath.dll")
-        add_custom_command(TARGET UnitTests POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different "${VCPKG_INSTALLED}/bin/LinearMath.dll" $<TARGET_FILE_DIR:UnitTests>
-        )
-      endif()
-    endif()
+# Optionally include Bullet shared libs if present in vcpkg to support runtime tests that rely on dynamic libs
+if (EXISTS "${VCPKG_INSTALLED}/lib/libBulletDynamics.so")
+  add_custom_command(TARGET UnitTests POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E copy_if_different "${VCPKG_INSTALLED}/lib/libBulletDynamics.so" $<TARGET_FILE_DIR:UnitTests>
+  )
+endif()
+if (EXISTS "${VCPKG_INSTALLED}/lib/libBulletCollision.so")
+  add_custom_command(TARGET UnitTests POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E copy_if_different "${VCPKG_INSTALLED}/lib/libBulletCollision.so" $<TARGET_FILE_DIR:UnitTests>
+  )
+endif()
+if (EXISTS "${VCPKG_INSTALLED}/lib/libLinearMath.so")
+  add_custom_command(TARGET UnitTests POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E copy_if_different "${VCPKG_INSTALLED}/lib/libLinearMath.so" $<TARGET_FILE_DIR:UnitTests>
+  )
 endif()
