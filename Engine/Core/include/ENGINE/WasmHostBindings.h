@@ -20,16 +20,16 @@ public:
 
     struct Token {
         Token() = default;
-        Token(Token&& other) noexcept : owner_(other.owner_), ns_(std::move(other.ns_)), name_(std::move(other.name_)), sig_(std::move(other.sig_)) { other.owner_ = nullptr; }
+        Token(Token&& other) noexcept : module_(other.module_), ns_(std::move(other.ns_)), name_(std::move(other.name_)), sig_(std::move(other.sig_)) { other.module_ = nullptr; }
         Token& operator=(Token&&) = delete;
         ~Token() noexcept;
-        bool valid() const noexcept { return owner_ != nullptr; }
+        bool valid() const noexcept { return module_ != nullptr; }
 
     private:
         friend class HostBindings;
-        Token(HostBindings* owner, std::string ns, std::string name, std::string sig) noexcept : owner_(owner), ns_(std::move(ns)), name_(std::move(name)), sig_(std::move(sig)) {}
+        Token(IM3Module module, std::string ns, std::string name, std::string sig) noexcept : module_(module), ns_(std::move(ns)), name_(std::move(name)), sig_(std::move(sig)) {}
 
-        HostBindings* owner_ = nullptr;
+        IM3Module module_ = nullptr;
         std::string ns_;
         std::string name_;
         std::string sig_;
@@ -40,11 +40,7 @@ public:
     Token RegisterRaw(const char* ns, const char* name, const char* sig, M3RawCall cb);
 
 private:
-    void Unregister(const std::string& ns, const std::string& name, const std::string& sig) noexcept;
-
     IM3Module module_ = nullptr;
-    // track registrations so we can find and remove them
-    std::vector<std::tuple<std::string, std::string, std::string, M3RawCall>> regs_;
 };
 
 } // namespace Genesis::Engine

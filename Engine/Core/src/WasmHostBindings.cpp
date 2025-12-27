@@ -13,33 +13,42 @@ m3ApiRawFunction(host_unregistered_stub) {
 
 HostBindings::Token HostBindings::RegisterRaw(const char* ns, const char* name, const char* sig, M3RawCall cb) {
     if (!module_) return {};
+    // debug: print module pointer and the binding we're attempting
+    IM3Runtime modRuntime = m3_GetModuleRuntime(module_);
+    const char* modName = m3_GetModuleName(module_);
+    std::cerr << "HostBindings: RegisterRaw module=" << module_ << " name='" << (modName ? modName : "(null)") << "' runtime=" << modRuntime << " ns='" << ns << "' name='" << name << "' sig='" << sig << "'" << std::endl;
     M3Result r = m3_LinkRawFunction(module_, ns, name, sig, cb);
     if (r) {
         std::cerr << "HostBindings: m3_LinkRawFunction failed for '" << ns << "'.'" << name << "' sig='" << sig << "': " << r << std::endl;
         return {};
     }
-    regs_.emplace_back(std::string(ns), std::string(name), std::string(sig), cb);
-    return Token(this, std::string(ns), std::string(name), std::string(sig));
+    // Return a token that stores the module pointer so it can unregister itself later.
+    return Token(module_, std::string(ns), std::string(name), std::string(sig));
 }
 
-void HostBindings::Unregister(const std::string& ns, const std::string& name, const std::string& sig) noexcept {
-    if (!module_) return;
-    // Replace the function with a stub to avoid leaving a dangling pointer into host code.
-    M3Result r = m3_LinkRawFunction(module_, ns.c_str(), name.c_str(), sig.c_str(), (M3RawCall)host_unregistered_stub);
-    if (r) {
-        // best-effort logging; we must not throw from noexcept destructor
-        std::cerr << "HostBindings: failed to unregister host '" << ns << "'.'" << name << "': " << r << std::endl;
-    }
-    // Remove from our registry for bookkeeping
-    regs_.erase(std::remove_if(regs_.begin(), regs_.end(), [&](auto &t) {
-        return std::get<0>(t) == ns && std::get<1>(t) == name && std::get<2>(t) == sig;
-    }), regs_.end());
-}
 
 HostBindings::Token::~Token() noexcept {
-    if (owner_) {
-        owner_->Unregister(ns_, name_, sig_);
-        owner_ = nullptr;
+    if (module_) {
+        // Replace the function with a stub to avoid leaving a dangling pointer into host code.
+        M3Result r = m3_LinkRawFunction(module_, ns_.c_str(), name_.c_str(), sig_.c_str(), (M3RawCall)host_unregistered_stub);
+        if (r) {
+            // If the signature doesn't match (can happen if the module import signature differs),
+            // attempt a best-effort fallback by linking with a null signature which skips validation.
+            // This is a safe, best-effort cleanup and should not throw.
+            const char* msg = r ? r : "(unknown)";
+            if (msg && std::string(msg).find("function signature mismatch") != std::string::npos) {
+                M3Result r2 = m3_LinkRawFunction(module_, ns_.c_str(), name_.c_str(), nullptr, (M3RawCall)host_unregistered_stub);
+                if (!r2) {
+                    // success on fallback; be quiet (no error to report)
+                } else {
+                    std::cerr << "HostBindings: failed to unregister host '" << ns_ << "'.'" << name_ << "' (fallback also failed): " << r2 << std::endl;
+                }
+            } else {
+                // best-effort logging; we must not throw from noexcept destructor
+                std::cerr << "HostBindings: failed to unregister host '" << ns_ << "'.'" << name_ << "': " << r << std::endl;
+            }
+        }
+        module_ = nullptr;
     }
 }
 
