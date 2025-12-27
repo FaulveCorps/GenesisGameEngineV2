@@ -11,11 +11,11 @@ Quick setup (Windows, vcpkg):
    - `.\vcpkg.exe install dawn:x64-windows`
 
 3. Configure CMake to point to the vcpkg installed tree (example):
-   - `cmake -S . -B build -G "Ninja" -A x64 -DCMAKE_BUILD_TYPE=Debug -DVCPKG_INSTALLED="<path-to-repo>\vcpkg\installed\x64-windows"`
+   - `cmake -S . -B Build -G "Ninja" -A x64 -DCMAKE_BUILD_TYPE=Debug -DVCPKG_INSTALLED="<path-to-repo>\vcpkg\installed\x64-windows"`
 
 4. Build & run the SampleGame with the `wgpu` backend:
-   - `cmake --build build --config Debug --target SampleGame`
-   - `build\GameProjects\SampleGame\Debug\SampleGame.exe --gfx-order wgpu`
+   - `cmake --build Build --config Debug --target SampleGame`
+   - `Build\GameProjects\SampleGame\Debug\SampleGame.exe --gfx-order wgpu`
 
 Notes:
 - The GitHub Actions workflow `windows-d3d12.yml` contains a `wgpu` matrix entry that will attempt to install `dawn:x64-windows` and run the smoke tests (including unit tests and the SampleGame smoke run).

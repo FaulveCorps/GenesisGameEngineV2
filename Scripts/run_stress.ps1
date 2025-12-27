@@ -1,7 +1,7 @@
 # run_stress.ps1
 # Repeatedly runs SampleGame in stress mode until a non-zero exit code (crash) is observed
 param(
-    [string]$exe = "build\GameProjects\SampleGame\Debug\SampleGame.exe",
+    [string]$exe = "Build\GameProjects\SampleGame\Debug\SampleGame.exe",
     [int]$frames = 5000,
     [int]$iterations = 0 # 0 == infinite
 )

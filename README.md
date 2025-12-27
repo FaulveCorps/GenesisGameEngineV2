@@ -17,8 +17,8 @@ On Windows you can install SDL3 and Assimp or provide the development packages t
 Build (out-of-source):
 
 ```bash
-mkdir build
-cd build
+mkdir Build
+cd Build
 cmake ..
 cmake --build . --config Debug
 ```
@@ -42,8 +42,8 @@ Packaging:
 - Use CPack to create a ZIP package of the built artifacts. Example:
 
 ```bash
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build --config Release --target package
+cmake -S . -B Build -DCMAKE_BUILD_TYPE=Release
+cmake --build Build --config Release --target package
 ```
 
-This will create `GenesisGameEngine-${PROJECT_VERSION}.zip` in the build output. You can also install the project contents to a local prefix with `cmake --install build --config Release --prefix <dir>`.
+This will create `GenesisGameEngine-${PROJECT_VERSION}.zip` in the Build output. You can also install the project contents to a local prefix with `cmake --install Build --config Release --prefix <dir>`.

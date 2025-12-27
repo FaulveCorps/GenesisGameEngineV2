@@ -52,19 +52,19 @@ jobs:
 
       - name: Configure CMake
         run: |
-          cmake -S . -B build -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }} -DCMAKE_BUILD_TYPE=Release
+          cmake -S . -B Build -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }} -DCMAKE_BUILD_TYPE=Release
 
       - name: Build
-        run: cmake --build build --config Release -- -j $(nproc || sysctl -n hw.ncpu || 2)
+        run: cmake --build Build --config Release -- -j $(nproc || sysctl -n hw.ncpu || 2)
 
       - name: Run tests
         run: |
-          cd build
+          cd Build
           ctest --output-on-failure -C Release
 
       - name: Run WASM e2e smoke test
         run: |
-          cd build
+          cd Build
           echo "Running wasm e2e smoke test (verbose)..."
           ctest -C Release -R WasmE2ESmoke -V
         shell: bash

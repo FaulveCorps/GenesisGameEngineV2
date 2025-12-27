@@ -11,7 +11,7 @@ With **CMakePresets.json** and **vcpkg.json**, the project handles all dependenc
 cmake --preset default
 
 # Build
-cmake --build build --config Debug
+cmake --build Build --config Debug
 
 # Run tests
 ctest --preset default
@@ -22,16 +22,16 @@ ctest --preset default
 **Debug builds:**
 ```bash
 cmake --preset default                  # Configure debug
-cmake --build build --config Debug     # Build all (Debug)
-cmake --build build --target EngineCore --config Debug   # Build engine core only
-cmake --build build --target SampleGame --config Debug   # Build sample game only
-cmake --build build --target UnitTests --config Debug    # Build unit tests
+cmake --build Build --config Debug     # Build all (Debug)
+cmake --build Build --target EngineCore --config Debug   # Build engine core only
+cmake --build Build --target SampleGame --config Debug   # Build sample game only
+cmake --build Build --target UnitTests --config Debug    # Build unit tests
 ```
 
 **Release builds:**
 ```bash
 cmake --preset release                 # Configure release
-cmake --build build-release --config Release
+cmake --build Build --config Release
 ```
 
 ### Dependencies
@@ -57,10 +57,10 @@ If you prefer explicit control or need different settings:
 
 ```bash
 # Clean previous build
-rmdir /s /q build
+rmdir /s /q Build
 
 # Configure with explicit paths
-cmake -S . -B build ^
+cmake -S . -B Build ^
   -G "Ninja" ^
   -DCMAKE_BUILD_TYPE=Debug ^
   -DCMAKE_TOOLCHAIN_FILE=%CD%\vcpkg\scripts\buildsystems\vcpkg.cmake ^
@@ -68,7 +68,7 @@ cmake -S . -B build ^
   -DVCPKG_TARGET_TRIPLET=x64-windows
 
 # Build
-cmake --build build
+cmake --build Build
 ```
 
 ### Troubleshooting
@@ -78,7 +78,7 @@ cmake --build build
 - If not found, update CMAKE_MAKE_PROGRAM in CMakePresets.json to the correct path
 
 **vcpkg dependency conflicts:**
-- Delete `build` folder and `vcpkg_installed` directory
+- Delete `Build` folder and `vcpkg_installed` directory
 - Re-run `cmake --preset default` to fresh-install all dependencies
 
 **Build fails with compiler errors:**
@@ -94,7 +94,7 @@ The setup is CI-ready. Example GitHub Actions workflow:
   run: cmake --preset default
 
 - name: Build
-  run: cmake --build build --config Debug
+  run: cmake --build Build --config Debug
 
 - name: Test
   run: ctest --preset default

@@ -33,7 +33,7 @@
       "displayName": "Default (Ninja Debug)",
       "description": "Alias for ninja-debug preset",
       "inherits": "ninja-debug",
-      "binaryDir": "${sourceDir}/build"
+      "binaryDir": "${sourceDir}/Build"
     },
     {
       "name": "vs2022",

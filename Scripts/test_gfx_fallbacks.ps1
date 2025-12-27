@@ -1,7 +1,7 @@
 # test_gfx_fallbacks.ps1
 # Runs SampleGame with different gfx-order permutations and with/without --gfx-strict
 param(
-    [string]$exe = "build\GameProjects\SampleGame\Debug\SampleGame.exe",
+    [string]$exe = "Build\GameProjects\SampleGame\Debug\SampleGame.exe",
     [int]$timeoutSec = 10
 )
 $workspace = Split-Path -Parent $MyInvocation.MyCommand.Definition | Split-Path -Parent

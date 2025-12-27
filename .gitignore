@@ -109,15 +109,23 @@ wgpu_test_trace.txt
 build-ninja-release/CMakeFiles/cmake.check_cache
 
 # Additional project build artifacts to ignore (added by restructure)
-/build/
+/Build/
 /build-*/
+/Build-*/
 /build_*/
-/build-vs/
-/build-vs-subsystems/
-/build_vs/
-/build-subsystems/
-/build-ninja-debug/
-/build-ninja-release/
+**/build-*/
+build-vs/
+**/build-vs/
+build-vs-subsystems/
+**/build-vs-subsystems/
+build_vs/
+**/build_vs/
+build-subsystems/
+**/build-subsystems/
+build-ninja-debug/
+**/build-ninja-debug/
+build-ninja-release/
+**/build-ninja-release/
 /Testing/Temporary/
 **/Debug/*.dll
 **/Debug/*.exe

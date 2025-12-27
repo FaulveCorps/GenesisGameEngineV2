@@ -3,7 +3,7 @@ $procdump = Join-Path $scriptRoot '..\tools\Procdump\procdump.exe'
 if (-not (Test-Path $procdump)) { Write-Error "ProcDump not found at $procdump"; exit 1 }
 $dumpDir = Join-Path $scriptRoot '..\dumps\forced_vulkan'
 New-Item -Path $dumpDir -ItemType Directory -Force | Out-Null
-$sampleExe = Join-Path $scriptRoot '..\build\GameProjects\SampleGame\Debug\SampleGame.exe'
+$sampleExe = Join-Path $scriptRoot '..\Build\GameProjects\SampleGame\Debug\SampleGame.exe'
 if (-not (Test-Path $sampleExe)) { Write-Error "SampleGame not found at $sampleExe"; exit 1 }
 # Set env var for this process
 $env:GENESIS_FORCE_VULKAN_SWAPCHAIN = '1'

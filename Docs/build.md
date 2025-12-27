@@ -10,8 +10,8 @@ Requirements
 Out-of-source build
 
 ```bash
-mkdir build
-cd build
+mkdir Build
+cd Build
 cmake ..
 cmake --build . --config Debug
 ```
@@ -21,15 +21,15 @@ Using vcpkg (recommended for Windows/CI)
 ```bash
 git clone https://github.com/Microsoft/vcpkg.git
 ./vcpkg/bootstrap-vcpkg.sh
-cmake -S . -B build -DCMAKE_TOOLCHAIN_FILE=path/to/vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-windows
-cmake --build build --config Release
+cmake -S . -B Build -DCMAKE_TOOLCHAIN_FILE=path/to/vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-windows
+cmake --build Build --config Release
 ```
 
 Packaging
 - After building, you can create a ZIP package using CPack (configured by the project):
 
 ```bash
-cmake --build build --config Release --target package
+cmake --build Build --config Release --target package
 ```
 
 This will create a `GenesisGameEngine-${PROJECT_VERSION}.zip` file in the build output.
