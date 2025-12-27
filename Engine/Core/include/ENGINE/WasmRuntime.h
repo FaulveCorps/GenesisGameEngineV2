@@ -27,6 +27,29 @@ public:
 
     // Simple helper: enumerate loaded modules
     static std::vector<std::string> LoadedModules();
+
+#ifdef HAVE_WASM3
+#include "wasm3.h"
+
+    // Small RAII token returned when registering a global host function. When the
+    // token is destroyed the registration is removed (best-effort).
+    struct HostBindingToken {
+        HostBindingToken() = default;
+        HostBindingToken(HostBindingToken&&) noexcept;
+        HostBindingToken& operator=(HostBindingToken&&) noexcept;
+        ~HostBindingToken() noexcept;
+        bool valid() const noexcept;
+
+    private:
+        HostBindingToken(size_t id) : id(id) {}
+        size_t id = SIZE_MAX;
+        friend class WasmRuntime;
+    };
+
+    // Register a host function globally so that subsequent module loads will have
+    // the import available. Returns a move-only token that unregisters on destroy.
+    static HostBindingToken RegisterHostFunction(const std::string& ns, const std::string& name, const std::string& sig, M3RawCall cb);
+#endif
 };
 
 } // namespace Genesis::Engine
