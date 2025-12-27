@@ -78,7 +78,7 @@ GenesisGameEngine/
 │       │   ├── Model.h, Shader.h, Mesh.h
 │       │   ├── OpenGLRenderer.h, DirectXRenderer.h
 │       │   └── PluginManager.h, ImGuiLayer.h
-│       └── SRC/
+│       └── src/
 │           ├── Engine.cpp, Scene.cpp, Model.cpp
 │           ├── Mesh.cpp, Shader.cpp
 │           ├── OpenGLRenderer.cpp, DirectXRenderer.cpp

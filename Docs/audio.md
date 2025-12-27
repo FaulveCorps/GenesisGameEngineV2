@@ -13,7 +13,7 @@ How to use
 
 - Play a one-shot sound:
 
-    audio->PlayOneShot("assets/audio/sound.wav", 0.9f);
+    audio->PlayOneShot("Assets/audio/sound.wav", 0.9f);
 
 Notes
 - The `miniaudio` backend is fetched via CMake's `FetchContent` (it will be available automatically if git fetch succeeds).
@@ -29,4 +29,4 @@ CMake
 
 Testing
 - Unit tests check the availability and basic initialization of the `miniaudio` backend when compiled with `HAVE_MINIAUDIO`.
-- To add a test that exercises actual playback with a committed asset, add a small WAV under `tests/assets/` and update `tests/test_audio_playback.cpp` to use the checked-in file.
+- To add a test that exercises actual playback with a committed asset, add a small WAV under `Tests/assets/` and update `Tests/test_audio_playback.cpp` to use the checked-in file.
