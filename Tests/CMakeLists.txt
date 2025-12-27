@@ -81,7 +81,7 @@ add_test(NAME WasmE2ESmoke COMMAND WasmE2ESmoke)
 
 target_include_directories(UnitTests PRIVATE
   ${CMAKE_SOURCE_DIR}/Engine/Core/include
-  ${CMAKE_SOURCE_DIR}/tests/include
+  ${CMAKE_SOURCE_DIR}/Tests/include
   ${catch2_SOURCE_DIR}/single_include
   ${catch2_SOURCE_DIR}/src
   ${catch2_SOURCE_DIR}/extras

@@ -19,7 +19,7 @@ TEST_CASE("Engine Init/Shutdown") {
 }
 
 TEST_CASE("Model can load triangle asset") {
-    std::string assetPath = std::string(PROJECT_SOURCE_DIR) + "/assets/models/triangle.obj";
+    std::string assetPath = std::string(PROJECT_SOURCE_DIR) + "/Assets/models/triangle.obj";
     Model m;
     REQUIRE(m.Load(assetPath) == true);
 }

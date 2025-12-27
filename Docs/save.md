@@ -25,4 +25,4 @@ Notes and guidance:
 - When adding a new backend, register its factory with `SubsystemRegistry::Instance().RegisterFactory("Save", "<name>", factoryFunc);` and provide a `Register<Backend>NameFactory()` helper and call it from `Engine::Init()`.
 
 Testing:
-- Unit tests for the Save subsystem are in `tests/test_save.cpp`. They create temporary directories and set `GENESIS_SAVE_DIR` to avoid polluting the tree.
+- Unit tests for the Save subsystem are in `Tests/test_save.cpp`. They create temporary directories and set `GENESIS_SAVE_DIR` to avoid polluting the tree.

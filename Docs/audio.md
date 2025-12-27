@@ -21,7 +21,7 @@ Notes
 - On Windows, `miniaudio` is built as part of the project and does not require additional runtime DLLs by default.
 
 Playback test
-- There's a unit test `tests/test_audio_playback.cpp` that generates a short WAV file at runtime and attempts to play it using the `miniaudio` backend (to avoid bundling binary assets in the repo).
+- There's a unit test `Tests/test_audio_playback.cpp` that generates a short WAV file at runtime and attempts to play it using the `miniaudio` backend (to avoid bundling binary assets in the repo).
 - The test is tolerant of systems without an audio device: if playback is not possible, the test will skip gracefully.
 
 CMake

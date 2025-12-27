@@ -1,5 +1,5 @@
 // Simple bgfx vertex shader for triangle smoke test
-// This is a minimal source; use `scripts/compile_bgfx_shaders.ps1` to compile for target backends.
+// This is a minimal source; use `Scripts/compile_bgfx_shaders.ps1` to compile for target backends.
 
 $input a_position, a_color0
 $output v_color0

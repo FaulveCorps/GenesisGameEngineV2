@@ -38,7 +38,7 @@ Notes & Testing
 ----------------
 - The `NullInput` backend is always available and is used as the default in `Engine::Init()`.
 - `SDLInput` is registered if SDL is available and can be selected at runtime.
-- A unit test `tests/test_input.cpp` verifies the null backend and failure case for unknown backends.
+- A unit test `Tests/test_input.cpp` verifies the null backend and failure case for unknown backends.
 
 Extending
 ---------

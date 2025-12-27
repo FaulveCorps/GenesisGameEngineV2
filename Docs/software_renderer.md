@@ -24,7 +24,7 @@ if (auto* sr = dynamic_cast<Genesis::Engine::SoftwareRenderer*>(renderer.get()))
 ```
 
 **Notes for CI**
-- The project now includes `tests/test_software_smoke.cpp` which uses the SoftwareRenderer to perform a deterministic offscreen render and verify pixel values. This test is part of the `UnitTests` suite and will run on CI without requiring GPU drivers.
+- The project now includes `Tests/test_software_smoke.cpp` which uses the SoftwareRenderer to perform a deterministic offscreen render and verify pixel values. This test is part of the `UnitTests` suite and will run on CI without requiring GPU drivers.
 
 **Running a visual proof (SampleGame)**
 - Build and run the SampleGame with the software renderer forced:

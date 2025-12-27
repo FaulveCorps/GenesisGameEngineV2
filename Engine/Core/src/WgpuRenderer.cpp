@@ -105,7 +105,7 @@ bool WgpuRenderer::Init(SDL_Window* window, SDL_GLContext /*glContext*/) {
 
         // Attempt to load WGSL shaders from assets; otherwise fall back to embedded strings
         std::string vs_code;
-        std::ifstream vs_file("assets/shaders/wgpu/triangle.vert.wgsl");
+        std::ifstream vs_file("Assets/shaders/wgpu/triangle.vert.wgsl");
         if (vs_file) {
             vs_code.assign(std::istreambuf_iterator<char>(vs_file), std::istreambuf_iterator<char>());
         } else {
@@ -119,7 +119,7 @@ bool WgpuRenderer::Init(SDL_Window* window, SDL_GLContext /*glContext*/) {
         }
 
         std::string fs_code;
-        std::ifstream fs_file("assets/shaders/wgpu/triangle.frag.wgsl");
+        std::ifstream fs_file("Assets/shaders/wgpu/triangle.frag.wgsl");
         if (fs_file) {
             fs_code.assign(std::istreambuf_iterator<char>(fs_file), std::istreambuf_iterator<char>());
         } else {

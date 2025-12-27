@@ -226,7 +226,7 @@ int main(int argc, char** argv) {
     std::cout << "DirectX smoke test: skipping model load" << std::endl;
 #else
     auto modelPtr = std::make_shared<Genesis::Engine::Model>();
-    if (!modelPtr->Load("assets/models/triangle.obj")) {
+    if (!modelPtr->Load("Assets/models/triangle.obj")) {
         std::cerr << "Failed to load model" << std::endl;
     } else {
         std::cout << "Model loaded successfully!" << std::endl;

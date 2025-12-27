@@ -1,5 +1,5 @@
 // Simple bgfx fragment shader for triangle smoke test
-// This is a minimal source; use `scripts/compile_bgfx_shaders.ps1` to compile for target backends.
+// This is a minimal source; use `Scripts/compile_bgfx_shaders.ps1` to compile for target backends.
 
 $input v_color0
 
