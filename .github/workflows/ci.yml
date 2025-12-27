@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        include:
+          - os: ubuntu-latest
+            triplet: x64-linux
+          - os: macos-latest
+            triplet: x64-osx
+          - os: windows-latest
+            triplet: x64-windows
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup vcpkg
+        run: |
+          git clone https://github.com/microsoft/vcpkg.git vcpkg
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            .\vcpkg\bootstrap-vcpkg.bat
+          else
+            ./vcpkg/bootstrap-vcpkg.sh
+          fi
+        shell: bash
+
+      - name: Install dependencies with vcpkg
+        run: |
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            .\vcpkg\vcpkg.exe install sdl3 assimp lua box2d wasm3 --triplet ${{ matrix.triplet }}
+          else
+            ./vcpkg/vcpkg install sdl3 assimp lua box2d wasm3 --triplet ${{ matrix.triplet }}
+          fi
+        shell: bash
+
+      - name: Verify vcpkg installation and list wasm3 files
+        run: |
+          echo "Listing vcpkg installed dirs for triplet: ${{ matrix.triplet }}"
+          ls -la vcpkg/installed/${{ matrix.triplet }}/include || true
+          ls -la vcpkg/installed/${{ matrix.triplet }}/lib || true
+          ls -la vcpkg/installed/${{ matrix.triplet }}/bin || true
+        shell: bash
+
+      - name: Configure CMake
+        run: |
+          cmake -S . -B build -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }} -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --config Release -- -j $(nproc || sysctl -n hw.ncpu || 2)
+
+      - name: Run tests
+        run: |
+          cd build
+          ctest --output-on-failure -C Release
+
+      - name: Run WASM e2e smoke test
+        run: |
+          cd build
+          echo "Running wasm e2e smoke test (verbose)..."
+          ctest -C Release -R WasmE2ESmoke -V
+        shell: bash
