@@ -1,3 +1,0 @@
-C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/uvwasi-subbuild/CMakeFiles/uvwasi-populate.dir
-C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/uvwasi-subbuild/CMakeFiles/ALL_BUILD.dir
-C:/Users/jpfau/Desktop/Project/GenesisGameEngine/build-vs-subsystems/_deps/uvwasi-subbuild/CMakeFiles/ZERO_CHECK.dir
