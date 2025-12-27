@@ -1,5 +1,7 @@
 #include "engine/IScripting.h"
 #include "engine/SubsystemRegistry.h"
+#include "engine/Engine.h"
+#include "engine/IPhysics.h"
 #include <iostream>
 
 #ifndef HAVE_LUA
@@ -118,7 +120,7 @@ private:
         lua_Integer h = luaL_checkinteger(L, 1);
         auto ph = Genesis::Engine::GetPhysicsSubsystem();
         if (!ph) { lua_pushboolean(L, 0); return 1; }
-        ph->DestroyRigidBody(static_cast<BodyHandle>(h));
+        ph->DestroyRigidBody(static_cast<IPhysics::BodyHandle>(h));
         lua_pushboolean(L, 1);
         return 1;
     }
@@ -134,7 +136,7 @@ private:
         double by = luaL_checknumber(L, 6);
         auto ph = Genesis::Engine::GetPhysicsSubsystem();
         if (!ph) { lua_pushnil(L); return 1; }
-        auto j = ph->CreateDistanceJoint(static_cast<BodyHandle>(a), static_cast<BodyHandle>(b), static_cast<float>(ax), static_cast<float>(ay), static_cast<float>(bx), static_cast<float>(by));
+        auto j = ph->CreateDistanceJoint(static_cast<IPhysics::BodyHandle>(a), static_cast<IPhysics::BodyHandle>(b), static_cast<float>(ax), static_cast<float>(ay), static_cast<float>(bx), static_cast<float>(by));
         if (j == 0) lua_pushnil(L); else lua_pushinteger(L, static_cast<lua_Integer>(j));
         return 1;
     }
@@ -147,7 +149,7 @@ private:
         double iy = luaL_checknumber(L, 3);
         auto ph = Genesis::Engine::GetPhysicsSubsystem();
         if (!ph) { lua_pushboolean(L, 0); return 1; }
-        ph->ApplyCentralImpulse(static_cast<BodyHandle>(h), static_cast<float>(ix), static_cast<float>(iy), 0.0f);
+        ph->ApplyCentralImpulse(static_cast<IPhysics::BodyHandle>(h), static_cast<float>(ix), static_cast<float>(iy), 0.0f);
         lua_pushboolean(L, 1);
         return 1;
     }
@@ -168,7 +170,7 @@ private:
 
         // Update physics subsystem callbacks
         auto ph = Genesis::Engine::GetPhysicsSubsystem();
-        std::function<void(BodyHandle,BodyHandle)> onBegin = [self](BodyHandle a, BodyHandle b){
+        IPhysics::ContactCallback onBegin = [self](IPhysics::BodyHandle a, IPhysics::BodyHandle b){
             if (self->m_contactBeginRef == LUA_REFNIL) return;
             lua_rawgeti(self->L, LUA_REGISTRYINDEX, self->m_contactBeginRef);
             lua_pushinteger(self->L, static_cast<lua_Integer>(a));
@@ -179,7 +181,7 @@ private:
                 lua_pop(self->L, 1);
             }
         };
-        std::function<void(BodyHandle,BodyHandle)> onEnd = [self](BodyHandle a, BodyHandle b){
+        IPhysics::ContactCallback onEnd = [self](IPhysics::BodyHandle a, IPhysics::BodyHandle b){
             if (self->m_contactEndRef == LUA_REFNIL) return;
             lua_rawgeti(self->L, LUA_REGISTRYINDEX, self->m_contactEndRef);
             lua_pushinteger(self->L, static_cast<lua_Integer>(a));
@@ -208,7 +210,7 @@ private:
 
         // Update physics subsystem callbacks by reusing current begin ref
         auto ph = Genesis::Engine::GetPhysicsSubsystem();
-        std::function<void(BodyHandle,BodyHandle)> onBegin = [self](BodyHandle a, BodyHandle b){
+        IPhysics::ContactCallback onBegin = [self](IPhysics::BodyHandle a, IPhysics::BodyHandle b){
             if (self->m_contactBeginRef == LUA_REFNIL) return;
             lua_rawgeti(self->L, LUA_REGISTRYINDEX, self->m_contactBeginRef);
             lua_pushinteger(self->L, static_cast<lua_Integer>(a));
@@ -219,7 +221,7 @@ private:
                 lua_pop(self->L, 1);
             }
         };
-        std::function<void(BodyHandle,BodyHandle)> onEnd = [self](BodyHandle a, BodyHandle b){
+        IPhysics::ContactCallback onEnd = [self](IPhysics::BodyHandle a, IPhysics::BodyHandle b){
             if (self->m_contactEndRef == LUA_REFNIL) return;
             lua_rawgeti(self->L, LUA_REGISTRYINDEX, self->m_contactEndRef);
             lua_pushinteger(self->L, static_cast<lua_Integer>(a));

@@ -30,9 +30,15 @@ if (WIN32)
         "${VCPKG_INSTALLED}/bin/poly2tri.dll"
         "${VCPKG_INSTALLED}/bin/pugixml.dll"
         "${VCPKG_INSTALLED}/bin/zlib1.dll"
-        "${VCPKG_INSTALLED}/bin/webgpu_dawn.dll"
-        "${VCPKG_INSTALLED}/bin/abseil_dll.dll"
     )
+
+    if (EXISTS "${VCPKG_INSTALLED}/bin/webgpu_dawn.dll")
+      list(APPEND SAMPLEGAME_RUNTIME_DLLS "${VCPKG_INSTALLED}/bin/webgpu_dawn.dll")
+    endif()
+
+    if (EXISTS "${VCPKG_INSTALLED}/bin/abseil_dll.dll")
+      list(APPEND SAMPLEGAME_RUNTIME_DLLS "${VCPKG_INSTALLED}/bin/abseil_dll.dll")
+    endif()
 
     # Attempt to include MSVC redistributable CRT DLLs (if present on developer machine)
     if (MSVC)

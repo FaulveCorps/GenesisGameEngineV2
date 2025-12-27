@@ -11,6 +11,7 @@
 
 namespace Genesis::Engine {
 
+#ifdef HAVE_WGPU
 // Static callbacks invoked by the WGPU device for uncaptured errors and device-loss
 void WgpuRenderer::OnUncapturedErrorCallback(const WGPUDevice* /*device*/, WGPUErrorType type, WGPUStringView message, void* userdata1, void* /*userdata2*/) {
     // If userdata1 is a WgpuRenderer*, forward to instance handler for proper state updates
@@ -57,6 +58,7 @@ void WgpuRenderer::HandleDeviceLost(WGPUDeviceLostReason reason, WGPUStringView 
     m_deviceLost = true;
     m_initialized = false;
 }
+#endif
 
 bool WgpuRenderer::Init(SDL_Window* window, SDL_GLContext /*glContext*/) {
 #ifdef HAVE_WGPU

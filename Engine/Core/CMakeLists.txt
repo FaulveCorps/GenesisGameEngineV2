@@ -11,9 +11,31 @@ if (NOT DEFINED VCPKG_INSTALLED)
   endif()
 endif()
 
-# SDL2 - headers under include/SDL2; code uses <SDL.h>
-set(SDL2_INCLUDE_DIR "${VCPKG_INSTALLED}/include/SDL2")
-find_library(SDL2_LIBRARY NAMES SDL2 PATHS "${VCPKG_INSTALLED}/lib" NO_DEFAULT_PATH REQUIRED)
+# Prefer SDL2, fallback to SDL3 for compatibility
+set(SDL_INCLUDE_DIR "")
+
+if (EXISTS "${VCPKG_INSTALLED}/include/SDL2")
+  set(SDL_INCLUDE_DIR "${VCPKG_INSTALLED}/include/SDL2")
+  find_library(SDL_LIBRARY NAMES SDL2 PATHS "${VCPKG_INSTALLED}/lib" NO_DEFAULT_PATH)
+endif()
+
+if (NOT SDL_LIBRARY AND EXISTS "${VCPKG_INSTALLED}/include/SDL3")
+  set(SDL_INCLUDE_DIR "${VCPKG_INSTALLED}/include/SDL3")
+  find_library(SDL_LIBRARY NAMES SDL3 PATHS "${VCPKG_INSTALLED}/lib" NO_DEFAULT_PATH)
+endif()
+
+# Final attempt: prefer concrete lib files from vcpkg if present
+if (EXISTS "${VCPKG_INSTALLED}/lib/SDL2.lib")
+  set(SDL_LIBRARY "${VCPKG_INSTALLED}/lib/SDL2.lib")
+elseif (EXISTS "${VCPKG_INSTALLED}/lib/SDL3.lib")
+  set(SDL_LIBRARY "${VCPKG_INSTALLED}/lib/SDL3.lib")
+elseif (NOT SDL_LIBRARY)
+  find_library(SDL_LIBRARY NAMES SDL2 SDL3 PATHS "${VCPKG_INSTALLED}/lib" NO_DEFAULT_PATH)
+endif()
+
+if (NOT SDL_LIBRARY)
+  message(FATAL_ERROR "Could not find SDL2 or SDL3 in ${VCPKG_INSTALLED}/lib (install sdl2 or sdl3 via vcpkg)")
+endif()
 
 # OpenGL
 find_package(OpenGL REQUIRED)
@@ -77,16 +99,21 @@ add_library(EngineCore STATIC
     src/WasmRuntime.cpp
 )  
 
+# Ensure preferred SDL include is searched early (prefer SDL2 when present)
+if (DEFINED SDL_INCLUDE_DIR)
+  include_directories(BEFORE ${SDL_INCLUDE_DIR})
+endif()
+
 target_include_directories(EngineCore PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/include
   ${entt_SOURCE_DIR}/single_include
-  ${SDL2_INCLUDE_DIR}
+  ${SDL_INCLUDE_DIR}
   ${ASSIMP_INCLUDE_DIR}
-)
+) 
 
 target_compile_features(EngineCore PUBLIC cxx_std_17)
 
-target_link_libraries(EngineCore PRIVATE ${SDL2_LIBRARY} OpenGL::GL ${ASSIMP_LIBRARY})
+target_link_libraries(EngineCore PUBLIC ${SDL_LIBRARY} OpenGL::GL ${ASSIMP_LIBRARY})
 
 # stb single-file image library (optional) - fetch via FetchContent
 FetchContent_Declare(
@@ -162,19 +189,27 @@ else()
 endif()
 
 # Box2D (optional) - 2D physics
-find_path(BOX2D_INCLUDE_DIR NAMES box2d/box2d.h PATHS "${VCPKG_INSTALLED}/include" NO_DEFAULT_PATH)
-if (BOX2D_INCLUDE_DIR)
-  find_library(BOX2D_LIBRARY NAMES box2d Box2D PATHS "${VCPKG_INSTALLED}/lib" NO_DEFAULT_PATH)
-  if (BOX2D_LIBRARY)
-    message(STATUS "Box2D found: include=${BOX2D_INCLUDE_DIR}")
-    target_include_directories(EngineCore PUBLIC ${BOX2D_INCLUDE_DIR})
-    target_link_libraries(EngineCore PUBLIC ${BOX2D_LIBRARY})
-    target_compile_definitions(EngineCore PUBLIC HAVE_BOX2D=1)
+# Note: Current vcpkg 'box2d' port provides Box2D v3 which is API-incompatible with
+# the engine's Box2D v2-based implementation. To avoid breakage, Box2D support is
+# disabled by default and can be enabled explicitly with -DENABLE_BOX2D=ON.
+option(ENABLE_BOX2D "Enable Box2D physics backend (requires compatible Box2D v2.x)" OFF)
+if (ENABLE_BOX2D)
+  find_path(BOX2D_INCLUDE_DIR NAMES box2d/box2d.h PATHS "${VCPKG_INSTALLED}/include" NO_DEFAULT_PATH)
+  if (BOX2D_INCLUDE_DIR)
+    find_library(BOX2D_LIBRARY NAMES box2d Box2D PATHS "${VCPKG_INSTALLED}/lib" NO_DEFAULT_PATH)
+    if (BOX2D_LIBRARY)
+      message(STATUS "Box2D found: include=${BOX2D_INCLUDE_DIR}")
+      target_include_directories(EngineCore PUBLIC ${BOX2D_INCLUDE_DIR})
+      target_link_libraries(EngineCore PUBLIC ${BOX2D_LIBRARY})
+      target_compile_definitions(EngineCore PUBLIC HAVE_BOX2D=1)
+    else()
+      message(STATUS "Box2D headers found but library missing; Box2D backend will be disabled")
+    endif()
   else()
-    message(STATUS "Box2D headers found but library missing; Box2D backend will be disabled")
+    message(STATUS "Box2D not found; Box2D backend will be disabled at runtime")
   endif()
 else()
-  message(STATUS "Box2D not found; Box2D backend will be disabled at runtime")
+  message(STATUS "Box2D support is disabled by default; pass -DENABLE_BOX2D=ON to enable if you have a compatible Box2D v2.x installation")
 endif()
 
 # wasm3 (optional) - lightweight WASM runtime for sandboxed mods

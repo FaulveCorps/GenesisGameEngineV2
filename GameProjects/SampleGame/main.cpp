@@ -29,6 +29,8 @@
 #include "engine/IInput.h"
 #include "engine/INetwork.h"
 #include "engine/ISave.h"
+#include "engine/IScripting.h"
+#include "engine/ModManager.h"
 #include "engine/WasmRuntime.h"
 #include <thread>
 #include <chrono>

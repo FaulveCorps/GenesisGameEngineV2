@@ -64,20 +64,36 @@ target_link_libraries(gl_vaorepro PRIVATE EngineCore)
 target_compile_features(gl_vaorepro PUBLIC cxx_std_17)
 
 # Small smoke executable to validate WASM e2e on CI (runs independently of UnitTests)
-add_executable(WasmE2ESmoke
-    wasm_e2e_check.cpp
-)
+# Only add the WASM E2E smoke when wasm3 runtime is present in vcpkg (CI installs wasm3)
+set(WASM3_LIB_PATH "")
+if (EXISTS "${VCPKG_INSTALLED}/bin/wasm3.dll")
+  set(WASM3_LIB_PATH "${VCPKG_INSTALLED}/bin/wasm3.dll")
+elseif (EXISTS "${VCPKG_INSTALLED}/lib/wasm3.lib")
+  set(WASM3_LIB_PATH "${VCPKG_INSTALLED}/lib/wasm3.lib")
+elseif (EXISTS "${VCPKG_INSTALLED}/lib/libwasm3.so")
+  set(WASM3_LIB_PATH "${VCPKG_INSTALLED}/lib/libwasm3.so")
+elseif (EXISTS "${VCPKG_INSTALLED}/lib/libwasm3.dylib")
+  set(WASM3_LIB_PATH "${VCPKG_INSTALLED}/lib/libwasm3.dylib")
+endif()
 
-target_include_directories(WasmE2ESmoke PRIVATE
-  ${CMAKE_SOURCE_DIR}/Engine/Core/include
-)
+if (WASM3_LIB_PATH)
+  add_executable(WasmE2ESmoke
+      wasm_e2e_check.cpp
+  )
 
-target_link_libraries(WasmE2ESmoke PRIVATE EngineCore)
+  target_include_directories(WasmE2ESmoke PRIVATE
+    ${CMAKE_SOURCE_DIR}/Engine/Core/include
+  )
 
-target_compile_features(WasmE2ESmoke PUBLIC cxx_std_17)
-# Provide PROJECT_SOURCE_DIR to the smoke executable so it can locate sample mod files
-target_compile_definitions(WasmE2ESmoke PRIVATE PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
-add_test(NAME WasmE2ESmoke COMMAND WasmE2ESmoke)
+  target_link_libraries(WasmE2ESmoke PRIVATE EngineCore)
+
+  target_compile_features(WasmE2ESmoke PUBLIC cxx_std_17)
+  # Provide PROJECT_SOURCE_DIR to the smoke executable so it can locate sample mod files
+  target_compile_definitions(WasmE2ESmoke PRIVATE PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+  add_test(NAME WasmE2ESmoke COMMAND WasmE2ESmoke)
+else()
+  message(STATUS "wasm3 not found in ${VCPKG_INSTALLED}; WasmE2ESmoke will be skipped locally.")
+endif()
 
 target_include_directories(UnitTests PRIVATE
   ${CMAKE_SOURCE_DIR}/Engine/Core/include
@@ -116,9 +132,15 @@ set(TEST_RUNTIME_LIBS
     "${VCPKG_INSTALLED}/bin/poly2tri.dll"
     "${VCPKG_INSTALLED}/bin/pugixml.dll"
     "${VCPKG_INSTALLED}/bin/zlib1.dll"
-    "${VCPKG_INSTALLED}/bin/webgpu_dawn.dll"
-    "${VCPKG_INSTALLED}/bin/abseil_dll.dll"
 )
+
+if (EXISTS "${VCPKG_INSTALLED}/bin/webgpu_dawn.dll")
+  list(APPEND TEST_RUNTIME_LIBS "${VCPKG_INSTALLED}/bin/webgpu_dawn.dll")
+endif()
+
+if (EXISTS "${VCPKG_INSTALLED}/bin/abseil_dll.dll")
+  list(APPEND TEST_RUNTIME_LIBS "${VCPKG_INSTALLED}/bin/abseil_dll.dll")
+endif()
 
 # Optional Windows DLLs
 if (EXISTS "${VCPKG_INSTALLED}/bin/miniaudio.dll")
