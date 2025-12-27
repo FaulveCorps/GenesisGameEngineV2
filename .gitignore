@@ -107,3 +107,22 @@ unitstest_out.txt
 vcpkg
 wgpu_test_trace.txt
 build-ninja-release/CMakeFiles/cmake.check_cache
+
+# Additional project build artifacts to ignore (added by restructure)
+/build/
+/build-*/
+/build_*/
+/build-vs/
+/build-vs-subsystems/
+/build_vs/
+/build-subsystems/
+/build-ninja-debug/
+/build-ninja-release/
+/Testing/Temporary/
+**/Debug/*.dll
+**/Debug/*.exe
+*.tlog
+*.ilk
+*.lastbuildstate
+*.recipe
+# End of generated ignores
