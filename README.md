@@ -1,5 +1,7 @@
 # Genesis Game Engine
 
+⚠️ **Repository re-rooted (2025-12-27)** — the repository was re-rooted so that the previous `GameEngine/` subtree is now the repository root. See `REROOT.md` for backups & recovery instructions and next steps for collaborators (re-clone or reset local branches).
+
 Genesis is a modular, cross-platform C++ game engine prototype. This repository contains the engine core, renderers, tools, and a sample game used for verification.
 
 ## Getting started (initial skeleton)
