@@ -404,6 +404,7 @@ void WasmRuntime::RegisterPhysicsCallbacks(std::shared_ptr<IPhysics> phys) {
             [](IPhysics::BodyHandle a, IPhysics::BodyHandle b) {
             std::lock_guard<std::mutex> lk(g_wasmMutex);
             for (auto &p : g_modules) {
+                if (p.second->timed_out.load()) continue; // skip modules that are quarantined
                 IM3Function f = nullptr;
                 M3Result r = m3_FindFunction(&f, p.second->runtime, "on_contact_begin");
                 if (!r) {
@@ -419,6 +420,7 @@ void WasmRuntime::RegisterPhysicsCallbacks(std::shared_ptr<IPhysics> phys) {
             [](IPhysics::BodyHandle a, IPhysics::BodyHandle b) {
             std::lock_guard<std::mutex> lk(g_wasmMutex);
             for (auto &p : g_modules) {
+                if (p.second->timed_out.load()) continue; // skip modules that are quarantined
                 IM3Function f = nullptr;
                 M3Result r = m3_FindFunction(&f, p.second->runtime, "on_contact_end");
                 if (!r) {
