@@ -13,13 +13,15 @@
 #include "m3_env.h"
 
 
-namespace Genesis::Engine {
-
-// Host implementations remain in the wasm-enabled section below
-
 #ifdef HAVE_WASM3
 #include "engine/WasmHostBindings.h"
 #include <algorithm>
+#endif
+
+namespace Genesis::Engine {
+
+#ifdef HAVE_WASM3
+// Host implementations remain in the wasm-enabled section below
 
 struct WasmModule {
     std::string name;
@@ -30,8 +32,24 @@ struct WasmModule {
 
     // Ensure resources are freed when module is destroyed; noexcept to avoid terminating during stack unwinding
     ~WasmModule() noexcept {
-        if (runtime) { m3_FreeRuntime(runtime); runtime = nullptr; }
-        if (module) { m3_FreeModule(module); module = nullptr; }
+        // Debug: trace destruction sequence
+        std::cerr << "WasmModule::~WasmModule: destroying module='" << name << "' modulePtr=" << module << " runtime=" << runtime << std::endl;
+        // Destroy host registration tokens first so they can unregister while module/runtime are still valid
+        std::cerr << "WasmModule::~WasmModule: clearing " << hostTokens.size() << " tokens" << std::endl;
+        hostTokens.clear();
+        std::cerr << "WasmModule::~WasmModule: tokens cleared" << std::endl;
+        if (runtime) {
+            std::cerr << "WasmModule::~WasmModule: freeing runtime (will also free loaded module)=" << runtime << std::endl;
+            m3_FreeRuntime(runtime);
+            runtime = nullptr;
+            module = nullptr; // runtime freed associated module
+            std::cerr << "WasmModule::~WasmModule: runtime freed; module pointer cleared" << std::endl;
+        } else if (module) {
+            std::cerr << "WasmModule::~WasmModule: freeing modulePtr (not attached to runtime)=" << module << std::endl;
+            m3_FreeModule(module);
+            module = nullptr;
+            std::cerr << "WasmModule::~WasmModule: module freed" << std::endl;
+        }
     }
 };
 
@@ -68,8 +86,14 @@ bool WasmRuntime::Init() {
 void WasmRuntime::Shutdown() {
     std::lock_guard<std::mutex> lk(g_wasmMutex);
     // Destroy modules first (tokens will unregister and runtime/module will be freed in WasmModule destructors)
+    std::cerr << "WasmRuntime::Shutdown: destroying " << g_modules.size() << " modules" << std::endl;
+    for (auto &p : g_modules) {
+        std::cerr << "WasmRuntime::Shutdown: module='" << p.first << "' ptr=" << p.second.get() << " runtime=" << p.second->runtime << " modulePtr=" << p.second->module << std::endl;
+    }
     g_modules.clear();
+    std::cerr << "WasmRuntime::Shutdown: modules cleared" << std::endl;
     if (g_env.env) { m3_FreeEnvironment(g_env.env); g_env.env = nullptr; }
+    std::cerr << "WasmRuntime::Shutdown: environment freed" << std::endl;
     g_inited = false;
 }
 
@@ -84,6 +108,12 @@ static void UnregisterGlobalHost(size_t id) {
     auto it = std::remove_if(g_globalHostFunctions.begin(), g_globalHostFunctions.end(), [&](const GlobalHostRegistration &g){ return g.id == id; });
     if (it != g_globalHostFunctions.end()) g_globalHostFunctions.erase(it, g_globalHostFunctions.end());
 }
+
+// Forward declarations for host functions (M3 API raw-style signatures)
+static const void* engine_create_body(IM3Runtime runtime, IM3ImportContext _ctx, uint64_t* _sp, void* _mem);
+static const void* engine_destroy_body(IM3Runtime runtime, IM3ImportContext _ctx, uint64_t* _sp, void* _mem);
+static const void* engine_apply_impulse(IM3Runtime runtime, IM3ImportContext _ctx, uint64_t* _sp, void* _mem);
+static const void* engine_create_distance_joint(IM3Runtime runtime, IM3ImportContext _ctx, uint64_t* _sp, void* _mem);
 
 // Host registration token lifecycle
 WasmRuntime::HostBindingToken::HostBindingToken(HostBindingToken&& other) noexcept : id(other.id) { other.id = SIZE_MAX; }
@@ -102,37 +132,22 @@ WasmRuntime::HostBindingToken WasmRuntime::RegisterHostFunction(const std::strin
 static const char kHostLinkFailed[] = "host link failed";
 static M3Result LinkHostFunctions(WasmModule* wm) {
     if (!wm || !wm->module) return "invalid-module";
+    std::cerr << "LinkHostFunctions: begin module='" << wm->name << "' modulePtr=" << wm->module << std::endl;
     HostBindings hb(wm->module);
-    // Register engine-level host functions
-    auto t0 = hb.RegisterRaw("env", "engine_create_body", "i(iiiii)", engine_create_body);
-    if (!t0.valid()) { std::cerr << "WasmRuntime: LinkHostFunctions failed to register 'engine_create_body' for module '" << wm->name << "'" << std::endl; return kHostLinkFailed; }
-    wm->hostTokens.push_back(std::move(t0));
-
-    auto t1 = hb.RegisterRaw("env", "engine_destroy_body", "v(i)", engine_destroy_body);
-    if (!t1.valid()) { std::cerr << "WasmRuntime: LinkHostFunctions failed to register 'engine_destroy_body' for module '" << wm->name << "'" << std::endl; return kHostLinkFailed; }
-    wm->hostTokens.push_back(std::move(t1));
-
-    auto t2 = hb.RegisterRaw("env", "engine_apply_impulse", "v(iii)", engine_apply_impulse);
-    if (!t2.valid()) { std::cerr << "WasmRuntime: LinkHostFunctions failed to register 'engine_apply_impulse' for module '" << wm->name << "'" << std::endl; return kHostLinkFailed; }
-    wm->hostTokens.push_back(std::move(t2));
-
-    auto t3 = hb.RegisterRaw("env", "engine_create_distance_joint", "i(iiiiii)", engine_create_distance_joint);
-    if (!t3.valid()) { std::cerr << "WasmRuntime: LinkHostFunctions failed to register 'engine_create_distance_joint' for module '" << wm->name << "'" << std::endl; return kHostLinkFailed; }
-    wm->hostTokens.push_back(std::move(t3));
-
     // Register any global host functions that were registered via WasmRuntime::RegisterHostFunction
     {
         std::lock_guard<std::mutex> lk(g_hostRegMutex);
         for (const auto &g : g_globalHostFunctions) {
             auto tok = hb.RegisterRaw(g.ns.c_str(), g.name.c_str(), g.sig.c_str(), g.cb);
             if (!tok.valid()) {
-                std::cerr << "WasmRuntime: LinkHostFunctions failed to register global host '" << g.ns << "'.'" << g.name << "' for module '" << wm->name << "'" << std::endl;
+                std::cerr << "WasmRuntime: LinkHostFunctions: failed to bind global host '" << g.ns << "'.'" << g.name << "' to module '" << wm->name << "' (see earlier logs)" << std::endl;
                 return kHostLinkFailed;
             }
             wm->hostTokens.push_back(std::move(tok));
         }
     }
 
+    std::cerr << "LinkHostFunctions: done module='" << wm->name << "'" << std::endl;
     return m3Err_none;
 }
 
@@ -211,14 +226,8 @@ static bool LoadModuleBytes(const std::string& name, const std::vector<uint8_t>&
     wm->bytes = bytes;
     wm->module = module;
 
-    // Link host imports into the parsed module (tokens are stored on the WasmModule so they outlive this function)
-    r = LinkHostFunctions(wm.get());
-    if (r) {
-        std::cerr << "WasmRuntime: LinkHostFunctions failed for module '" << name << "': " << (r ? r : "(unknown)") << std::endl;
-        // WasmModule destructor will free module
-        return false;
-    }
-
+    // Create runtime and load the module into it BEFORE linking host imports. Wasm3 requires the module
+    // to be associated with a runtime for m3_LinkRawFunction to succeed.
     IM3Runtime runtime = m3_NewRuntime(g_env.env, 64*1024, NULL);
     if (!runtime) {
         std::cerr << "WasmRuntime: m3_NewRuntime failed for module '" << name << "'" << std::endl;
@@ -234,7 +243,17 @@ static bool LoadModuleBytes(const std::string& name, const std::vector<uint8_t>&
         return false;
     }
 
+    // Attach the runtime to the module container so LinkHostFunctions can see it
     wm->runtime = runtime;
+
+    // Link host imports into the loaded module (tokens are stored on the WasmModule so they outlive this function)
+    r = LinkHostFunctions(wm.get());
+    if (r) {
+        std::cerr << "WasmRuntime: LinkHostFunctions failed for module '" << name << "': " << (r ? r : "(unknown)") << std::endl;
+        // Do not free runtime here; let WasmModule destructor handle cleanup in the correct order (module then runtime)
+        return false;
+    }
+
     g_modules[name] = std::move(wm);
     std::cout << "WasmRuntime: loaded module '" << name << "'" << std::endl;
     return true;

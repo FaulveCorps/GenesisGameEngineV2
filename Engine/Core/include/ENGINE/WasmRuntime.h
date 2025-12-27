@@ -5,6 +5,10 @@
 #include <vector>
 #include "engine/IPhysics.h"
 
+#ifdef HAVE_WASM3
+#include "wasm3.h"
+#endif
+
 namespace Genesis::Engine {
 
 class WasmRuntime {
@@ -28,8 +32,7 @@ public:
     // Simple helper: enumerate loaded modules
     static std::vector<std::string> LoadedModules();
 
-#ifdef HAVE_WASM3
-#include "wasm3.h"
+    #ifdef HAVE_WASM3
 
     // Small RAII token returned when registering a global host function. When the
     // token is destroyed the registration is removed (best-effort).
