@@ -28,6 +28,8 @@ We adopt a new `WasmRuntime` abstraction and a minimal, explicit host-binding AP
      - `instruction_budget = optional, implemented if host engine supports it`
    - By default, limits are enforced and configurable per runtime/module. Exceeding limits causes a deterministic trap and a visible error code instead of crash.
 
+   - TODO: Implement **per-module memory page limits** (enforce maximum memory pages at load time) and integrate with wasm3 if supported. Create a ticket (e.g., GS-XXXX) to track adding memory fencing enforcement and testing for malicious modules that attempt to grow memory beyond limits.
+
 ## Consequences
 
 - Safer default behaviour: untrusted modules cannot silently hog memory/CPU.

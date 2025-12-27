@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include "engine/IPhysics.h"
+#include "engine/Wasm/ResourceLimits.h"
 
 #ifdef HAVE_WASM3
 #include "wasm3.h"
@@ -25,6 +26,11 @@ public:
 
     // Call exported function by name with optional string args (uses runtime's CallArgv mechanism)
     static bool CallExported(const std::string& moduleName, const std::string& funcName, const std::vector<std::string>& args = {});
+    // Call exported function with a timeout (ms). If the call does not complete within timeoutMs,
+    // the module is marked as timed out and the call returns false.
+    static bool CallExportedWithTimeout(const std::string& moduleName, const std::string& funcName, const std::vector<std::string>& args, uint32_t timeoutMs);
+    // Set default resource limits for runtime (affects future calls / modules)
+    static void SetDefaultResourceLimits(const ResourceLimits& limits);
 
     // For physics: install callback forwarders that invoke module exports named 'on_contact_begin'/'on_contact_end'
     static void RegisterPhysicsCallbacks(std::shared_ptr<IPhysics> phys);

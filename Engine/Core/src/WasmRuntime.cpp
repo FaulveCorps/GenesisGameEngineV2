@@ -6,6 +6,11 @@
 #include <iterator>
 #include <unordered_map>
 #include <mutex>
+#include <future>
+#include <chrono>
+#include <thread>
+#include <atomic>
+#include "engine/Wasm/ResourceLimits.h"
 
 
 
@@ -29,6 +34,11 @@ struct WasmModule {
     IM3Module module = nullptr;
     IM3Runtime runtime = nullptr;
     std::vector<HostBindings::Token> hostTokens;
+
+    // Resource/monitoring state
+    std::atomic<bool> timed_out{false};    // set when the module exceeded execution time
+    std::atomic<int> active_calls{0};      // number of in-flight calls into this module
+
 
     // Ensure resources are freed when module is destroyed; noexcept to avoid terminating during stack unwinding
     ~WasmModule() noexcept {
@@ -69,6 +79,11 @@ static std::mutex g_wasmMutex;
 static std::unordered_map<std::string, std::unique_ptr<WasmModule>> g_modules;
 static bool g_inited = false;
 static EnvRAII g_env;
+
+// Default resource limits (can be updated via SetDefaultResourceLimits)
+static ResourceLimits g_defaultResourceLimits;
+// Modules scheduled for deferred cleanup (e.g., timed-out modules that still have active calls)
+static std::vector<std::unique_ptr<WasmModule>> g_shutdownModules;
 
 bool WasmRuntime::Init() {
     std::lock_guard<std::mutex> lk(g_wasmMutex);
@@ -127,6 +142,12 @@ WasmRuntime::HostBindingToken WasmRuntime::RegisterHostFunction(const std::strin
     g_globalHostFunctions.push_back({ id, ns, name, sig, cb });
     std::cout << "WasmRuntime: registered global host '" << ns << "'.'" << name << "' id=" << id << std::endl;
     return HostBindingToken(id);
+}
+
+void WasmRuntime::SetDefaultResourceLimits(const ResourceLimits& limits) {
+    std::lock_guard<std::mutex> lk(g_wasmMutex);
+    g_defaultResourceLimits = limits;
+    std::cout << "WasmRuntime: default resource limits updated: memory=" << g_defaultResourceLimits.memory_limit_bytes << " bytes exec_ms=" << g_defaultResourceLimits.execution_time_ms << std::endl;
 }
 
 static const char kHostLinkFailed[] = "host link failed";
@@ -228,6 +249,8 @@ static bool LoadModuleBytes(const std::string& name, const std::vector<uint8_t>&
 
     // Create runtime and load the module into it BEFORE linking host imports. Wasm3 requires the module
     // to be associated with a runtime for m3_LinkRawFunction to succeed.
+    // TODO: Enforce memory limits per-module (e.g., max memory pages) by examining module bytes and/or using
+    // wasm3 APIs if available. See Docs/adr/0003-wasm-runtime.md and ticket GS-XXXX for follow-up.
     IM3Runtime runtime = m3_NewRuntime(g_env.env, 64*1024, NULL);
     if (!runtime) {
         std::cerr << "WasmRuntime: m3_NewRuntime failed for module '" << name << "'" << std::endl;
@@ -284,26 +307,87 @@ bool WasmRuntime::LoadModuleFromBytes(const std::string& moduleName, const std::
 }
 
 bool WasmRuntime::CallExported(const std::string& moduleName, const std::string& funcName, const std::vector<std::string>& args) {
-    std::lock_guard<std::mutex> lk(g_wasmMutex);
-    auto it = g_modules.find(moduleName);
-    if (it == g_modules.end()) return false;
-    auto& m = it->second;
-    IM3Function f = nullptr;
-    M3Result r = m3_FindFunction(&f, m->runtime, funcName.c_str());
-    if (r) {
-        std::cerr << "WasmRuntime: m3_FindFunction failed for module '" << moduleName << "' func '" << funcName << "': " << (r ? r : "(unknown)") << std::endl;
+    // Call with the default execution time limit
+    return CallExportedWithTimeout(moduleName, funcName, args, g_defaultResourceLimits.execution_time_ms);
+}
+
+bool WasmRuntime::CallExportedWithTimeout(const std::string& moduleName, const std::string& funcName, const std::vector<std::string>& args, uint32_t timeoutMs) {
+    // Locate module and mark as active (increment in-flight counter)
+    WasmModule* modulePtr = nullptr;
+    {
+        std::lock_guard<std::mutex> lk(g_wasmMutex);
+        auto it = g_modules.find(moduleName);
+        if (it == g_modules.end()) return false;
+        modulePtr = it->second.get();
+        if (modulePtr->timed_out.load()) {
+            std::cerr << "WasmRuntime: rejecting call to timed-out module '" << moduleName << "' func '" << funcName << "'" << std::endl;
+            return false;
+        }
+        modulePtr->active_calls.fetch_add(1);
+    }
+
+    // Run the call asynchronously so we can enforce a timeout. Capture the raw module pointer so the worker
+    // can still decrement active_calls even if the module is removed from the map.
+    auto fut = std::async(std::launch::async, [moduleName, funcName, args, modulePtr]() -> bool {
+        WasmModule* m = modulePtr;
+        if (!m) return false;
+        if (m->timed_out.load()) return false;
+
+        bool call_ok = false;
+        // Perform the actual wasm call under the global wasm mutex so runtimes aren't freed concurrently
+        {
+            std::lock_guard<std::mutex> lk(g_wasmMutex);
+            IM3Function f = nullptr;
+            M3Result r = m3_FindFunction(&f, m->runtime, funcName.c_str());
+            if (r) {
+                std::cerr << "WasmRuntime: m3_FindFunction failed for module '" << moduleName << "' func '" << funcName << "': " << (r ? r : "(unknown)") << std::endl;
+                call_ok = false;
+            } else {
+                std::vector<const char*> argv;
+                argv.reserve(args.size());
+                for (auto &s : args) argv.push_back(s.c_str());
+                r = m3_CallArgv(f, static_cast<uint32_t>(argv.size()), argv.empty() ? nullptr : argv.data());
+                if (r) {
+                    std::cerr << "WasmRuntime: m3_CallArgv failed for module '" << moduleName << "' func '" << funcName << "': " << (r ? r : "(unknown)") << std::endl;
+                    call_ok = false;
+                } else {
+                    call_ok = true;
+                }
+            }
+        }
+
+        // Decrement active calls and schedule cleanup if the module is timed out and no active calls left
+        int prev = m->active_calls.fetch_sub(1);
+        if (m->timed_out.load() && prev == 1) {
+            std::lock_guard<std::mutex> lk(g_wasmMutex);
+            auto it = g_modules.find(moduleName);
+            if (it != g_modules.end() && it->second.get() == m) {
+                std::cerr << "WasmRuntime: scheduling cleanup for module '" << moduleName << "' after timeout" << std::endl;
+                g_shutdownModules.push_back(std::move(it->second));
+                g_modules.erase(it);
+            }
+        }
+
+        return call_ok;
+    });
+
+    // Wait for result with timeout
+    auto status = fut.wait_for(std::chrono::milliseconds(timeoutMs));
+    if (status == std::future_status::ready) {
+        bool res = fut.get();
+        return res;
+    } else {
+        // Timeout: mark module as timed out and log. Do not free resources synchronously while the module
+        // might still be executing. The worker will decrement active call counters and schedule cleanup when safe.
+        {
+            // Set atomically without holding g_wasmMutex to avoid deadlocks; the cleanup will be scheduled by the worker thread
+            std::lock_guard<std::mutex> lk(g_wasmMutex);
+            auto it = g_modules.find(moduleName);
+            if (it != g_modules.end()) it->second->timed_out.store(true);
+        }
+        std::cerr << "WasmRuntime: module '" << moduleName << "' func '" << funcName << "' timed out after " << timeoutMs << "ms" << std::endl;
         return false;
     }
-    // m3_CallArgv takes an array of C strings
-    std::vector<const char*> argv;
-    argv.reserve(args.size());
-    for (auto &s : args) argv.push_back(s.c_str());
-    r = m3_CallArgv(f, static_cast<uint32_t>(argv.size()), argv.empty() ? nullptr : argv.data());
-    if (r) {
-        std::cerr << "WasmRuntime: m3_CallArgv failed for module '" << moduleName << "' func '" << funcName << "': " << (r ? r : "(unknown)") << std::endl;
-        return false;
-    }
-    return true;
 }
 
 std::vector<std::string> WasmRuntime::LoadedModules() {
@@ -357,6 +441,8 @@ bool WasmRuntime::LoadModule(const std::filesystem::path& /*modulePath*/) { retu
 // Load from bytes: no-op when wasm3 not available
 bool WasmRuntime::LoadModuleFromBytes(const std::string& /*moduleName*/, const std::vector<uint8_t>& /*bytes*/) { return false; }
 bool WasmRuntime::CallExported(const std::string& /*moduleName*/, const std::string& /*funcName*/, const std::vector<std::string>& /*args*/) { return false; }
+bool WasmRuntime::CallExportedWithTimeout(const std::string& /*moduleName*/, const std::string& /*funcName*/, const std::vector<std::string>& /*args*/, uint32_t /*timeoutMs*/) { return false; }
+void WasmRuntime::SetDefaultResourceLimits(const ResourceLimits& /*limits*/) { }
 void WasmRuntime::RegisterPhysicsCallbacks(std::shared_ptr<IPhysics> /*phys*/) { }
 std::vector<std::string> WasmRuntime::LoadedModules() { return {}; }
 
