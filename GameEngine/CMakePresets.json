@@ -1,0 +1,107 @@
+{
+  "version": 6,
+  "configurePresets": [
+    {
+      "name": "ninja-debug",
+      "displayName": "Ninja Debug (Fast Parallel Builds, Development)",
+      "description": "Ninja Multi-Config with full parallelism, /FS flag, embedded debug info for fast incremental builds",
+      "generator": "Ninja Multi-Config",
+      "cacheVariables": {
+        "CMAKE_TOOLCHAIN_FILE": "C:/Program Files/vcpkg/scripts/buildsystems/vcpkg.cmake",
+        "VCPKG_TARGET_TRIPLET": "x64-windows",
+        "CMAKE_CXX_FLAGS_INIT": "/FS /fp:fast",
+        "CMAKE_MSVC_DEBUG_INFORMATION_FORMAT": "Embedded"
+      },
+      "binaryDir": "${sourceDir}/build-ninja-debug"
+    },
+    {
+      "name": "ninja-release",
+      "displayName": "Ninja Release (Optimized for Production)",
+      "description": "Ninja Multi-Config with full optimizations, LTO, inlining, and fast code generation",
+      "generator": "Ninja Multi-Config",
+      "cacheVariables": {
+        "CMAKE_TOOLCHAIN_FILE": "C:/Program Files/vcpkg/scripts/buildsystems/vcpkg.cmake",
+        "VCPKG_TARGET_TRIPLET": "x64-windows",
+        "CMAKE_CXX_FLAGS_INIT": "/O2 /Oi /Oy /GL /Gw /fp:fast",
+        "CMAKE_EXE_LINKER_FLAGS_INIT": "/LTCG:incremental /OPT:REF /OPT:ICF",
+        "CMAKE_SHARED_LINKER_FLAGS_INIT": "/LTCG:incremental /OPT:REF /OPT:ICF"
+      },
+      "binaryDir": "${sourceDir}/build-ninja-release"
+    },
+    {
+      "name": "default",
+      "displayName": "Default (Ninja Debug)",
+      "description": "Alias for ninja-debug preset",
+      "inherits": "ninja-debug",
+      "binaryDir": "${sourceDir}/build"
+    },
+    {
+      "name": "vs2022",
+      "displayName": "Visual Studio 2022 (IDE Support)",
+      "description": "Traditional Visual Studio generator for IDE integration and debugging",
+      "generator": "Visual Studio 17 2022",
+      "architecture": "x64",
+      "cacheVariables": {
+        "CMAKE_TOOLCHAIN_FILE": "C:/Program Files/vcpkg/scripts/buildsystems/vcpkg.cmake",
+        "VCPKG_TARGET_TRIPLET": "x64-windows"
+      },
+      "binaryDir": "${sourceDir}/build-vs"
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "debug",
+      "displayName": "Build Debug (All Targets, Ninja)",
+      "description": "Build all targets in debug with Ninja (fast parallel builds)",
+      "configurePreset": "ninja-debug",
+      "jobs": 0,
+      "configuration": "Debug"
+    },
+    {
+      "name": "release",
+      "displayName": "Build Release (All Targets, Optimized)",
+      "description": "Build all targets with full optimizations",
+      "configurePreset": "ninja-release",
+      "jobs": 0,
+      "configuration": "Release"
+    },
+    {
+      "name": "engine",
+      "displayName": "Build Engine Core (Fast)",
+      "description": "Build EngineCore library only with Ninja",
+      "configurePreset": "ninja-debug",
+      "targets": ["EngineCore"],
+      "jobs": 0
+    },
+    {
+      "name": "game",
+      "displayName": "Build Sample Game (Fast)",
+      "description": "Build SampleGame executable with Ninja",
+      "configurePreset": "ninja-debug",
+      "targets": ["SampleGame"],
+      "jobs": 0
+    },
+    {
+      "name": "tests",
+      "displayName": "Build Tests (Fast)",
+      "description": "Build UnitTests with Ninja",
+      "configurePreset": "ninja-debug",
+      "targets": ["UnitTests"],
+      "jobs": 0
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "default",
+      "displayName": "Run Tests (Debug)",
+      "description": "Run unit tests from Debug build",
+      "configurePreset": "default",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "stopOnFailure": false
+      }
+    }
+  ]
+}
