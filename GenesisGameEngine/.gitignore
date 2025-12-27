@@ -1,0 +1,128 @@
+# Build artifacts & caches
+# General build directories (avoid committing generated build trees)
+/build2/
+/build_vs/
+/build-vs/
+/out/
+/bin/
+/lib/
+/tmp/
+
+# CMake & build system artefacts (generated)
+/CMakeFiles/
+/CMakeCache.txt
+/cmake_install.cmake
+/Makefile
+/install_manifest.txt
+*.cmake
+*.make
+*.tlog0
+
+# Visual Studio / MSBuild outputs
+*.sln
+*.vcxproj*
+*.vcxproj.user
+*.vcxproj.filters
+*.user
+*.suo
+*.sdf
+*.opensdf
+ipch/
+*.ipch
+*.obj
+*.o
+*.exe
+# Keep binary artifacts out of source control; they will live in build directories
+**/bin/*
+**/lib/*
+*.pdb
+
+# vcpkg build outputs and caches (keep vcpkg.exe if checked in)
+/vcpkg/installed/
+/vcpkg/buildtrees/
+/vcpkg/packages/
+/vcpkg/archives/
+/vcpkg/tools/
+!vcpkg/vcpkg.exe
+
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor / user files and logs
+.vscode/
+.idea/
+*.code-workspace
+
+# vcpkg binary cache and top-level helper artifacts (keep vcpkg.exe if present)
+.vcpkg_binary_cache
+/vcpkg/
+!vcpkg/vcpkg.exe
+
+# Ignore subbuild generated stamps & tlogs (externalprojects/_deps)
+/build-vs/_deps/
+/build_vs/_deps/
+
+# Logs and smoke/test artifacts
+*.log
+err.log
+out.log
+out_debug2.log
+out_debug3.log
+out_forced_vulkan_debug.log
+out_forced_vulkan.log
+out_triangle.log
+out_cli_triangle.log
+out_cli_triangle2.log
+smoke-*.log
+
+# Runtime-generated artifacts (screenshots, test outputs)
+/artifacts/
+software_render*.bmp
+test_cycle_*.bmp
+
+
+# Crash capture / Procdump artifacts
+Tools/Procdump.zip
+tools/Procdump/*.dmp
+
+# Temporary and misc
+*.tmp
+*.bak
+*~
+.DS_Store
+Thumbs.db
+
+BUILD_OPTIMIZATION.md
+HEADLESS_TEST.md
+SDL2_MIGRATION.md
+TROUBLESHOOTING.md
+build-ninja-debug/CMakeCache.txt
+build-ninja-debug/CMakeFiles/cmake.check_cache
+list_err.txt
+list_out.txt
+out.txt
+unitstest_out.txt
+vcpkg
+wgpu_test_trace.txt
+build-ninja-release/CMakeFiles/cmake.check_cache
+
+# Additional project build artifacts to ignore (added by restructure)
+/build/
+/build-*/
+/build_*/
+/build-vs/
+/build-vs-subsystems/
+/build_vs/
+/build-subsystems/
+/build-ninja-debug/
+/build-ninja-release/
+/Testing/Temporary/
+**/Debug/*.dll
+**/Debug/*.exe
+*.tlog
+*.ilk
+*.lastbuildstate
+*.recipe
+# End of generated ignores
