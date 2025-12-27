@@ -9,6 +9,12 @@ This document defines how I (the agent) will develop the Genesis Game Engine dur
 
 ---
 
+## Memory & Reference (Copilot) 💾
+- **Agenda as source-of-truth:** The `Agenda/` folder is the authoritative source for agent memory, ADRs, policies, meeting notes, and agent-specific instructions. Agents (including Copilot) must always consult and reference files under `Agenda/` when recalling project history, decisions, or behavior rules.
+- **Memory updates:** When agent memory or instructions need to be recorded or updated, add or edit files under `Agenda/` (preferably `Agenda/Compatible`); avoid storing persistent memory in other parts of the repo.
+
+---
+
 ## Goals ✅
 - Deliver a functional, buildable, and testable C++ game engine skeleton that meets the functional requirements in the provided Game Engine Document.
 - Prioritize a minimal, correct implementation, then expand features in clearly versioned phases.
