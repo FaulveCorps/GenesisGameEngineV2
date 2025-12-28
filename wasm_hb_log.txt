@@ -1,0 +1,8 @@
+RegisterVoidString: holder=00000274DA25CFE0 module=00000274DA222120 key=env:host_log runtime=00000274DA217A70
+RegisterVoidString: keyPtrAddr=00000274DA25D480
+trampoline_v: runtime=00000274DA217A70 _ctx=000000A4603DCA50 ptr=0 len=5
+trampoline_v: ud=00000274DA25D6D0
+trampoline_v: modRuntime=00000274DA217A70
+trampoline_v: mem=00000274DBB14538 memSz=65536
+trampoline_v: about to call callback with s='hello'
+trampoline_v: callback returned

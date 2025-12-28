@@ -1,8 +1,8 @@
 #pragma once
 
-#include "ENGINE/IGraphics.h"
-#include "ENGINE/Shader.h"
-#include "ENGINE/Texture.h"
+#include "Engine/IGraphics.h"
+#include "Engine/Shader.h"
+#include "Engine/Texture.h"
 #include <memory>
 
 namespace Genesis::Engine {

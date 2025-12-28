@@ -48,6 +48,10 @@ struct WasmModule {
         std::cerr << "WasmModule::~WasmModule: clearing " << hostTokens.size() << " tokens" << std::endl;
         hostTokens.clear();
         std::cerr << "WasmModule::~WasmModule: tokens cleared" << std::endl;
+        // Clean up any global host callback registrations associated with this module so
+        // holders are destroyed only after the module/runtime are gone.
+        if (module) { HostBindings::CleanupModuleCallbacks(module); }
+
         if (runtime) {
             std::cerr << "WasmModule::~WasmModule: freeing runtime (will also free loaded module)=" << runtime << std::endl;
             m3_FreeRuntime(runtime);
@@ -171,6 +175,17 @@ static M3Result LinkHostFunctions(WasmModule* wm) {
     std::cerr << "LinkHostFunctions: done module='" << wm->name << "'" << std::endl;
     return m3Err_none;
 }
+
+// Return pointer to a module's timed_out flag (or nullptr). This is used by host trampolines
+// to perform a fast, lock-free check without taking the global wasm mutex (avoids deadlocks).
+std::atomic<bool>* WasmRuntime::GetModuleTimedOutPtr(IM3Module module) {
+    std::lock_guard<std::mutex> lk(g_wasmMutex);
+    for (auto &p : g_modules) {
+        if (p.second && p.second->module == module) return &p.second->timed_out;
+    }
+    return nullptr;
+}
+
 
 // Host import implementations
 m3ApiRawFunction(engine_create_body) {

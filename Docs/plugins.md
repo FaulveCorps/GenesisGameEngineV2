@@ -1,6 +1,6 @@
 # Plugin API & Guidelines
 
-The engine exposes a minimal C plugin API (`Engine/Core/include/ENGINE/PluginAPI.h`) for runtime modules.
+The engine exposes a minimal C plugin API (`Engine/Core/include/Engine/PluginAPI.h`) for runtime modules.
 
 Required exported functions (extern "C"):
 - `bool Plugin_Init()` — called when the plugin is loaded; return `true` on success.

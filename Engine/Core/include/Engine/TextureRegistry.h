@@ -4,7 +4,7 @@
 #include <mutex>
 #include <unordered_map>
 #include <utility>
-#include "ENGINE/IGraphics.h"
+"Engine/IGraphics.h"
 
 namespace Genesis::Engine {
 class Texture;

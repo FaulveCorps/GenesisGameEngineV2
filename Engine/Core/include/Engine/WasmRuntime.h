@@ -5,6 +5,7 @@
 #include <vector>
 #include "engine/IPhysics.h"
 #include "engine/Wasm/ResourceLimits.h"
+#include <atomic>
 
 #ifdef HAVE_WASM3
 #include "wasm3.h"
@@ -31,6 +32,10 @@ public:
     static bool CallExportedWithTimeout(const std::string& moduleName, const std::string& funcName, const std::vector<std::string>& args, uint32_t timeoutMs);
     // Set default resource limits for runtime (affects future calls / modules)
     static void SetDefaultResourceLimits(const ResourceLimits& limits);
+
+    // Return pointer to the module's timed_out flag, or nullptr if not managed by WasmRuntime.
+    // This pointer is intentionally a raw pointer so trampolines can perform a fast, lock-free check.
+    static std::atomic<bool>* GetModuleTimedOutPtr(IM3Module module);
 
     // For physics: install callback forwarders that invoke module exports named 'on_contact_begin'/'on_contact_end'
     static void RegisterPhysicsCallbacks(std::shared_ptr<IPhysics> phys);

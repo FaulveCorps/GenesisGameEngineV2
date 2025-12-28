@@ -4,7 +4,7 @@
 #include <memory>
 #include <vector>
 #include <string>
-#include "ENGINE/IGraphics.h"
+"Engine/IGraphics.h"
 
 namespace Genesis::Engine {
 class IGraphicsAPI;

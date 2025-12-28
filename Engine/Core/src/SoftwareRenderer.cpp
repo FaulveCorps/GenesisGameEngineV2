@@ -1,5 +1,5 @@
-#include "ENGINE/SoftwareRenderer.h"
-#include "ENGINE/Texture.h"
+#include "Engine/SoftwareRenderer.h"
+#include "Engine/Texture.h"
 #include <iostream>
 #include <algorithm>
 #include <unordered_map>

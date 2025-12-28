@@ -45,9 +45,11 @@ add_executable(UnitTests
     test_scripting.cpp
     test_wasm_runtime.cpp
     test_wasm_runtime_raii.cpp
+    test_wasm_host_bindings.cpp
     test_wasm_runtime.cpp
     test_wasm_sample_mod.cpp
     test_wasm_mod_file.cpp
+    test_wasm_host_bindings.cpp
     test_wasm_e2e.cpp
     test_wasm_limits.cpp
     ${catch2_SOURCE_DIR}/extras/catch_amalgamated.cpp
