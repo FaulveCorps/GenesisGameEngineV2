@@ -1,5 +1,6 @@
 #include "catch_amalgamated.hpp"
 #include "engine/WasmRuntime.h"
+#include "engine/Engine.h"
 
 #ifdef HAVE_WASM3
 #include <fstream>

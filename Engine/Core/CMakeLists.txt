@@ -96,6 +96,7 @@ add_library(EngineCore STATIC
     src/MiniaudioAudio.cpp
     src/miniaudio_impl.cpp
     src/stb_image_impl.cpp
+    src/WasmHostBindings.cpp
     src/WasmRuntime.cpp
 )  
 

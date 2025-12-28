@@ -1,5 +1,6 @@
 #include "catch_amalgamated.hpp"
 #include "engine/WasmRuntime.h"
+#include <fstream>
 
 #ifdef HAVE_WASM3
 TEST_CASE("WasmRuntime: load sample mod from repo hex file", "[wasm][mod][file]") {
