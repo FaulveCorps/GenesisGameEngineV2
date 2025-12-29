@@ -101,16 +101,35 @@ TEST_CASE("Wasm HostBindings: host_log receives string from module", "[wasm][hos
         REQUIRE(r2 == m3Err_none);
         std::cerr << "Test: calling run" << std::endl;
         r2 = m3_CallArgv(f, 0, nullptr);
-        std::cerr << "Test: call returned: " << r2 << std::endl;
+        std::cerr << "Test: call returned: r2=" << (int)r2 << std::endl;
+        std::cerr << "Test: captured (before assert, len=" << captured.size() << ")='" << captured << "'" << std::endl;
         REQUIRE(r2 == m3Err_none);
 
+        std::cerr << "Test: about to assert captured value: '" << captured << "'" << std::endl;
         REQUIRE(captured == "hello");
+        std::cerr << "Test: captured check passed" << std::endl;
     }
 
     // Cleanup
-    if (runtime) m3_FreeRuntime(runtime);
-    m3_FreeModule(module);
+    IM3Module saved_module = module;
+    bool freed_by_runtime = false;
+    if (runtime) {
+        std::cerr << "Test: about to free runtime" << std::endl;
+        m3_FreeRuntime(runtime);
+        std::cerr << "Test: freed runtime" << std::endl;
+        freed_by_runtime = true;
+    }
+    if (!freed_by_runtime && module) {
+        std::cerr << "Test: about to free module" << std::endl;
+        m3_FreeModule(module);
+        std::cerr << "Test: freed module" << std::endl;
+    }
+    std::cerr << "Test: about to finalize cleanup module callbacks" << std::endl;
+    Genesis::Engine::HostBindings::CleanupModuleCallbacks(saved_module);
+    std::cerr << "Test: done cleanup module callbacks" << std::endl;
+    std::cerr << "Test: about to free env" << std::endl;
     m3_FreeEnvironment(env);
+    std::cerr << "Test: freed env" << std::endl;
 }
 
     TEST_CASE("Wasm HostBindings: host_log rejects over-long strings", "[wasm][host][limits]") {
@@ -153,8 +172,11 @@ TEST_CASE("Wasm HostBindings: host_log receives string from module", "[wasm][hos
         tok2 = {};
         std::cerr << "Test: post-assert reached; token cleared; about to cleanup" << std::endl;
 
-        if (runtime2) { std::cerr << "Test: about to free runtime2" << std::endl; m3_FreeRuntime(runtime2); std::cerr << "Test: freed runtime2" << std::endl; }
-        std::cerr << "Test: about to free module2" << std::endl; m3_FreeModule(module2); std::cerr << "Test: freed module2" << std::endl;
+        IM3Module saved_module2 = module2;
+        bool freed_by_runtime2 = false;
+        if (runtime2) { std::cerr << "Test: about to free runtime2" << std::endl; m3_FreeRuntime(runtime2); std::cerr << "Test: freed runtime2" << std::endl; freed_by_runtime2 = true; }
+        if (!freed_by_runtime2 && module2) { std::cerr << "Test: about to free module2" << std::endl; m3_FreeModule(module2); std::cerr << "Test: freed module2" << std::endl; }
+        std::cerr << "Test: about to finalize cleanup module callbacks for module2" << std::endl; Genesis::Engine::HostBindings::CleanupModuleCallbacks(saved_module2); std::cerr << "Test: done cleanup module callbacks for module2" << std::endl;
         std::cerr << "Test: about to free env2" << std::endl; m3_FreeEnvironment(env2); std::cerr << "Test: freed env2" << std::endl;
     }
 
@@ -196,8 +218,11 @@ TEST_CASE("Wasm HostBindings: host_log receives string from module", "[wasm][hos
             REQUIRE(r3 != m3Err_none);
         }
 
-        if (runtime3) m3_FreeRuntime(runtime3);
-        m3_FreeModule(module3);
+        IM3Module saved_module3 = module3;
+        bool freed_by_runtime3 = false;
+        if (runtime3) { m3_FreeRuntime(runtime3); freed_by_runtime3 = true; }
+        if (!freed_by_runtime3 && module3) m3_FreeModule(module3);
+        Genesis::Engine::HostBindings::CleanupModuleCallbacks(saved_module3);
         m3_FreeEnvironment(env3);
     }
 

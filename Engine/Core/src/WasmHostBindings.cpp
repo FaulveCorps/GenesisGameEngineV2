@@ -11,7 +11,12 @@
 #include <functional>
 #include <algorithm>
 #include <sstream>
+#include <thread>
 #include <windows.h>
+#ifdef _WIN32
+#include <dbghelp.h>
+#pragma comment(lib, "Dbghelp.lib")
+#endif
 
 #ifdef _DEBUG
 #include <crtdbg.h>
@@ -71,6 +76,10 @@ struct CallbackI32I32 : CallbackBase {
 
 struct CallbackVoidString : CallbackBase {
     std::function<void(const std::string&)> cb;
+};
+
+struct CallbackRaw : CallbackBase {
+    M3RawCall cb;
 };
 
 static std::mutex g_callbacksMutex;
@@ -292,19 +301,230 @@ static std::string KeyFor(const char* ns, const char* name) { return std::string
 
 // Register a raw host function (namespace, name, signature, callback). Returns a Token
 // that will unregister on destruction. The callback must conform to wasm3's M3RawCall.
-HostBindings::Token HostBindings::RegisterRaw(const char* ns, const char* name, const char* sig, M3RawCall cb) {
+m3ApiRawFunction(host_trampoline_raw) {
+    void* ud = _ctx ? _ctx->userdata : nullptr;
+    if (!ud) m3ApiTrap("host userdata missing");
+    auto udt = reinterpret_cast<ImportUserdata*>(ud);
+    if (!udt) m3ApiTrap("host userdata parse failed");
+    if (udt->kind == 2) {
+        auto hptr = reinterpret_cast<CallbackRaw*>(udt->ptr);
+        if (!hptr || !hptr->active) m3ApiTrap("host function unregistered");
+        if (hptr->timed_out_ptr && hptr->timed_out_ptr->load()) m3ApiTrap("module timed out");
+        IM3Runtime modRuntime = m3_GetModuleRuntime(hptr->module);
+        {
+            std::ostringstream oss; oss << "host_trampoline_raw: invoking raw cb holder=" << hptr << " module=" << hptr->module << " runtime=" << modRuntime;
+            LogToFile(oss.str());
+        }
+        try {
+            auto r = hptr->cb(modRuntime, _ctx, _sp, _mem);
+            std::ostringstream oss; oss << "host_trampoline_raw: callback returned ptr=" << (void*)r;
+            LogToFile(oss.str());
+            return r;
+        } catch (...) {
+            LogToFile("host_trampoline_raw: callback threw exception");
+            m3ApiTrap("host callback threw exception");
+        }
+    } else if (udt->kind == 1) {
+    } else if (udt->kind == 1) {
+        auto keyPtr = reinterpret_cast<const std::string*>(udt->ptr);
+        if (!keyPtr) m3ApiTrap("host userdata missing");
+        std::shared_ptr<CallbackBase> base;
+        {
+            std::lock_guard<std::mutex> lk(g_callbacksMutex);
+            auto it = g_callbacks.find(*keyPtr);
+            if (it == g_callbacks.end() || !it->second || !it->second->active) m3ApiTrap("host function unregistered");
+            base = it->second;
+        }
+        auto h = std::static_pointer_cast<CallbackRaw>(base);
+        if (h->timed_out_ptr && h->timed_out_ptr->load()) m3ApiTrap("module timed out");
+        IM3Runtime modRuntime = m3_GetModuleRuntime(h->module);
+        try {
+            return h->cb(modRuntime, _ctx, _sp, _mem);
+        } catch (...) {
+            m3ApiTrap("host callback threw exception");
+        }
+    } else {
+        m3ApiTrap("host userdata kind unknown");
+    }
+}
+
+HostBindings::Token HostBindings::RegisterRaw(const char* ns, const char* name, const char* sig, M3RawCall cb, std::atomic<bool>* module_timed_out_ptr) {
     if (!module_) return {};
     IM3Runtime modRuntime = m3_GetModuleRuntime(module_);
     const char* modName = m3_GetModuleName(module_);
-    std::cerr << "HostBindings: RegisterRaw module=" << module_ << " name='" << (modName ? modName : "(null)") << "' runtime=" << modRuntime << " ns='" << ns << "' name='" << name << "' sig='" << sig << "'" << std::endl;
-    M3Result r = m3_LinkRawFunction(module_, ns, name, sig, cb);
-    if (r) {
-        std::cerr << "HostBindings: m3_LinkRawFunction failed for '" << ns << "'.'" << name << "' sig='" << sig << "': " << r << std::endl;
+    std::cerr << "RegisterRaw: creating holder for ns='" << ns << "' name='" << name << "' module=" << module_ << " runtime=" << modRuntime << " thread=" << std::this_thread::get_id() << std::endl;
+
+    try {
+        // Create holder for raw callback
+        auto holder = std::make_shared<CallbackRaw>();
+        holder->cb = cb;
+        holder->module = module_;
+        holder->maxStringLength = maxStringLength_;
+
+        std::string key = KeyFor(ns, name);
+        std::shared_ptr<std::string> keyPtr;
+        {
+            std::lock_guard<std::mutex> lk(g_callbacksMutex);
+            g_callbacks[key] = holder;
+            auto itKey = g_callback_keys.find(key);
+            if (itKey == g_callback_keys.end()) {
+                keyPtr = std::make_shared<std::string>(key);
+                g_callback_keys[key] = keyPtr;
+            } else {
+                keyPtr = itKey->second;
+            }
+        }
+        std::cerr << "RegisterRaw: inserted holder=" << holder.get() << " keyPtr=" << (void*)keyPtr.get() << std::endl;
+
+        auto udptr_local = std::make_shared<ImportUserdata>();
+        IM3Runtime modRuntimeLocal = m3_GetModuleRuntime(module_);
+        // Prefer key-based userdata so the userdata pointer stored in wasm3 is a stable pointer
+        // to a string that we hold in g_callback_keys. This avoids dangling userdata if we
+        // erase our internal holder maps before the module is fully torn down.
+        udptr_local->kind = 1;
+        udptr_local->ptr = keyPtr.get();
+        if (modRuntimeLocal) {
+            // If caller provided a timed_out pointer (e.g., LinkHostFunctions already holds g_wasmMutex
+            // and can pass &wm->timed_out), use it to avoid re-locking g_wasmMutex inside
+            // WasmRuntime::GetModuleTimedOutPtr which would deadlock.
+            if (module_timed_out_ptr) {
+                holder->timed_out_ptr = module_timed_out_ptr;
+            } else {
+                try {
+                    holder->timed_out_ptr = WasmRuntime::GetModuleTimedOutPtr(module_);
+                } catch (const std::system_error &se) {
+                    std::cerr << "RegisterRaw: GetModuleTimedOutPtr threw system_error: " << se.what() << " code=" << se.code().value() << "\n";
+                    holder->timed_out_ptr = nullptr;
+                }
+            }
+        }
+
+        holder->udptr = udptr_local;
+        {
+            std::lock_guard<std::mutex> lk2(g_callbacksMutex);
+            g_import_userdata[key] = udptr_local;
+        }
+
+        std::cerr << "RegisterRaw: prepared import userdata, about to call m3_LinkRawFunctionEx" << std::endl;
+
+        const char* thisSig = sig ? sig : "";
+        try {
+            // Prefer passing the key-based ImportUserdata pointer so module-stored userdata remains stable
+            M3Result r = m3_LinkRawFunctionEx(module_, ns, name, thisSig, (M3RawCall)host_trampoline_raw, udptr_local.get());
+            if (r) {
+                std::cerr << "HostBindings: m3_LinkRawFunctionEx failed for '" << ns << "'.'" << name << "' sig='" << thisSig << "': " << r << std::endl;
+                // Fallback: try the older holder-pointer based path
+                M3Result rf = m3_LinkRawFunctionEx(module_, ns, name, thisSig, (M3RawCall)host_trampoline_raw, holder.get());
+                if (rf) {
+                    std::cerr << "HostBindings: fallback m3_LinkRawFunction failed: " << rf << std::endl;
+                    std::lock_guard<std::mutex> lk(g_callbacksMutex);
+                    auto it = g_callbacks.find(key);
+                    if (it != g_callbacks.end() && it->second == holder) g_callbacks.erase(it);
+                    g_import_userdata.erase(key);
+                    return {};
+                }
+            }
+        } catch (const std::system_error &se) {
+            std::cerr << "RegisterRaw: m3_LinkRawFunctionEx threw system_error: " << se.what() << " code=" << se.code().value() << std::endl;
+#ifdef _WIN32
+            void* addrs[64];
+            USHORT frames = CaptureStackBackTrace(0, 64, addrs, nullptr);
+            std::cerr << "Stack frames captured: " << frames << std::endl;
+            HANDLE hProc = GetCurrentProcess();
+            SymSetOptions(SYMOPT_DEFERRED_LOADS | SYMOPT_UNDNAME);
+            if (SymInitialize(hProc, NULL, TRUE)) {
+                for (USHORT i = 0; i < frames; ++i) {
+                    DWORD64 addr = (DWORD64)(addrs[i]);
+                    char buffer[sizeof(SYMBOL_INFO) + MAX_SYM_NAME * sizeof(TCHAR)];
+                    PSYMBOL_INFO pSymbol = (PSYMBOL_INFO)buffer;
+                    pSymbol->SizeOfStruct = sizeof(SYMBOL_INFO);
+                    pSymbol->MaxNameLen = MAX_SYM_NAME;
+                    DWORD64 displacement = 0;
+                    if (SymFromAddr(hProc, addr, &displacement, pSymbol)) {
+                        std::cerr << std::hex << pSymbol->Address << " " << pSymbol->Name << std::dec << " +0x" << displacement << std::endl;
+                    } else {
+                        std::cerr << std::hex << addr << std::dec << std::endl;
+                    }
+                }
+            } else {
+                for (USHORT i=0;i<frames;i++) std::cerr << addrs[i] << std::endl;
+            }
+#endif
+            // Fallback: try raw link path as a last resort
+            std::cerr << "RegisterRaw: attempting fallback to m3_LinkRawFunction" << std::endl;
+            M3Result rf = m3_LinkRawFunction(module_, ns, name, thisSig, cb);
+            if (rf) {
+                std::cerr << "RegisterRaw: fallback m3_LinkRawFunction failed: " << rf << std::endl;
+                std::lock_guard<std::mutex> lk(g_callbacksMutex);
+                auto it = g_callbacks.find(key);
+                if (it != g_callbacks.end() && it->second == holder) g_callbacks.erase(it);
+                g_import_userdata.erase(key);
+                return {};
+            }
+            std::cerr << "RegisterRaw: fallback m3_LinkRawFunction succeeded" << std::endl;
+        } catch (const std::exception &ex) {
+            std::cerr << "RegisterRaw: exception while linking: " << ex.what() << std::endl;
+            std::lock_guard<std::mutex> lk(g_callbacksMutex);
+            auto it = g_callbacks.find(key);
+            if (it != g_callbacks.end() && it->second == holder) g_callbacks.erase(it);
+            g_import_userdata.erase(key);
+            return {};
+        }
+
+        std::cerr << "RegisterRaw: linked ok, holder=" << holder.get() << " key=" << key << std::endl;
+        Token tok(module_, this, std::string(ns), std::string(name), std::string(sig));
+        if (module_timed_out_ptr) {
+            tok.module_managed_ = true;
+        } else {
+            try {
+                tok.module_managed_ = (WasmRuntime::GetModuleTimedOutPtr(module_) != nullptr);
+            } catch (const std::system_error &se) {
+                std::cerr << "RegisterRaw: GetModuleTimedOutPtr threw when setting module_managed_: " << se.what() << " code=" << se.code().value() << std::endl;
+                tok.module_managed_ = false;
+            }
+        }
+        return tok;
+    } catch (const std::system_error &se) {
+        std::cerr << "RegisterRaw: caught system_error: " << se.what() << " code=" << se.code().value() << " thread=" << std::this_thread::get_id() << std::endl;
+#ifdef _WIN32
+        void* addrs[64];
+        USHORT frames = CaptureStackBackTrace(0, 64, addrs, nullptr);
+        std::cerr << "Stack frames captured: " << frames << std::endl;
+        HANDLE hProc = GetCurrentProcess();
+        SymSetOptions(SYMOPT_DEFERRED_LOADS | SYMOPT_UNDNAME);
+        if (SymInitialize(hProc, NULL, TRUE)) {
+            for (USHORT i = 0; i < frames; ++i) {
+                DWORD64 addr = (DWORD64)(addrs[i]);
+                char buffer[sizeof(SYMBOL_INFO) + MAX_SYM_NAME * sizeof(TCHAR)];
+                PSYMBOL_INFO pSymbol = (PSYMBOL_INFO)buffer;
+                pSymbol->SizeOfStruct = sizeof(SYMBOL_INFO);
+                pSymbol->MaxNameLen = MAX_SYM_NAME;
+                DWORD64 displacement = 0;
+                if (SymFromAddr(hProc, addr, &displacement, pSymbol)) {
+                    std::cerr << std::hex << pSymbol->Address << " " << pSymbol->Name << std::dec << " +0x" << displacement << std::endl;
+                } else {
+                    std::cerr << std::hex << addr << std::dec << std::endl;
+                }
+            }
+        } else {
+            for (USHORT i=0;i<frames;i++) std::cerr << addrs[i] << std::endl;
+        }
+#endif
+        // Try to cleanup any partial registration
+        try {
+            std::lock_guard<std::mutex> lk(g_callbacksMutex);
+            auto it = g_callbacks.find(KeyFor(ns, name));
+            if (it != g_callbacks.end()) g_callbacks.erase(it);
+            g_import_userdata.erase(KeyFor(ns, name));
+        } catch (...) {}
+        return {};
+    } catch (const std::exception &ex) {
+        std::cerr << "RegisterRaw: exception: " << ex.what() << std::endl;
+        return {};
+    } catch (...) {
+        std::cerr << "RegisterRaw: unknown exception" << std::endl;
         return {};
     }
-    Token tok(module_, this, std::string(ns), std::string(name), std::string(sig));
-    tok.module_managed_ = (WasmRuntime::GetModuleTimedOutPtr(module_) != nullptr);
-    return tok;
 }
 
 // Register a typed (i32->i32) host function
@@ -334,14 +554,15 @@ HostBindings::Token HostBindings::RegisterI32I32(const char* ns, const char* nam
 
     // Create a per-registration ImportUserdata to avoid shared-state races.
     auto udptr_local = std::make_shared<ImportUserdata>();
+    // Prefer key-based userdata (kind==1) so the userdata pointer stored in the module
+    // is a stable string pointer that does not dangle if holder/udptr are destroyed
+    // before the module is freed. This avoids use-after-free when the module runtime
+    // frees internals that may reference userdata pointers.
+    udptr_local->kind = 1;
+    udptr_local->ptr = keyPtr.get();
     if (modRuntime) {
-        udptr_local->kind = 2;
-        udptr_local->ptr = holder.get();
-        // If this module is managed by WasmRuntime, capture a pointer to its timed_out flag
+        // If the module runtime exists, capture a pointer to its timed_out flag
         holder->timed_out_ptr = WasmRuntime::GetModuleTimedOutPtr(module_);
-    } else {
-        udptr_local->kind = 1;
-        udptr_local->ptr = keyPtr.get();
     }
     holder->udptr = udptr_local;
     {
@@ -352,15 +573,28 @@ HostBindings::Token HostBindings::RegisterI32I32(const char* ns, const char* nam
     }
 
     const char* sig = "i(i)";
+    // Prefer the key-based userdata path
     M3Result r = m3_LinkRawFunctionEx(module_, ns, name, sig, (M3RawCall)host_trampoline_i32_i32, udptr_local.get());
     if (r) {
         std::cerr << "HostBindings: m3_LinkRawFunctionEx failed for '" << ns << "'.'" << name << "' sig='" << sig << "': " << r << std::endl;
-        std::lock_guard<std::mutex> lk(g_callbacksMutex);
-        auto it = g_callbacks.find(key);
-        if (it != g_callbacks.end() && it->second == holder) g_callbacks.erase(it);
-        // Clean up the import userdata entry we created above
-        g_import_userdata.erase(key);
-        return {};
+        // Fallback: try holder pointer if key-based userdata is not accepted
+        M3Result r2 = m3_LinkRawFunctionEx(module_, ns, name, sig, (M3RawCall)host_trampoline_i32_i32, holder.get());
+        if (!r2) {
+            std::cerr << "HostBindings: m3_LinkRawFunctionEx(holder) succeeded as fallback" << std::endl;
+            udptr_local->kind = 2;
+            udptr_local->ptr = holder.get();
+            holder->timed_out_ptr = WasmRuntime::GetModuleTimedOutPtr(module_);
+            holder->udptr = udptr_local;
+            std::lock_guard<std::mutex> lk2(g_callbacksMutex);
+            g_import_userdata[key] = udptr_local;
+        } else {
+            std::lock_guard<std::mutex> lk(g_callbacksMutex);
+            auto it = g_callbacks.find(key);
+            if (it != g_callbacks.end() && it->second == holder) g_callbacks.erase(it);
+            // Clean up the import userdata entry we created above
+            g_import_userdata.erase(key);
+            return {};
+        }
     }
     std::cerr << "RegisterI32I32: linked ok, holder=" << holder.get() << " key=" << key << std::endl;
     Token tok(module_, this, std::string(ns), std::string(name), std::string(sig));
@@ -399,13 +633,15 @@ HostBindings::Token HostBindings::RegisterVoidString(const char* ns, const char*
 
     // Create a per-registration ImportUserdata to avoid shared-state races.
     auto udptr_local = std::make_shared<ImportUserdata>();
+    // Prefer key-based userdata (kind==1) so the userdata pointer stored in the module
+    // is a stable string pointer that does not dangle if holder/udptr are destroyed
+    // before the module is freed. This avoids use-after-free when the module runtime
+    // frees internals that may reference userdata pointers.
+    udptr_local->kind = 1;
+    udptr_local->ptr = keyPtr.get();
     if (modRuntime) {
-        udptr_local->kind = 2;
-        udptr_local->ptr = holder.get();
+        // If the module runtime exists, record a pointer to the module's timed_out flag
         holder->timed_out_ptr = WasmRuntime::GetModuleTimedOutPtr(module_);
-    } else {
-        udptr_local->kind = 1;
-        udptr_local->ptr = keyPtr.get();
     }
     holder->udptr = udptr_local;
     {
@@ -415,19 +651,19 @@ HostBindings::Token HostBindings::RegisterVoidString(const char* ns, const char*
     }
 
     const char* sig = "v(ii)"; // void(ptr,len)
+    // Prefer the key-based userdata path (udptr_local)
     M3Result r = m3_LinkRawFunctionEx(module_, ns, name, sig, (M3RawCall)host_trampoline_v_ptr_len, udptr_local.get());
     if (r) {
         std::cerr << "HostBindings: m3_LinkRawFunctionEx(key) failed for '" << ns << "'.'" << name << "' sig='" << sig << "': " << r << std::endl;
-        // Fallback: try the previous behavior (pass holder.get()) to detect whether userdata type matters.
+        // Fallback: if the wasm3 variant doesn't accept our userdata layout, try passing holder.get()
         M3Result r2 = m3_LinkRawFunctionEx(module_, ns, name, sig, (M3RawCall)host_trampoline_v_ptr_len, holder.get());
         if (!r2) {
             std::cerr << "HostBindings: m3_LinkRawFunctionEx(holder) succeeded as fallback" << std::endl;
-            // Ensure holder carries a consistent userdata representation so the holder can be safely observed
+            // If we fall back to the holder representation, update the ImportUserdata to reflect that
             udptr_local->kind = 2;
             udptr_local->ptr = holder.get();
             holder->timed_out_ptr = WasmRuntime::GetModuleTimedOutPtr(module_);
             holder->udptr = udptr_local;
-            // Record the userdata in the global map so it remains valid while linked
             std::lock_guard<std::mutex> lk2(g_callbacksMutex);
             g_import_userdata[key] = udptr_local;
         } else {
@@ -514,45 +750,34 @@ uint32_t HostBindings::alloc_in_module(const std::string& s) {
 
 HostBindings::Token::~Token() noexcept {
     if (!module_) return;
-    std::cerr << "Token::~Token: unregistering host '" << ns_ << "'.'" << name_ << "' sig='" << sig_ << "' module=" << module_ << std::endl;
+    std::cerr << "Token::~Token: unregistering host '" << ns_ << "'.'" << name_ << "' sig='" << sig_ << "' module=" << module_ << " thread=" << std::this_thread::get_id() << std::endl;
     {
-        std::ostringstream oss; oss << "Token::~Token: entering ns=" << ns_ << " name=" << name_ << " sig=" << sig_ << " module=" << module_;
+        std::ostringstream oss; oss << "Token::~Token: entering ns=" << ns_ << " name=" << name_ << " sig=" << sig_ << " module=" << module_ << " thread=" << std::this_thread::get_id();
         LogToFile(oss.str());
     }
 
-    // Conservative strategy:
-    // - If this token was created for an unmanaged module (not under WasmRuntime), we avoid calling
-    //   into wasm3 here (the module may already be freed) and instead remove the holder from g_callbacks.
-    // - If the module is managed by WasmRuntime, we prefer to defer relinking/unregistration until
-    //   module unload (WasmModule destructor calls CleanupModuleCallbacks). In that case mark the holder
-    //   inactive and leave it in g_callbacks until module unload.
-
     std::string key = KeyFor(ns_.c_str(), name_.c_str());
+    std::cerr << "Token::~Token: about to acquire g_callbacksMutex for key='" << key << "'" << std::endl;
     {
         std::lock_guard<std::mutex> lk(g_callbacksMutex);
+        std::cerr << "Token::~Token: inside g_callbacksMutex for key='" << key << "'" << std::endl;
         auto it = g_callbacks.find(key);
         if (it != g_callbacks.end()) {
+            std::cerr << "Token::~Token: found holder entry, marking inactive" << std::endl;
             if (it->second) it->second->active = false;
-            if (!module_managed_) {
-                g_callbacks.erase(it);
-                // Remove the associated ImportUserdata to avoid leaking it
-                g_import_userdata.erase(key);
-                std::ostringstream oss; oss << "Token::~Token: erased holder (unmanaged module) and cleared import userdata";
-                LogToFile(oss.str());
-            } else {
-                std::ostringstream oss; oss << "Token::~Token: module managed; left holder in g_callbacks until module unload";
-                LogToFile(oss.str());
-            }
+            // Avoid erasing entries here to prevent lock-order races and iterator invalidation
+            // while other code (e.g., LinkHostFunctions) iterates or modifies the maps.
+            std::ostringstream oss; oss << "Token::~Token: marked holder inactive (module_managed=" << (module_managed_ ? "true" : "false") << ")";
+            LogToFile(oss.str());
+            std::cerr << "Token::~Token: marked holder inactive (logged)" << std::endl;
         } else {
+            std::cerr << "Token::~Token: no holder found in g_callbacks for key='" << key << "'" << std::endl;
             std::ostringstream oss; oss << "Token::~Token: no holder found in g_callbacks for key='" << key << "'";
             LogToFile(oss.str());
         }
     }
 
-    // We won't call m3_LinkRawFunction or other wasm3 APIs here because module_ may already be freed
-    // (callers that manage module lifetimes must ensure safe ordering). The WasmRuntime-managed path
-    // will clean up remaining holders at module unload via CleanupModuleCallbacks.
-
+    std::cerr << "Token::~Token: releasing lock and clearing module_" << std::endl;
     module_ = nullptr;
 }
 

@@ -8,6 +8,7 @@
 #include <functional>
 #include <cstdint>
 #include <new>
+#include <atomic>
 
 namespace Genesis::Engine {
 
@@ -50,7 +51,8 @@ public:
 
     // Register a raw host function (namespace, name, signature, callback). Returns a Token
     // that will unregister on destruction. The callback must conform to wasm3's M3RawCall.
-    Token RegisterRaw(const char* ns, const char* name, const char* sig, M3RawCall cb);
+    // Optional last parameter: pointer to the module's timed_out flag (if caller already has it)
+    Token RegisterRaw(const char* ns, const char* name, const char* sig, M3RawCall cb, std::atomic<bool>* module_timed_out_ptr = nullptr);
 
     // Register a host function that takes/returns i32 (i32 -> i32). Useful for simple numeric callbacks.
     // Returns an RAII Token that will unregister the binding when destroyed.
