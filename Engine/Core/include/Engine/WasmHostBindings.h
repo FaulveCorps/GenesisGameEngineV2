@@ -89,6 +89,8 @@ public:
     // Debug helpers used by unit tests
     static size_t DebugGetCallbacksCount();
     static size_t DebugGetDeferredCount();
+    // Dump a safe snapshot of callback holder memory (to log file) for investigation
+    static void DebugDumpCallbacksSnapshot(const std::string& context);
 #endif
 
 private:

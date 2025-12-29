@@ -503,15 +503,83 @@ bool WasmRuntime::CallExportedWithTimeout(const std::string& moduleName, const s
                 argv.reserve(args.size());
                 for (auto &s : args) argv.push_back(s.c_str());
                 std::cerr << "WasmRuntime: about to call function f=" << (void*)f << " module='" << moduleName << "' func='" << funcName << "'" << std::endl;
+#ifdef HAVE_WASM3
+                // Print module memory info to ensure linear memory is valid
+                try {
+                    uint32_t memSz = 0;
+                    uint8_t* memPtr = m3_GetMemory(m->runtime, &memSz, 0);
+                    std::cerr << "WasmRuntime: module memory ptr=" << (void*)memPtr << " size=" << memSz << std::endl;
+                } catch(...) {
+                    std::cerr << "WasmRuntime: m3_GetMemory threw or unavailable" << std::endl;
+                }
+#endif
+#ifdef _DEBUG
+                HostBindings::DebugDumpCallbacksSnapshot("CallExported - before m3_CallArgv");
+#endif
                 r = m3_CallArgv(f, static_cast<uint32_t>(argv.size()), argv.empty() ? nullptr : argv.data());
                 std::cerr << "WasmRuntime: m3_CallArgv returned r=" << (r ? r : "(none)") << " (ptr=" << (void*)r << ")" << std::endl;
                 if (r) {
+#ifdef _DEBUG
+                    HostBindings::DebugDumpCallbacksSnapshot("CallExported - after m3_CallArgv failed");
+#endif
                     std::cerr << "WasmRuntime: m3_CallArgv failed for module '" << moduleName << "' func '" << funcName << "': " << (r ? r : "(unknown)") << " (ptr=" << (void*)r << ")" << std::endl;
                     // Dump up to 256 bytes of the error string in hex to help debugging non-printable messages
                     const char* err = r;
                     std::cerr << "WasmRuntime: m3_CallArgv error bytes:";
                     for (int i=0; i<256 && err && err[i]; ++i) std::cerr << " " << std::hex << (int)(uint8_t)err[i];
                     std::cerr << std::dec << std::endl;
+#ifdef _WIN32
+                    // Try to read raw memory at the error pointer to get more context (not relying on NUL termination)
+                    {
+                        char membuf[128]; SIZE_T bytesRead = 0;
+                        if (ReadProcessMemory(GetCurrentProcess(), (LPCVOID)err, membuf, sizeof(membuf), &bytesRead) && bytesRead > 0) {
+                            std::cerr << "WasmRuntime: m3_CallArgv raw memory at " << (void*)err << " bytes:";
+                            for (SIZE_T i = 0; i < bytesRead && i < 64; ++i) std::cerr << " " << std::hex << (int)(uint8_t)membuf[i];
+                            std::cerr << std::dec << std::endl;
+                            // Dump a few bytes from the module memory start too for correlation
+                            try {
+                                uint32_t memSz2 = 0;
+                                uint8_t* memPtr2 = m3_GetMemory(m->runtime, &memSz2, 0);
+                                if (memPtr2 && memSz2 > 0) {
+                                    std::cerr << "WasmRuntime: module mem[0..15]=";
+                                    for (uint32_t ii=0; ii<16 && ii<memSz2; ++ii) std::cerr << " " << std::hex << (int)memPtr2[ii];
+                                    std::cerr << std::dec << std::endl;
+                                }
+                            } catch(...) {
+                                std::cerr << "WasmRuntime: m3_GetMemory threw or unavailable in error branch" << std::endl;
+                            }
+                        } else {
+                            std::cerr << "WasmRuntime: ReadProcessMemory failed on m3_CallArgv err ptr, GetLastError=" << GetLastError() << std::endl;
+                        }
+                    }
+#endif
+                    // Try to get richer error info from wasm3 runtime
+                    try {
+                        M3ErrorInfo ei{0};
+                        m3_GetErrorInfo(m->runtime, &ei);
+                        std::cerr << "WasmRuntime: m3_GetErrorInfo: result=" << (ei.result ? ei.result : "(null)") << " file=" << (ei.file ? ei.file : "(null)") << " line=" << ei.line << " message=" << (ei.message ? ei.message : "(null)") << std::endl;
+                        if (ei.function) {
+                            const char* fname = m3_GetFunctionName(ei.function);
+                            std::cerr << "WasmRuntime: m3_GetErrorInfo: function=" << (fname ? fname : "(unknown)") << std::endl;
+                        }
+                        // Try to obtain a wasm-level backtrace
+                        try {
+                            IM3BacktraceInfo bt = m3_GetBacktrace(m->runtime);
+                            if (bt && bt->frames) {
+                                std::cerr << "WasmRuntime: m3 backtrace:";
+                                for (IM3BacktraceFrame fr = bt->frames; fr; fr = fr->next) {
+                                    const char* fname = fr->function ? m3_GetFunctionName(fr->function) : nullptr;
+                                    std::cerr << "  func=" << (fname ? fname : "(unknown)") << " offset=" << fr->moduleOffset;
+                                }
+                                std::cerr << std::endl;
+                            }
+                        } catch (...) {
+                            std::cerr << "WasmRuntime: m3_GetBacktrace threw or unavailable" << std::endl;
+                        }
+                        m3_ResetErrorInfo(m->runtime);
+                    } catch (...) {
+                        std::cerr << "WasmRuntime: m3_GetErrorInfo threw or unavailable" << std::endl;
+                    }
                     call_ok = false;
                 } else {
                     call_ok = true;

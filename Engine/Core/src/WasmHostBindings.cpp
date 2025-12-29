@@ -324,6 +324,12 @@ static void DumpCallbacksSnapshot(const std::string& context) {
     }
 }
 
+#ifdef _DEBUG
+void HostBindings::DebugDumpCallbacksSnapshot(const std::string& context) {
+    DumpCallbacksSnapshot(context);
+}
+#endif
+
 // Deferred unregistration queue to avoid touching g_callbacks in potentially-unsafe teardown moments
 static std::mutex g_deferredUnregMutex;
 static std::vector<std::pair<std::string, bool>> g_deferred_unregs;
@@ -581,7 +587,10 @@ m3ApiRawFunction(host_trampoline_raw) {
         if (h->timed_out_ptr && h->timed_out_ptr->load()) m3ApiTrap("module timed out");
         IM3Runtime modRuntime = m3_GetModuleRuntime(h->module);
         try {
-            return h->cb(modRuntime, _ctx, _sp, _mem);
+            std::cerr << "host_trampoline_raw: invoking holder=" << h.get() << " key=" << *keyPtr << " module=" << h->module << std::endl;
+            auto res = h->cb(modRuntime, _ctx, _sp, _mem);
+            std::cerr << "host_trampoline_raw: callback returned" << std::endl;
+            return res;
         } catch (...) {
             m3ApiTrap("host callback threw exception");
         }

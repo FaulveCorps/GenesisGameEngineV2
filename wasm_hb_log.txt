@@ -289,3 +289,117 @@ Token::~Token: sizes: g_callbacks=1 g_callback_keys=1 g_import_userdata=1
 Token::~Token: deferring unregister for key='env:test_ping' module_managed=false
 DeferUnregisterCallback: queued key=env:test_ping module_managed=false
 ScopedVectoredDump: removed handler=000001CD30106700
+DumpCallbacksSnapshot: context=CallExported - before m3_CallArgv entries=1
+DumpCallbacksSnapshot: key=env:test_ping ptr=00000189C6B53EE0
+DumpCallbacksSnapshot: key=env:test_ping memory preview:A8 13 8D 4D F7 7F 00 00 01 00 00 00 00 00 00 00 90 CF 11 C5 89 01 00 00 00 00 10 00 00 00 00 00 20 03 B6 C6 89 01 00 00 10 03 B6 C6 89 01 00 00 08 96 17 C5 89 01 00 00 B5 AF 34 4D F7 7F 00 00
+DumpCallbacksSnapshot: context=CallExported - after m3_CallArgv failed entries=1
+DumpCallbacksSnapshot: key=env:test_ping ptr=00000189C6B53EE0
+DumpCallbacksSnapshot: key=env:test_ping memory preview:A8 13 8D 4D F7 7F 00 00 01 00 00 00 00 00 00 00 90 CF 11 C5 89 01 00 00 00 00 10 00 00 00 00 00 20 03 B6 C6 89 01 00 00 10 03 B6 C6 89 01 00 00 08 96 17 C5 89 01 00 00 B5 AF 34 4D F7 7F 00 00
+DumpCallbacksSnapshot: context=CallExported - before m3_CallArgv entries=1
+DumpCallbacksSnapshot: key=env:test_ping ptr=00000189C6B53EE0
+DumpCallbacksSnapshot: key=env:test_ping memory preview:A8 13 8D 4D F7 7F 00 00 01 00 00 00 00 00 00 00 90 CF 11 C5 89 01 00 00 00 00 10 00 00 00 00 00 20 03 B6 C6 89 01 00 00 10 03 B6 C6 89 01 00 00 08 96 17 C5 89 01 00 00 B5 AF 34 4D F7 7F 00 00
+DumpCallbacksSnapshot: context=CallExported - after m3_CallArgv failed entries=1
+DumpCallbacksSnapshot: key=env:test_ping ptr=00000189C6B53EE0
+DumpCallbacksSnapshot: key=env:test_ping memory preview:A8 13 8D 4D F7 7F 00 00 01 00 00 00 00 00 00 00 90 CF 11 C5 89 01 00 00 00 00 10 00 00 00 00 00 20 03 B6 C6 89 01 00 00 10 03 B6 C6 89 01 00 00 08 96 17 C5 89 01 00 00 B5 AF 34 4D F7 7F 00 00
+Token::~Token: entering ns=env name=test_ping sig=v() module=00000189C511CF90 thread=1304
+ScopedVectoredDump: handler=00000189C513F0D0
+Token::~Token: g_callbacks addr=00007FF74D9B3190 g_callback_keys addr=00007FF74D9B30D0 g_import_userdata addr=00007FF74D9B3140
+Token::~Token: sizes: g_callbacks=1 g_callback_keys=1 g_import_userdata=1
+Token::~Token: deferring unregister for key='env:test_ping' module_managed=false
+DeferUnregisterCallback: queued key=env:test_ping module_managed=false
+ScopedVectoredDump: removed handler=00000189C513F0D0
+DumpCallbacksSnapshot: context=CallExported - before m3_CallArgv entries=1
+DumpCallbacksSnapshot: key=env:test_ping ptr=000002F2CF4C2A40
+DumpCallbacksSnapshot: key=env:test_ping memory preview:A8 13 8F 87 F6 7F 00 00 01 00 00 00 00 00 00 00 B0 81 3E CF F2 02 00 00 00 00 10 00 00 00 00 00 10 3A E1 D0 F2 02 00 00 00 3A E1 D0 F2 02 00 00 98 F0 44 CF F2 02 00 00 B5 AF 36 87 F6 7F 00 00
+DumpCallbacksSnapshot: context=CallExported - after m3_CallArgv failed entries=1
+DumpCallbacksSnapshot: key=env:test_ping ptr=000002F2CF4C2A40
+DumpCallbacksSnapshot: key=env:test_ping memory preview:A8 13 8F 87 F6 7F 00 00 01 00 00 00 00 00 00 00 B0 81 3E CF F2 02 00 00 00 00 10 00 00 00 00 00 10 3A E1 D0 F2 02 00 00 00 3A E1 D0 F2 02 00 00 98 F0 44 CF F2 02 00 00 B5 AF 36 87 F6 7F 00 00
+DumpCallbacksSnapshot: context=CallExported - before m3_CallArgv entries=1
+DumpCallbacksSnapshot: key=env:test_ping ptr=000002F2CF4C2A40
+DumpCallbacksSnapshot: key=env:test_ping memory preview:A8 13 8F 87 F6 7F 00 00 01 00 00 00 00 00 00 00 B0 81 3E CF F2 02 00 00 00 00 10 00 00 00 00 00 10 3A E1 D0 F2 02 00 00 00 3A E1 D0 F2 02 00 00 98 F0 44 CF F2 02 00 00 B5 AF 36 87 F6 7F 00 00
+DumpCallbacksSnapshot: context=CallExported - after m3_CallArgv failed entries=1
+DumpCallbacksSnapshot: key=env:test_ping ptr=000002F2CF4C2A40
+DumpCallbacksSnapshot: key=env:test_ping memory preview:A8 13 8F 87 F6 7F 00 00 01 00 00 00 00 00 00 00 B0 81 3E CF F2 02 00 00 00 00 10 00 00 00 00 00 10 3A E1 D0 F2 02 00 00 00 3A E1 D0 F2 02 00 00 98 F0 44 CF F2 02 00 00 B5 AF 36 87 F6 7F 00 00
+Token::~Token: entering ns=env name=test_ping sig=v() module=000002F2CF3E81B0 thread=12312
+ScopedVectoredDump: handler=000002F2CF3FDCC0
+Token::~Token: g_callbacks addr=00007FF6879D3190 g_callback_keys addr=00007FF6879D30D0 g_import_userdata addr=00007FF6879D3140
+Token::~Token: sizes: g_callbacks=1 g_callback_keys=1 g_import_userdata=1
+Token::~Token: deferring unregister for key='env:test_ping' module_managed=false
+DeferUnregisterCallback: queued key=env:test_ping module_managed=false
+ScopedVectoredDump: removed handler=000002F2CF3FDCC0
+DumpCallbacksSnapshot: context=CallExported - before m3_CallArgv entries=1
+DumpCallbacksSnapshot: key=env:test_ping ptr=000001E6F04C4100
+DumpCallbacksSnapshot: key=env:test_ping memory preview:A8 13 0A 27 F6 7F 00 00 01 00 00 00 00 00 00 00 30 FC 44 F0 E6 01 00 00 00 00 10 00 00 00 00 00 50 A8 4C F0 E6 01 00 00 40 A8 4C F0 E6 01 00 00 48 C5 44 F0 E6 01 00 00 B5 AF B1 26 F6 7F 00 00
+DumpCallbacksSnapshot: context=CallExported - after m3_CallArgv failed entries=1
+DumpCallbacksSnapshot: key=env:test_ping ptr=000001E6F04C4100
+DumpCallbacksSnapshot: key=env:test_ping memory preview:A8 13 0A 27 F6 7F 00 00 01 00 00 00 00 00 00 00 30 FC 44 F0 E6 01 00 00 00 00 10 00 00 00 00 00 50 A8 4C F0 E6 01 00 00 40 A8 4C F0 E6 01 00 00 48 C5 44 F0 E6 01 00 00 B5 AF B1 26 F6 7F 00 00
+DumpCallbacksSnapshot: context=CallExported - before m3_CallArgv entries=1
+DumpCallbacksSnapshot: key=env:test_ping ptr=000001E6F04C4100
+DumpCallbacksSnapshot: key=env:test_ping memory preview:A8 13 0A 27 F6 7F 00 00 01 00 00 00 00 00 00 00 30 FC 44 F0 E6 01 00 00 00 00 10 00 00 00 00 00 50 A8 4C F0 E6 01 00 00 40 A8 4C F0 E6 01 00 00 48 C5 44 F0 E6 01 00 00 B5 AF B1 26 F6 7F 00 00
+DumpCallbacksSnapshot: context=CallExported - after m3_CallArgv failed entries=1
+DumpCallbacksSnapshot: key=env:test_ping ptr=000001E6F04C4100
+DumpCallbacksSnapshot: key=env:test_ping memory preview:A8 13 0A 27 F6 7F 00 00 01 00 00 00 00 00 00 00 30 FC 44 F0 E6 01 00 00 00 00 10 00 00 00 00 00 50 A8 4C F0 E6 01 00 00 40 A8 4C F0 E6 01 00 00 48 C5 44 F0 E6 01 00 00 B5 AF B1 26 F6 7F 00 00
+Token::~Token: entering ns=env name=test_ping sig=v() module=000001E6F044FC30 thread=7828
+ScopedVectoredDump: handler=000001E6F040E190
+Token::~Token: g_callbacks addr=00007FF627183190 g_callback_keys addr=00007FF6271830D0 g_import_userdata addr=00007FF627183140
+Token::~Token: sizes: g_callbacks=1 g_callback_keys=1 g_import_userdata=1
+Token::~Token: deferring unregister for key='env:test_ping' module_managed=false
+DeferUnregisterCallback: queued key=env:test_ping module_managed=false
+ScopedVectoredDump: removed handler=000001E6F040E190
+DumpCallbacksSnapshot: context=CallExported - before m3_CallArgv entries=1
+DumpCallbacksSnapshot: key=env:test_ping ptr=00000212E7EB3050
+DumpCallbacksSnapshot: key=env:test_ping memory preview:A8 13 16 F5 F6 7F 00 00 01 00 00 00 00 00 00 00 A0 8A DD E7 12 02 00 00 00 00 10 00 00 00 00 00 A0 40 76 E9 12 02 00 00 90 40 76 E9 12 02 00 00 F8 73 E4 E7 12 02 00 00 B5 AF BD F4 F6 7F 00 00
+DumpCallbacksSnapshot: context=CallExported - after m3_CallArgv failed entries=1
+DumpCallbacksSnapshot: key=env:test_ping ptr=00000212E7EB3050
+DumpCallbacksSnapshot: key=env:test_ping memory preview:A8 13 16 F5 F6 7F 00 00 01 00 00 00 00 00 00 00 A0 8A DD E7 12 02 00 00 00 00 10 00 00 00 00 00 A0 40 76 E9 12 02 00 00 90 40 76 E9 12 02 00 00 F8 73 E4 E7 12 02 00 00 B5 AF BD F4 F6 7F 00 00
+DumpCallbacksSnapshot: context=CallExported - before m3_CallArgv entries=1
+DumpCallbacksSnapshot: key=env:test_ping ptr=00000212E7EB3050
+DumpCallbacksSnapshot: key=env:test_ping memory preview:A8 13 16 F5 F6 7F 00 00 01 00 00 00 00 00 00 00 A0 8A DD E7 12 02 00 00 00 00 10 00 00 00 00 00 A0 40 76 E9 12 02 00 00 90 40 76 E9 12 02 00 00 F8 73 E4 E7 12 02 00 00 B5 AF BD F4 F6 7F 00 00
+DumpCallbacksSnapshot: context=CallExported - after m3_CallArgv failed entries=1
+DumpCallbacksSnapshot: key=env:test_ping ptr=00000212E7EB3050
+DumpCallbacksSnapshot: key=env:test_ping memory preview:A8 13 16 F5 F6 7F 00 00 01 00 00 00 00 00 00 00 A0 8A DD E7 12 02 00 00 00 00 10 00 00 00 00 00 A0 40 76 E9 12 02 00 00 90 40 76 E9 12 02 00 00 F8 73 E4 E7 12 02 00 00 B5 AF BD F4 F6 7F 00 00
+Token::~Token: entering ns=env name=test_ping sig=v() module=00000212E7DD8AA0 thread=10656
+ScopedVectoredDump: handler=00000212E7DFE450
+Token::~Token: g_callbacks addr=00007FF6F5243190 g_callback_keys addr=00007FF6F52430D0 g_import_userdata addr=00007FF6F5243140
+Token::~Token: sizes: g_callbacks=1 g_callback_keys=1 g_import_userdata=1
+Token::~Token: deferring unregister for key='env:test_ping' module_managed=false
+DeferUnregisterCallback: queued key=env:test_ping module_managed=false
+ScopedVectoredDump: removed handler=00000212E7DFE450
+DumpCallbacksSnapshot: context=CallExported - before m3_CallArgv entries=1
+DumpCallbacksSnapshot: key=env:test_ping ptr=000001416D591C40
+DumpCallbacksSnapshot: key=env:test_ping memory preview:A8 13 3C 61 F6 7F 00 00 01 00 00 00 00 00 00 00 00 11 D5 6E 41 01 00 00 00 00 10 00 00 00 00 00 50 27 D5 6E 41 01 00 00 40 27 D5 6E 41 01 00 00 B8 DD 51 6D 41 01 00 00 B5 AF E3 60 F6 7F 00 00
+DumpCallbacksSnapshot: context=CallExported - after m3_CallArgv failed entries=1
+DumpCallbacksSnapshot: key=env:test_ping ptr=000001416D591C40
+DumpCallbacksSnapshot: key=env:test_ping memory preview:A8 13 3C 61 F6 7F 00 00 01 00 00 00 00 00 00 00 00 11 D5 6E 41 01 00 00 00 00 10 00 00 00 00 00 50 27 D5 6E 41 01 00 00 40 27 D5 6E 41 01 00 00 B8 DD 51 6D 41 01 00 00 B5 AF E3 60 F6 7F 00 00
+DumpCallbacksSnapshot: context=CallExported - before m3_CallArgv entries=1
+DumpCallbacksSnapshot: key=env:test_ping ptr=000001416D591C40
+DumpCallbacksSnapshot: key=env:test_ping memory preview:A8 13 3C 61 F6 7F 00 00 01 00 00 00 00 00 00 00 00 11 D5 6E 41 01 00 00 00 00 10 00 00 00 00 00 50 27 D5 6E 41 01 00 00 40 27 D5 6E 41 01 00 00 B8 DD 51 6D 41 01 00 00 B5 AF E3 60 F6 7F 00 00
+DumpCallbacksSnapshot: context=CallExported - after m3_CallArgv failed entries=1
+DumpCallbacksSnapshot: key=env:test_ping ptr=000001416D591C40
+DumpCallbacksSnapshot: key=env:test_ping memory preview:A8 13 3C 61 F6 7F 00 00 01 00 00 00 00 00 00 00 00 11 D5 6E 41 01 00 00 00 00 10 00 00 00 00 00 50 27 D5 6E 41 01 00 00 40 27 D5 6E 41 01 00 00 B8 DD 51 6D 41 01 00 00 B5 AF E3 60 F6 7F 00 00
+Token::~Token: entering ns=env name=test_ping sig=v() module=000001416ED51100 thread=12744
+ScopedVectoredDump: handler=000001416D4DEC00
+Token::~Token: g_callbacks addr=00007FF6614A3190 g_callback_keys addr=00007FF6614A30D0 g_import_userdata addr=00007FF6614A3140
+Token::~Token: sizes: g_callbacks=1 g_callback_keys=1 g_import_userdata=1
+Token::~Token: deferring unregister for key='env:test_ping' module_managed=false
+DeferUnregisterCallback: queued key=env:test_ping module_managed=false
+ScopedVectoredDump: removed handler=000001416D4DEC00
+DumpCallbacksSnapshot: context=CallExported - before m3_CallArgv entries=1
+DumpCallbacksSnapshot: key=env:test_ping ptr=000002804E7732F0
+DumpCallbacksSnapshot: key=env:test_ping memory preview:A8 13 0E FA F6 7F 00 00 01 00 00 00 00 00 00 00 E0 68 CD 4C 80 02 00 00 00 00 10 00 00 00 00 00 40 E1 77 4E 80 02 00 00 30 E1 77 4E 80 02 00 00 38 A3 D3 4C 80 02 00 00 B5 AF B5 F9 F6 7F 00 00
+DumpCallbacksSnapshot: context=CallExported - after m3_CallArgv failed entries=1
+DumpCallbacksSnapshot: key=env:test_ping ptr=000002804E7732F0
+DumpCallbacksSnapshot: key=env:test_ping memory preview:A8 13 0E FA F6 7F 00 00 01 00 00 00 00 00 00 00 E0 68 CD 4C 80 02 00 00 00 00 10 00 00 00 00 00 40 E1 77 4E 80 02 00 00 30 E1 77 4E 80 02 00 00 38 A3 D3 4C 80 02 00 00 B5 AF B5 F9 F6 7F 00 00
+DumpCallbacksSnapshot: context=CallExported - before m3_CallArgv entries=1
+DumpCallbacksSnapshot: key=env:test_ping ptr=000002804E7732F0
+DumpCallbacksSnapshot: key=env:test_ping memory preview:A8 13 0E FA F6 7F 00 00 01 00 00 00 00 00 00 00 E0 68 CD 4C 80 02 00 00 00 00 10 00 00 00 00 00 40 E1 77 4E 80 02 00 00 30 E1 77 4E 80 02 00 00 38 A3 D3 4C 80 02 00 00 B5 AF B5 F9 F6 7F 00 00
+DumpCallbacksSnapshot: context=CallExported - after m3_CallArgv failed entries=1
+DumpCallbacksSnapshot: key=env:test_ping ptr=000002804E7732F0
+DumpCallbacksSnapshot: key=env:test_ping memory preview:A8 13 0E FA F6 7F 00 00 01 00 00 00 00 00 00 00 E0 68 CD 4C 80 02 00 00 00 00 10 00 00 00 00 00 40 E1 77 4E 80 02 00 00 30 E1 77 4E 80 02 00 00 38 A3 D3 4C 80 02 00 00 B5 AF B5 F9 F6 7F 00 00
+Token::~Token: entering ns=env name=test_ping sig=v() module=000002804CCD68E0 thread=476
+ScopedVectoredDump: handler=000002804CCFC520
+Token::~Token: g_callbacks addr=00007FF6FA1C3190 g_callback_keys addr=00007FF6FA1C30D0 g_import_userdata addr=00007FF6FA1C3140
+Token::~Token: sizes: g_callbacks=1 g_callback_keys=1 g_import_userdata=1
+Token::~Token: deferring unregister for key='env:test_ping' module_managed=false
+DeferUnregisterCallback: queued key=env:test_ping module_managed=false
+ScopedVectoredDump: removed handler=000002804CCFC520
