@@ -29,6 +29,8 @@ add_executable(UnitTests
     test_2d_sprite_gl_readback.cpp
     test_samplegame_autocycle.cpp
     test_shader_subsystem.cpp
+    test_pbr_material.cpp
+    test_gltf_material_import.cpp
     test_audio.cpp
     test_audio_playback.cpp
     test_physics.cpp

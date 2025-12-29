@@ -276,6 +276,45 @@ bool OpenGLRenderer::Init(SDL_Window* window, SDL_GLContext glContext) {
         } else {
             std::cerr << "OpenGLRenderer: sprite quad - GL functions not available" << std::endl;
         }
+
+        // Create a simple prototype PBR shader (very simple lighting model for smoke testing)
+        const std::string pbrVert = R"(
+            #version 330 core
+            layout(location = 0) in vec3 aPos;
+            layout(location = 1) in vec3 aNormal;
+            out vec3 vNormal;
+            void main() {
+                vNormal = aNormal;
+                gl_Position = vec4(aPos, 1.0);
+            }
+        )";
+
+        const std::string pbrFrag = R"(
+            #version 330 core
+            in vec3 vNormal;
+            out vec4 FragColor;
+            uniform vec4 uBaseColor = vec4(1.0,1.0,1.0,1.0);
+            uniform float uMetallic = 0.0;
+            uniform float uRoughness = 1.0;
+            void main() {
+                vec3 n = normalize(vNormal);
+                vec3 lightDir = normalize(vec3(0.5, 0.5, 0.8));
+                float NdotL = max(dot(n, lightDir), 0.0);
+                vec3 diffuse = uBaseColor.rgb * NdotL;
+                vec3 viewDir = normalize(vec3(0.0,0.0,1.0));
+                vec3 halfDir = normalize(lightDir + viewDir);
+                float spec = pow(max(dot(n, halfDir), 0.0), mix(16.0, 128.0, 1.0 - uRoughness));
+                vec3 specular = vec3(uMetallic) * spec;
+                FragColor = vec4(diffuse + specular, uBaseColor.a);
+            }
+        )";
+
+        m_pbrShader = Shader::FromSource(pbrVert, pbrFrag);
+        if (!m_pbrShader) {
+            std::cerr << "OpenGLRenderer: failed to compile PBR prototype shader" << std::endl;
+        } else {
+            std::cout << "OpenGLRenderer: compiled prototype PBR shader id=" << m_pbrShader->GetID() << std::endl;
+        }
     }
 
     // Print GL renderer info for debug

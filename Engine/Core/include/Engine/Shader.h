@@ -3,6 +3,7 @@
 #include <string>
 #include <iostream>
 #include <memory>
+#include <array>
 
 namespace Genesis::Engine {
 class IGraphicsAPI;
@@ -24,6 +25,10 @@ public:
 
     void Use() const;
     unsigned int GetID() const { return programID_; }
+
+    // Quick uniform helpers for prototyping use cases (GL only fallback)
+    void SetUniformFloat(const std::string& name, float v) const;
+    void SetUniformVec4(const std::string& name, const std::array<float,4>& v) const;
 
 private:
     // Stored source (GL/GLSL for now). In future, add WGSL/HLSL variants.

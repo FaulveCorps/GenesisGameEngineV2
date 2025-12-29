@@ -4,7 +4,8 @@
 #include <assimp/scene.h>
 #include <assimp/Importer.hpp>
 #include <vector>
-#include "engine/Mesh.h"
+#include "Engine/Mesh.h"
+#include "Engine/Material.h"
 
 namespace Genesis::Engine {
 
@@ -16,12 +17,19 @@ public:
     bool Load(const std::string& path);
     void Draw();
 
+    // Material accessors (parsed from scene materials)
+    const std::vector<Material>& Materials() const { return m_materials; }
+    int GetMaterialIndexForMesh(size_t meshIndex) const;
+
 private:
     Assimp::Importer m_importer;
     const aiScene* m_scene = nullptr;
 
     // Extracted CPU-side meshes (drawn via vertex arrays)
     std::vector<Mesh> m_meshes;
+
+    // Parsed materials from the source file (mapped from aiMaterial)
+    std::vector<Material> m_materials;
 };
 
 } // namespace Genesis::Engine

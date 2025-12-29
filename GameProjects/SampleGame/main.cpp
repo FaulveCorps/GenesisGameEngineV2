@@ -200,6 +200,7 @@ int main(int argc, char** argv) {
 
     // Create small test shader to validate re-creation across renderer switches
     std::shared_ptr<Genesis::Engine::Shader> testShader;
+    std::shared_ptr<Genesis::Engine::Shader> pbrShader;
     {
         const std::string testVert = R"(
             #version 330 core
@@ -228,10 +229,66 @@ int main(int argc, char** argv) {
     std::cout << "DirectX smoke test: skipping model load" << std::endl;
 #else
     auto modelPtr = std::make_shared<Genesis::Engine::Model>();
-    if (!modelPtr->Load("Assets/models/triangle.obj")) {
-        std::cerr << "Failed to load model" << std::endl;
-    } else {
+    // Prefer the PBR sample if available, otherwise fall back to triangle.obj
+    namespace fs = std::filesystem;
+    const std::string pbrPath = "Assets/models/pbr_sample.gltf";
+    bool loaded = false;
+    if (fs::exists(pbrPath)) {
+        std::cout << "SampleGame: detected PBR sample, attempting to load: " << pbrPath << std::endl;
+        loaded = modelPtr->Load(pbrPath);
+    }
+    if (!loaded) {
+        if (!modelPtr->Load("Assets/models/triangle.obj")) {
+            std::cerr << "Failed to load model" << std::endl;
+        } else {
+            loaded = true;
+        }
+    }
+
+    if (loaded) {
         std::cout << "Model loaded successfully!" << std::endl;
+
+        // If the model exposes PBR materials, create a prototype PBR shader and set uniforms
+        const auto& mats = modelPtr->Materials();
+        if (!mats.empty()) {
+            const std::string pbrVert = R"(
+                #version 330 core
+                layout(location = 0) in vec3 aPos;
+                layout(location = 1) in vec3 aNormal;
+                out vec3 vNormal;
+                void main() { vNormal = aNormal; gl_Position = vec4(aPos, 1.0); }
+            )";
+            const std::string pbrFrag = R"(
+                #version 330 core
+                in vec3 vNormal;
+                out vec4 FragColor;
+                uniform vec4 uBaseColor = vec4(1.0);
+                uniform float uMetallic = 0.0;
+                uniform float uRoughness = 1.0;
+                void main() {
+                    vec3 n = normalize(vNormal);
+                    vec3 lightDir = normalize(vec3(0.5, 0.5, 0.8));
+                    float NdotL = max(dot(n, lightDir), 0.0);
+                    vec3 diffuse = uBaseColor.rgb * NdotL;
+                    vec3 viewDir = normalize(vec3(0.0,0.0,1.0));
+                    vec3 halfDir = normalize(lightDir + viewDir);
+                    float spec = pow(max(dot(n, halfDir), 0.0), mix(16.0, 128.0, 1.0 - uRoughness));
+                    vec3 specular = vec3(uMetallic) * spec;
+                    FragColor = vec4(diffuse + specular, uBaseColor.a);
+                }
+            )";
+            pbrShader = Genesis::Engine::Shader::FromSource(pbrVert, pbrFrag);
+            if (pbrShader && pbrShader->GetID() != 0) {
+                pbrShader->Use();
+                pbrShader->SetUniformVec4("uBaseColor", mats[0].baseColor);
+                pbrShader->SetUniformFloat("uMetallic", mats[0].metallic);
+                pbrShader->SetUniformFloat("uRoughness", mats[0].roughness);
+                std::cout << "SampleGame: created PBR shader (prototype) and set material uniforms" << std::endl;
+            } else {
+                std::cerr << "SampleGame: failed to compile PBR shader" << std::endl;
+            }
+        }
+
         scene.Registry().emplace<Genesis::Engine::ModelComponent>(entity, Genesis::Engine::ModelComponent{ modelPtr });
         scene.Registry().emplace<Genesis::Engine::Transform>(entity, Genesis::Engine::Transform{});
     }

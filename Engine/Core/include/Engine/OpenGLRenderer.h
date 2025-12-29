@@ -39,6 +39,9 @@ private:
     unsigned int m_spriteVBO = 0;
     unsigned int m_spriteEBO = 0;
 
+    // Simple PBR shader (prototype)
+    std::shared_ptr<Shader> m_pbrShader;
+
     // Debug draw resources
     unsigned int m_debugVAO = 0;
     unsigned int m_debugVBO = 0;

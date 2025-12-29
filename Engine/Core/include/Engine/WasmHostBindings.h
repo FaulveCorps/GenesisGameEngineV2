@@ -7,6 +7,7 @@
 #include <tuple>
 #include <functional>
 #include <cstdint>
+#include <new>
 
 namespace Genesis::Engine {
 
@@ -23,7 +24,14 @@ public:
     struct Token {
         Token() = default;
         Token(Token&& other) noexcept : module_(other.module_), host_(other.host_), ns_(std::move(other.ns_)), name_(std::move(other.name_)), sig_(std::move(other.sig_)) { other.module_ = nullptr; other.host_ = nullptr; }
-        Token& operator=(Token&& other) = delete;
+        Token& operator=(Token&& other) noexcept {
+            if (this == &other) return *this;
+            // Ensure existing registration (if any) is cleaned up
+            this->~Token();
+            // Move-construct into this storage
+            new (this) Token(std::move(other));
+            return *this;
+        }
         ~Token() noexcept;
         bool valid() const noexcept { return module_ != nullptr; }
 
