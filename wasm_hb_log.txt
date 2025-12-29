@@ -236,3 +236,4 @@ trampoline_v: _CrtCheckMemory OK
 Token::~Token: entering ns=env name=host_log sig=v(ii) module=0000023BD0580560 thread=9320
 Token::~Token: marked holder inactive (module_managed=false)
 CleanupModuleCallbacks: erasing key=env:host_log holder=0000023BD05339F0
+Token::~Token: entering ns=env name=test_ping sig=v() module=000002CAAFF81CB0 thread=204
