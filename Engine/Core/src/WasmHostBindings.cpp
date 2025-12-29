@@ -124,11 +124,12 @@ static void WriteMiniDumpForException(EXCEPTION_POINTERS* ep, const std::string&
     mei.ThreadId = GetCurrentThreadId();
     mei.ExceptionPointers = ep;
     mei.ClientPointers = FALSE;
-    MiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(), hFile, MiniDumpWithFullMemory, &mei, NULL, NULL);
+    MINIDUMP_TYPE dumpType = static_cast<MINIDUMP_TYPE>(MiniDumpWithFullMemory | MiniDumpWithHandleData | MiniDumpWithThreadInfo | MiniDumpWithUnloadedModules);
+    MiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(), hFile, dumpType, &mei, NULL, NULL);
     CloseHandle(hFile);
     std::ostringstream oss; oss << "WriteMiniDumpForException: wrote dump " << path << " context: " << context;
     LogToFile(oss.str());
-}
+} 
 
 static void WriteMiniDumpSnapshot(const std::string& context) {
     SYSTEMTIME st; GetLocalTime(&st);
@@ -142,14 +143,48 @@ static void WriteMiniDumpSnapshot(const std::string& context) {
         LogToFile("WriteMiniDumpSnapshot: CreateFileA failed");
         return;
     }
-    // No exception info: capture a process snapshot useful for postmortem
-    BOOL rv = MiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(), hFile, MiniDumpWithFullMemory, NULL, NULL, NULL);
+    MINIDUMP_TYPE dumpType = static_cast<MINIDUMP_TYPE>(MiniDumpWithFullMemory | MiniDumpWithHandleData | MiniDumpWithThreadInfo | MiniDumpWithUnloadedModules);
+    BOOL rv = MiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(), hFile, dumpType, NULL, NULL, NULL);
     CloseHandle(hFile);
     std::ostringstream oss; oss << "WriteMiniDumpSnapshot: wrote dump " << path << " context: " << context;
     LogToFile(oss.str());
+} 
+
+// Vectored exception handler that writes a dump when an access violation occurs.
+// We register this with AddVectoredExceptionHandler during sensitive map operations so we
+// can capture an exception context even if the process is about to crash.
+static LONG CALLBACK VectoredDumpHandler(PEXCEPTION_POINTERS ep) {
+    try {
+        WriteMiniDumpForException(ep, "VectoredDumpHandler");
+    } catch (...) {
+        LogToFile("VectoredDumpHandler: WriteMiniDumpForException threw");
+    }
+    // Do not swallow the exception; allow normal crash handling to proceed after we've written a dump.
+    return EXCEPTION_CONTINUE_SEARCH;
 }
 
+// RAII helper to register/unregister vectored exception handler
+struct ScopedVectoredDump {
+    void* handler;
+    ScopedVectoredDump() : handler(nullptr) {
+        handler = AddVectoredExceptionHandler(1, VectoredDumpHandler);
+        std::ostringstream oss; oss << "ScopedVectoredDump: handler=" << handler;
+        LogToFile(oss.str());
+    }
+    ~ScopedVectoredDump() {
+        if (handler) {
+            RemoveVectoredExceptionHandler(handler);
+            std::ostringstream oss; oss << "ScopedVectoredDump: removed handler=" << handler;
+            LogToFile(oss.str());
+            handler = nullptr;
+        }
+    }
+};
+
 static void SafeUnregisterCallback_NoThrow(const std::string& key, bool module_managed) {
+    // Register a vectored exception handler so we can capture an AV during map access.
+    ScopedVectoredDump svd;
+
     // Conservative, non-throwing instrumentation: inspect pointer with VirtualQuery,
     // log memory region and a small preview, write a snapshot dump, but avoid dereferencing
     // or destroying potentially-corrupted holder pointer (unsafe to touch or delete).
@@ -188,7 +223,7 @@ static void SafeUnregisterCallback_NoThrow(const std::string& key, bool module_m
         uintptr_t base = reinterpret_cast<uintptr_t>(mbi.BaseAddress);
         uintptr_t p = reinterpret_cast<uintptr_t>(rawptr);
         size_t avail = static_cast<size_t>(mbi.RegionSize - (p - base));
-        size_t preview = avail < 64 ? avail : 64;
+        size_t preview = avail < 256 ? avail : 256;
         if (preview > 0) {
             // safe to read within the region
             std::string hex;
@@ -864,6 +899,19 @@ HostBindings::Token::~Token() noexcept {
 
     std::string key = KeyFor(ns_.c_str(), name_.c_str());
     std::cerr << "Token::~Token: about to acquire g_callbacksMutex for key='" << key << "'" << std::endl;
+    // Register a vectored exception handler so we capture any AV during cleanup
+    ScopedVectoredDump svd;
+    {
+        std::ostringstream oss2; oss2 << "Token::~Token: g_callbacks addr=" << &g_callbacks << " g_callback_keys addr=" << &g_callback_keys << " g_import_userdata addr=" << &g_import_userdata;
+        LogToFile(oss2.str());
+    }
+    try {
+        std::ostringstream osz; osz << "Token::~Token: sizes: g_callbacks=" << g_callbacks.size() << " g_callback_keys=" << g_callback_keys.size() << " g_import_userdata=" << g_import_userdata.size();
+        LogToFile(osz.str());
+    } catch (...) {
+        LogToFile("Token::~Token: exception reading container sizes");
+    }
+
     // Use a no-throw helper that uses SEH internally to capture crashes during map operations.
     SafeUnregisterCallback_NoThrow(key, module_managed_);
 

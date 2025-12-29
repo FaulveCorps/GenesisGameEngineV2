@@ -239,3 +239,10 @@ CleanupModuleCallbacks: erasing key=env:host_log holder=0000023BD05339F0
 Token::~Token: entering ns=env name=test_ping sig=v() module=000002CAAFF81CB0 thread=204
 Token::~Token: entering ns=env name=test_ping sig=v() module=000001923E8C7960 thread=6824
 Token::~Token: entering ns=env name=test_ping sig=v() module=000001D86210BCE0 thread=1036
+Token::~Token: entering ns=env name=test_ping sig=v() module=0000016E5CB246A0 thread=9124
+ScopedVectoredDump: handler=0000016E5CB466E0
+Token::~Token: g_callbacks addr=00007FF7AC65A130 g_callback_keys addr=00007FF7AC65A090 g_import_userdata addr=00007FF7AC65A0E0
+Token::~Token: sizes: g_callbacks=1 g_callback_keys=1 g_import_userdata=1
+ScopedVectoredDump: handler=0000016E5CB462C0
+WriteMiniDumpForException: wrote dump Tools\external\procdump\dumps\token_crash_20251229_142439.dmp context: VectoredDumpHandler
+WriteMiniDumpForException: wrote dump Tools\external\procdump\dumps\token_crash_20251229_142440.dmp context: VectoredDumpHandler
