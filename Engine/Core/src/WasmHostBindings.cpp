@@ -130,44 +130,92 @@ static void WriteMiniDumpForException(EXCEPTION_POINTERS* ep, const std::string&
     LogToFile(oss.str());
 }
 
-static void SafeUnregisterCallback_NoThrow(const std::string& key, bool module_managed) {
-    bool locked = false;
-    __try {
-        g_callbacksMutex.lock();
-        locked = true;
-        auto it = g_callbacks.find(key);
-        if (it != g_callbacks.end()) {
-            void* rawptr = it->second ? static_cast<void*>(it->second.get()) : nullptr;
-            // Allocate a stub without using throwing allocation paths
-            CallbackBase* stubraw = new (std::nothrow) CallbackBase();
-            if (stubraw) {
-                std::shared_ptr<CallbackBase> stub(stubraw);
-                stub->active = false;
-                stub->module = nullptr;
-                it->second = stub;
-            } else {
-                // allocation failed; best-effort: mark existing holder inactive without exceptions
-                if (it->second) {
-                    CallbackBase* raw = it->second.get();
-                    if (raw) raw->active = false;
-                }
-            }
-            g_import_userdata.erase(key);
-            std::ostringstream oss; oss << "SafeUnregisterCallback_NoThrow: replaced holder at " << rawptr << " with stub (module_managed=" << (module_managed ? "true" : "false") << ")";
-            LogToFile(oss.str());
-        } else {
-            std::ostringstream oss; oss << "SafeUnregisterCallback_NoThrow: no holder found for key='" << key << "'";
-            LogToFile(oss.str());
-        }
-        if (locked) { g_callbacksMutex.unlock(); locked = false; }
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-        EXCEPTION_POINTERS* ep = GetExceptionInformation();
-        WriteMiniDumpForException(ep, key);
-        std::ostringstream oss; oss << "SafeUnregisterCallback_NoThrow: SEH fired for key='" << key << "'";
-        LogToFile(oss.str());
-        if (locked) { __try { g_callbacksMutex.unlock(); } __except(EXCEPTION_EXECUTE_HANDLER) { } }
+static void WriteMiniDumpSnapshot(const std::string& context) {
+    SYSTEMTIME st; GetLocalTime(&st);
+    char filename[256];
+    sprintf_s(filename, "token_snapshot_%04d%02d%02d_%02d%02d%02d.dmp", st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond);
+    std::string dir = "Tools\\external\\procdump\\dumps\\";
+    CreateDirectoryA(dir.c_str(), NULL);
+    std::string path = dir + filename;
+    HANDLE hFile = CreateFileA(path.c_str(), GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (hFile == INVALID_HANDLE_VALUE) {
+        LogToFile("WriteMiniDumpSnapshot: CreateFileA failed");
+        return;
     }
+    // No exception info: capture a process snapshot useful for postmortem
+    BOOL rv = MiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(), hFile, MiniDumpWithFullMemory, NULL, NULL, NULL);
+    CloseHandle(hFile);
+    std::ostringstream oss; oss << "WriteMiniDumpSnapshot: wrote dump " << path << " context: " << context;
+    LogToFile(oss.str());
 }
+
+static void SafeUnregisterCallback_NoThrow(const std::string& key, bool module_managed) {
+    // Conservative, non-throwing instrumentation: inspect pointer with VirtualQuery,
+    // log memory region and a small preview, write a snapshot dump, but avoid dereferencing
+    // or destroying potentially-corrupted holder pointer (unsafe to touch or delete).
+    std::lock_guard<std::mutex> lk(g_callbacksMutex);
+    auto it = g_callbacks.find(key);
+    if (it == g_callbacks.end()) {
+        std::ostringstream oss; oss << "SafeUnregisterCallback_NoThrow: no holder found for key='" << key << "'";
+        LogToFile(oss.str());
+        return;
+    }
+
+    void* rawptr = it->second ? static_cast<void*>(it->second.get()) : nullptr;
+    std::ostringstream oss; oss << "SafeUnregisterCallback_NoThrow: holder rawptr=" << rawptr << " module_managed=" << (module_managed ? "true" : "false");
+    LogToFile(oss.str());
+
+    if (!rawptr) {
+        LogToFile("SafeUnregisterCallback_NoThrow: rawptr is null, nothing to probe");
+        return;
+    }
+
+    MEMORY_BASIC_INFORMATION mbi;
+    SIZE_T q = VirtualQuery(rawptr, &mbi, sizeof(mbi));
+    if (q == 0) {
+        std::ostringstream os2; os2 << "SafeUnregisterCallback_NoThrow: VirtualQuery failed for ptr=" << rawptr;
+        LogToFile(os2.str());
+        WriteMiniDumpSnapshot(key);
+        return;
+    }
+
+    std::ostringstream os3;
+    os3 << "SafeUnregisterCallback_NoThrow: region Base=" << mbi.BaseAddress << " RegionSize=" << mbi.RegionSize << " State=" << mbi.State << " Protect=" << mbi.Protect;
+    LogToFile(os3.str());
+
+    // Only preview bytes if memory is committed
+    if (mbi.State == MEM_COMMIT) {
+        uintptr_t base = reinterpret_cast<uintptr_t>(mbi.BaseAddress);
+        uintptr_t p = reinterpret_cast<uintptr_t>(rawptr);
+        size_t avail = static_cast<size_t>(mbi.RegionSize - (p - base));
+        size_t preview = avail < 64 ? avail : 64;
+        if (preview > 0) {
+            // safe to read within the region
+            std::string hex;
+            hex.reserve(preview * 3 + 32);
+            unsigned char* bytes = reinterpret_cast<unsigned char*>(rawptr);
+            for (size_t i = 0; i < preview; ++i) {
+                char buf[8]; sprintf_s(buf, "%02X", bytes[i]);
+                if (i) hex.push_back(' ');
+                hex += buf;
+            }
+            std::ostringstream os4; os4 << "SafeUnregisterCallback_NoThrow: memory preview (first " << preview << " bytes): " << hex;
+            LogToFile(os4.str());
+        }
+    } else {
+        std::ostringstream os5; os5 << "SafeUnregisterCallback_NoThrow: not committed (State=" << mbi.State << ") - skipping preview";
+        LogToFile(os5.str());
+    }
+
+    // Write a snapshot dump so we can analyze registers/stack and module memory later
+    WriteMiniDumpSnapshot(key);
+
+    // Avoid modifying or erasing the map entry here: modifying may cause the shared_ptr
+    // destructor to run on a potentially-corrupted pointer and cause an immediate crash.
+    // We'll analyze the snapshot to decide a safe remediation (e.g., change teardown order
+    // so Token destructors run only after global callback cleanup).
+}
+
 
 // Trampolines: small adapters that extract userdata (the Callback holder) and invoke
 // the C++ callable. These are minimal and must be robust (trap on unregistered callbacks).
