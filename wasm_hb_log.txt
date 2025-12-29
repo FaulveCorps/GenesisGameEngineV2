@@ -237,3 +237,4 @@ Token::~Token: entering ns=env name=host_log sig=v(ii) module=0000023BD0580560 t
 Token::~Token: marked holder inactive (module_managed=false)
 CleanupModuleCallbacks: erasing key=env:host_log holder=0000023BD05339F0
 Token::~Token: entering ns=env name=test_ping sig=v() module=000002CAAFF81CB0 thread=204
+Token::~Token: entering ns=env name=test_ping sig=v() module=000001923E8C7960 thread=6824

@@ -111,6 +111,64 @@ static std::string SanitizePreview(const std::string& s, size_t max_preview = 25
     return out;
 }
 
+static void WriteMiniDumpForException(EXCEPTION_POINTERS* ep, const std::string& context) {
+    SYSTEMTIME st; GetLocalTime(&st);
+    char filename[256];
+    sprintf_s(filename, "token_crash_%04d%02d%02d_%02d%02d%02d.dmp", st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond);
+    std::string dir = "Tools\\external\\procdump\\dumps\\";
+    CreateDirectoryA(dir.c_str(), NULL);
+    std::string path = dir + filename;
+    HANDLE hFile = CreateFileA(path.c_str(), GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (hFile == INVALID_HANDLE_VALUE) return;
+    MINIDUMP_EXCEPTION_INFORMATION mei;
+    mei.ThreadId = GetCurrentThreadId();
+    mei.ExceptionPointers = ep;
+    mei.ClientPointers = FALSE;
+    MiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(), hFile, MiniDumpWithFullMemory, &mei, NULL, NULL);
+    CloseHandle(hFile);
+    std::ostringstream oss; oss << "WriteMiniDumpForException: wrote dump " << path << " context: " << context;
+    LogToFile(oss.str());
+}
+
+static void SafeUnregisterCallback_NoThrow(const std::string& key, bool module_managed) {
+    bool locked = false;
+    __try {
+        g_callbacksMutex.lock();
+        locked = true;
+        auto it = g_callbacks.find(key);
+        if (it != g_callbacks.end()) {
+            void* rawptr = it->second ? static_cast<void*>(it->second.get()) : nullptr;
+            // Allocate a stub without using throwing allocation paths
+            CallbackBase* stubraw = new (std::nothrow) CallbackBase();
+            if (stubraw) {
+                std::shared_ptr<CallbackBase> stub(stubraw);
+                stub->active = false;
+                stub->module = nullptr;
+                it->second = stub;
+            } else {
+                // allocation failed; best-effort: mark existing holder inactive without exceptions
+                if (it->second) {
+                    CallbackBase* raw = it->second.get();
+                    if (raw) raw->active = false;
+                }
+            }
+            g_import_userdata.erase(key);
+            std::ostringstream oss; oss << "SafeUnregisterCallback_NoThrow: replaced holder at " << rawptr << " with stub (module_managed=" << (module_managed ? "true" : "false") << ")";
+            LogToFile(oss.str());
+        } else {
+            std::ostringstream oss; oss << "SafeUnregisterCallback_NoThrow: no holder found for key='" << key << "'";
+            LogToFile(oss.str());
+        }
+        if (locked) { g_callbacksMutex.unlock(); locked = false; }
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        EXCEPTION_POINTERS* ep = GetExceptionInformation();
+        WriteMiniDumpForException(ep, key);
+        std::ostringstream oss; oss << "SafeUnregisterCallback_NoThrow: SEH fired for key='" << key << "'";
+        LogToFile(oss.str());
+        if (locked) { __try { g_callbacksMutex.unlock(); } __except(EXCEPTION_EXECUTE_HANDLER) { } }
+    }
+}
+
 // Trampolines: small adapters that extract userdata (the Callback holder) and invoke
 // the C++ callable. These are minimal and must be robust (trap on unregistered callbacks).
 
@@ -758,24 +816,8 @@ HostBindings::Token::~Token() noexcept {
 
     std::string key = KeyFor(ns_.c_str(), name_.c_str());
     std::cerr << "Token::~Token: about to acquire g_callbacksMutex for key='" << key << "'" << std::endl;
-    {
-        std::lock_guard<std::mutex> lk(g_callbacksMutex);
-        std::cerr << "Token::~Token: inside g_callbacksMutex for key='" << key << "'" << std::endl;
-        auto it = g_callbacks.find(key);
-        if (it != g_callbacks.end()) {
-            std::cerr << "Token::~Token: found holder entry, marking inactive" << std::endl;
-            if (it->second) it->second->active = false;
-            // Avoid erasing entries here to prevent lock-order races and iterator invalidation
-            // while other code (e.g., LinkHostFunctions) iterates or modifies the maps.
-            std::ostringstream oss; oss << "Token::~Token: marked holder inactive (module_managed=" << (module_managed_ ? "true" : "false") << ")";
-            LogToFile(oss.str());
-            std::cerr << "Token::~Token: marked holder inactive (logged)" << std::endl;
-        } else {
-            std::cerr << "Token::~Token: no holder found in g_callbacks for key='" << key << "'" << std::endl;
-            std::ostringstream oss; oss << "Token::~Token: no holder found in g_callbacks for key='" << key << "'";
-            LogToFile(oss.str());
-        }
-    }
+    // Use a no-throw helper that uses SEH internally to capture crashes during map operations.
+    SafeUnregisterCallback_NoThrow(key, module_managed_);
 
     std::cerr << "Token::~Token: releasing lock and clearing module_" << std::endl;
     module_ = nullptr;
