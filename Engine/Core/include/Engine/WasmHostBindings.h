@@ -81,6 +81,16 @@ public:
     // Useful to ensure any holders are destroyed only after the module/runtime are gone.
     static void CleanupModuleCallbacks(IM3Module module);
 
+    // Process any previously-deferred unregistrations queued by Token destructors that
+    // avoided touching global callback maps during unsafe teardown windows.
+    static void ProcessDeferredUnregistrations();
+
+#ifdef _DEBUG
+    // Debug helpers used by unit tests
+    static size_t DebugGetCallbacksCount();
+    static size_t DebugGetDeferredCount();
+#endif
+
 private:
     IM3Module module_ = nullptr;
     size_t maxStringLength_ = 1024 * 1024; // 1 MB default

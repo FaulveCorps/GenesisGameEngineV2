@@ -48,6 +48,7 @@ add_executable(UnitTests
     test_wasm_runtime.cpp
     test_wasm_runtime_raii.cpp
     test_wasm_host_bindings.cpp
+    test_wasm_deferred_unreg.cpp
     test_wasm_runtime.cpp
     test_wasm_sample_mod.cpp
     test_wasm_mod_file.cpp

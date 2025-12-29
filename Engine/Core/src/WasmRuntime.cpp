@@ -74,6 +74,9 @@ struct WasmModule {
             // Now it's safe to remove callbacks associated with the module
             HostBindings::CleanupModuleCallbacks(saved_module);
         }
+
+        // Process any deferred unregistrations now that module/runtime resources have been freed
+        HostBindings::ProcessDeferredUnregistrations();
     }
 };
 
@@ -121,6 +124,10 @@ void WasmRuntime::Shutdown() {
     }
     g_modules.clear();
     std::cerr << "WasmRuntime::Shutdown: modules cleared" << std::endl;
+
+    // Process any deferred unregistrations that were queued by Token destructors during teardown
+    HostBindings::ProcessDeferredUnregistrations();
+
     if (g_env.env) { m3_FreeEnvironment(g_env.env); g_env.env = nullptr; }
     std::cerr << "WasmRuntime::Shutdown: environment freed" << std::endl;
     g_inited = false;

@@ -246,3 +246,46 @@ Token::~Token: sizes: g_callbacks=1 g_callback_keys=1 g_import_userdata=1
 ScopedVectoredDump: handler=0000016E5CB462C0
 WriteMiniDumpForException: wrote dump Tools\external\procdump\dumps\token_crash_20251229_142439.dmp context: VectoredDumpHandler
 WriteMiniDumpForException: wrote dump Tools\external\procdump\dumps\token_crash_20251229_142440.dmp context: VectoredDumpHandler
+Token::~Token: entering ns=env name=test_ping sig=v() module=0000021365311580 thread=8348
+ScopedVectoredDump: handler=000002136529E320
+Token::~Token: g_callbacks addr=00007FF62DB8A130 g_callback_keys addr=00007FF62DB8A090 g_import_userdata addr=00007FF62DB8A0E0
+Token::~Token: sizes: g_callbacks=1 g_callback_keys=1 g_import_userdata=1
+WriteMiniDumpForException: wrote dump Tools\external\procdump\dumps\token_crash_20251229_160331.dmp context: VectoredDumpHandler
+Token::~Token: entering ns=env name=test_ping sig=v() module=000001420468F320 thread=6040
+ScopedVectoredDump: handler=00000142046BDDC0
+Token::~Token: g_callbacks addr=00007FF68DA1A130 g_callback_keys addr=00007FF68DA1A090 g_import_userdata addr=00007FF68DA1A0E0
+Token::~Token: sizes: g_callbacks=1 g_callback_keys=1 g_import_userdata=1
+WriteMiniDumpForException: wrote dump Tools\external\procdump\dumps\token_crash_20251229_160547.dmp context: VectoredDumpHandler
+Token::~Token: entering ns=env name=test_ping sig=v() module=0000014BCD807EE0 thread=3956
+ScopedVectoredDump: handler=0000014BCD83BF70
+Token::~Token: g_callbacks addr=00007FF67DB4A130 g_callback_keys addr=00007FF67DB4A090 g_import_userdata addr=00007FF67DB4A0E0
+Token::~Token: sizes: g_callbacks=1 g_callback_keys=1 g_import_userdata=1
+WriteMiniDumpForException: wrote dump Tools\external\procdump\dumps\token_crash_20251229_160738.dmp context: VectoredDumpHandler
+Token::~Token: entering ns=env name=test_ping sig=v() module=000001BAD2C91D70 thread=7908
+ScopedVectoredDump: handler=000001BAD2CB9CD0
+Token::~Token: g_callbacks addr=00007FF7B8AEA150 g_callback_keys addr=00007FF7B8AEA090 g_import_userdata addr=00007FF7B8AEA100
+Token::~Token: sizes: g_callbacks=1 g_callback_keys=1 g_import_userdata=1
+Token::~Token: deferring unregister for key='env:test_ping' module_managed=false
+DeferUnregisterCallback: queued key=env:test_ping module_managed=false
+ScopedVectoredDump: removed handler=000001BAD2CB9CD0
+Token::~Token: entering ns=env name=test_ping sig=v() module=0000012EDF9EB7C0 thread=3528
+ScopedVectoredDump: handler=0000012EDFA0A0A0
+Token::~Token: g_callbacks addr=00007FF7848EA150 g_callback_keys addr=00007FF7848EA090 g_import_userdata addr=00007FF7848EA100
+Token::~Token: sizes: g_callbacks=1 g_callback_keys=1 g_import_userdata=1
+Token::~Token: deferring unregister for key='env:test_ping' module_managed=false
+DeferUnregisterCallback: queued key=env:test_ping module_managed=false
+ScopedVectoredDump: removed handler=0000012EDFA0A0A0
+Token::~Token: entering ns=env name=test_ping sig=v() module=000001E75625E050 thread=13048
+ScopedVectoredDump: handler=000001E75627C1D0
+Token::~Token: g_callbacks addr=00007FF7ECDF3190 g_callback_keys addr=00007FF7ECDF30D0 g_import_userdata addr=00007FF7ECDF3140
+Token::~Token: sizes: g_callbacks=1 g_callback_keys=1 g_import_userdata=1
+Token::~Token: deferring unregister for key='env:test_ping' module_managed=false
+DeferUnregisterCallback: queued key=env:test_ping module_managed=false
+ScopedVectoredDump: removed handler=000001E75627C1D0
+Token::~Token: entering ns=env name=test_ping sig=v() module=000001CD300DEF80 thread=11456
+ScopedVectoredDump: handler=000001CD30106700
+Token::~Token: g_callbacks addr=00007FF7ECDF3190 g_callback_keys addr=00007FF7ECDF30D0 g_import_userdata addr=00007FF7ECDF3140
+Token::~Token: sizes: g_callbacks=1 g_callback_keys=1 g_import_userdata=1
+Token::~Token: deferring unregister for key='env:test_ping' module_managed=false
+DeferUnregisterCallback: queued key=env:test_ping module_managed=false
+ScopedVectoredDump: removed handler=000001CD30106700

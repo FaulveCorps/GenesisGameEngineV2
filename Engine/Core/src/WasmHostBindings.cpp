@@ -12,6 +12,8 @@
 #include <algorithm>
 #include <sstream>
 #include <thread>
+#include <vector>
+#include <cstdint>
 #include <windows.h>
 #ifdef _WIN32
 #include <dbghelp.h>
@@ -249,6 +251,105 @@ static void SafeUnregisterCallback_NoThrow(const std::string& key, bool module_m
     // destructor to run on a potentially-corrupted pointer and cause an immediate crash.
     // We'll analyze the snapshot to decide a safe remediation (e.g., change teardown order
     // so Token destructors run only after global callback cleanup).
+}
+
+
+// Diagnostic helper: copy g_callbacks under lock and safely probe holder memory for
+// each entry (small preview). This avoids holding the lock while performing memory reads.
+static void DumpCallbacksSnapshot(const std::string& context) {
+    try {
+        std::vector<std::pair<std::string, void*>> entries;
+        {
+            std::lock_guard<std::mutex> lk(g_callbacksMutex);
+            entries.reserve(g_callbacks.size());
+            for (const auto &p : g_callbacks) {
+                void* ptr = p.second ? static_cast<void*>(p.second.get()) : nullptr;
+                entries.emplace_back(p.first, ptr);
+            }
+        }
+        std::ostringstream oss; oss << "DumpCallbacksSnapshot: context=" << context << " entries=" << entries.size();
+        LogToFile(oss.str());
+        for (const auto &e : entries) {
+            std::ostringstream o2; o2 << "DumpCallbacksSnapshot: key=" << e.first << " ptr=" << e.second;
+            LogToFile(o2.str());
+            if (e.second) {
+                MEMORY_BASIC_INFORMATION mbi;
+                SIZE_T q = VirtualQuery(e.second, &mbi, sizeof(mbi));
+                if (q != 0 && mbi.State == MEM_COMMIT) {
+                    DWORD prot = mbi.Protect;
+                    bool skipRead = false;
+                    if ((prot & PAGE_GUARD) != 0) skipRead = true;
+                    if (prot == PAGE_NOACCESS) skipRead = true;
+                    if (skipRead) {
+                        std::ostringstream osr; osr << "DumpCallbacksSnapshot: key=" << e.first << " memory not readable (Protect=" << prot << ")";
+                        LogToFile(osr.str());
+                    } else {
+                        uintptr_t base = reinterpret_cast<uintptr_t>(mbi.BaseAddress);
+                        uintptr_t p = reinterpret_cast<uintptr_t>(e.second);
+                        size_t avail = static_cast<size_t>(mbi.RegionSize - (p - base));
+                        size_t preview = avail < 64 ? avail : 64;
+                        if (preview > 0) {
+                            std::string hex;
+                            hex.reserve(preview * 3 + 32);
+                            unsigned char* bytes = reinterpret_cast<unsigned char*>(e.second);
+                            {
+                                SIZE_T bytesRead = 0;
+                                std::vector<unsigned char> bufVec(preview);
+                                if (ReadProcessMemory(GetCurrentProcess(), e.second, bufVec.data(), preview, &bytesRead) && bytesRead > 0) {
+                                    for (SIZE_T i = 0; i < bytesRead; ++i) {
+                                        char bbuf[8]; sprintf_s(bbuf, "%02X", bufVec[i]);
+                                        if (i) hex.push_back(' ');
+                                        hex += bbuf;
+                                    }
+                                } else {
+                                    std::ostringstream err; err << "DumpCallbacksSnapshot: ReadProcessMemory failed for key=" << e.first << " err=" << GetLastError();
+                                    LogToFile(err.str());
+                                    hex = "<READ_FAILED>";
+                                }
+                            }
+                            std::ostringstream o3; o3 << "DumpCallbacksSnapshot: key=" << e.first << " memory preview:" << hex;
+                            LogToFile(o3.str());
+                        }
+                    }
+                } else {
+                    std::ostringstream o4; o4 << "DumpCallbacksSnapshot: key=" << e.first << " memory region not committed or VirtualQuery failed";
+                    LogToFile(o4.str());
+                }
+            } else {
+                LogToFile(std::string("DumpCallbacksSnapshot: ptr is null for key=") + e.first);
+            }
+        }
+    } catch (...) {
+        LogToFile("DumpCallbacksSnapshot: exception while generating snapshot");
+    }
+}
+
+// Deferred unregistration queue to avoid touching g_callbacks in potentially-unsafe teardown moments
+static std::mutex g_deferredUnregMutex;
+static std::vector<std::pair<std::string, bool>> g_deferred_unregs;
+
+static void DeferUnregisterCallback(const std::string& key, bool module_managed) {
+    try {
+        std::lock_guard<std::mutex> lk(g_deferredUnregMutex);
+        g_deferred_unregs.emplace_back(key, module_managed);
+        std::ostringstream oss; oss << "DeferUnregisterCallback: queued key=" << key << " module_managed=" << (module_managed ? "true" : "false");
+        LogToFile(oss.str());
+    } catch (...) {
+        LogToFile("DeferUnregisterCallback: exception while queuing");
+    }
+}
+
+static void ProcessDeferredUnregistrations_Internal() {
+    std::vector<std::pair<std::string, bool>> todo;
+    {
+        std::lock_guard<std::mutex> lk(g_deferredUnregMutex);
+        todo.swap(g_deferred_unregs);
+    }
+    for (auto &p : todo) {
+        std::ostringstream oss; oss << "ProcessDeferredUnregistrations: processing key=" << p.first << " module_managed=" << (p.second ? "true" : "false");
+        LogToFile(oss.str());
+        SafeUnregisterCallback_NoThrow(p.first, p.second);
+    }
 }
 
 
@@ -912,8 +1013,83 @@ HostBindings::Token::~Token() noexcept {
         LogToFile("Token::~Token: exception reading container sizes");
     }
 
-    // Use a no-throw helper that uses SEH internally to capture crashes during map operations.
-    SafeUnregisterCallback_NoThrow(key, module_managed_);
+    // Probe the callback entry for this key with minimal map access and safe memory reads
+    // to avoid iterating potentially-corrupted container internals.
+    // ProbeCallbackForKey only performs a find() under lock and then uses ReadProcessMemory
+    // and VirtualQuery to safely get a small preview without risking iterator derefs.
+    static auto ProbeCallbackForKey = [](const std::string &key) {
+        try {
+            void* ptr = nullptr;
+            {
+                std::lock_guard<std::mutex> lk(g_callbacksMutex);
+                auto it = g_callbacks.find(key);
+                bool found = (it != g_callbacks.end());
+                if (found && it->second) ptr = static_cast<void*>(it->second.get());
+                std::ostringstream os; os << "ProbeCallbackForKey: key=" << key << " found=" << found << " ptr=" << ptr;
+                LogToFile(os.str());
+                // Also probe g_callback_keys and g_import_userdata presence
+                auto itk = g_callback_keys.find(key);
+                if (itk != g_callback_keys.end()) {
+                    std::ostringstream os2; os2 << "ProbeCallbackForKey: g_callback_keys keyPtr=" << (void*)itk->second.get();
+                    LogToFile(os2.str());
+                } else {
+                    LogToFile(std::string("ProbeCallbackForKey: g_callback_keys missing for key=") + key);
+                }
+                auto itu = g_import_userdata.find(key);
+                if (itu != g_import_userdata.end() && itu->second) {
+                    std::ostringstream os3; os3 << "ProbeCallbackForKey: g_import_userdata kind=" << itu->second->kind << " ptr=" << itu->second->ptr;
+                    LogToFile(os3.str());
+                } else {
+                    LogToFile(std::string("ProbeCallbackForKey: g_import_userdata missing for key=") + key);
+                }
+            }
+            if (!ptr) return;
+            MEMORY_BASIC_INFORMATION mbi;
+            SIZE_T q = VirtualQuery(ptr, &mbi, sizeof(mbi));
+            if (q == 0) {
+                std::ostringstream os; os << "ProbeCallbackForKey: VirtualQuery failed for ptr=" << ptr;
+                LogToFile(os.str());
+                WriteMiniDumpSnapshot(key);
+                return;
+            }
+            std::ostringstream os4; os4 << "ProbeCallbackForKey: Base=" << mbi.BaseAddress << " RegionSize=" << mbi.RegionSize << " State=" << mbi.State << " Protect=" << mbi.Protect;
+            LogToFile(os4.str());
+            if (mbi.State == MEM_COMMIT && ((mbi.Protect & PAGE_GUARD) == 0) && mbi.Protect != PAGE_NOACCESS) {
+                uintptr_t base = reinterpret_cast<uintptr_t>(mbi.BaseAddress);
+                uintptr_t p = reinterpret_cast<uintptr_t>(ptr);
+                size_t avail = static_cast<size_t>(mbi.RegionSize - (p - base));
+                size_t preview = avail < 64 ? avail : 64;
+                if (preview > 0) {
+                    SIZE_T bytesRead = 0;
+                    std::vector<unsigned char> bufVec(preview);
+                    if (ReadProcessMemory(GetCurrentProcess(), ptr, bufVec.data(), preview, &bytesRead) && bytesRead > 0) {
+                        std::ostringstream oh; oh << "ProbeCallbackForKey: memory preview:";
+                        for (SIZE_T i = 0; i < bytesRead; ++i) {
+                            char bbuf[8]; sprintf_s(bbuf, "%02X", bufVec[i]);
+                            if (i) oh << " ";
+                            oh << bbuf;
+                        }
+                        LogToFile(oh.str());
+                    } else {
+                        std::ostringstream err; err << "ProbeCallbackForKey: ReadProcessMemory failed err=" << GetLastError();
+                        LogToFile(err.str());
+                    }
+                }
+            } else {
+                std::ostringstream os5; os5 << "ProbeCallbackForKey: not readable or not committed (State=" << mbi.State << " Protect=" << mbi.Protect << ")";
+                LogToFile(os5.str());
+            }
+        } catch (...) {
+            LogToFile("ProbeCallbackForKey: exception during probe");
+        }
+    };
+
+    // Defer unregistration to avoid touching g_callbacks during potentially unsafe teardown windows.
+    {
+        std::ostringstream osd; osd << "Token::~Token: deferring unregister for key='" << key << "' module_managed=" << (module_managed_ ? "true" : "false");
+        LogToFile(osd.str());
+    }
+    DeferUnregisterCallback(key, module_managed_);
 
     std::cerr << "Token::~Token: releasing lock and clearing module_" << std::endl;
     module_ = nullptr;
@@ -933,6 +1109,21 @@ void HostBindings::CleanupModuleCallbacks(IM3Module module) {
         }
     }
 }
+
+void HostBindings::ProcessDeferredUnregistrations() {
+    ProcessDeferredUnregistrations_Internal();
+}
+
+#ifdef _DEBUG
+size_t HostBindings::DebugGetCallbacksCount() {
+    std::lock_guard<std::mutex> lk(g_callbacksMutex);
+    return g_callbacks.size();
+}
+size_t HostBindings::DebugGetDeferredCount() {
+    std::lock_guard<std::mutex> lk(g_deferredUnregMutex);
+    return g_deferred_unregs.size();
+}
+#endif
 
 } // namespace Genesis::Engine
 #endif // HAVE_WASM3
