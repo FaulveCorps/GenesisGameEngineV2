@@ -34,6 +34,26 @@ try:
                 print('Error reading process properties:', e)
     except Exception as e:
         print('No DebuggedProcesses or error:', e)
+        # If requested, attempt to start debugging (e.g., user opened a dump file and wants to start session)
+        if len(sys.argv) > 1 and sys.argv[1] == 'start':
+            print('Attempting to start debugging via DTE.ExecuteCommand("Debug.Start")')
+            try:
+                dte.ExecuteCommand('Debug.Start')
+            except Exception as e2:
+                print('ExecuteCommand Debug.Start failed:', e2)
+            import time
+            time.sleep(1)
+            try:
+                procs = dbg.DebuggedProcesses
+                print('After Start: DebuggedProcesses.Count =', procs.Count)
+                for i in range(1, procs.Count+1):
+                    p = procs.Item(i)
+                    try:
+                        print('Proc', i, 'Name:', p.Name, 'ProcessID:', p.ProcessID, 'IsDump:', getattr(p,'IsDump', None))
+                    except Exception as e:
+                        print('Error reading process properties after start:', e)
+            except Exception as e:
+                print('Still no DebuggedProcesses or error after start:', e)
     try:
         # Try LocalProcesses
         lprocs = dbg.LocalProcesses
