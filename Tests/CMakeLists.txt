@@ -29,6 +29,8 @@ add_executable(UnitTests
     test_2d_sprite_gl_readback.cpp
     test_samplegame_autocycle.cpp
     test_shader_subsystem.cpp
+    test_pbr_material.cpp
+    test_gltf_material_import.cpp
     test_audio.cpp
     test_audio_playback.cpp
     test_physics.cpp
@@ -45,9 +47,11 @@ add_executable(UnitTests
     test_scripting.cpp
     test_wasm_runtime.cpp
     test_wasm_runtime_raii.cpp
+    test_wasm_host_bindings.cpp
     test_wasm_runtime.cpp
     test_wasm_sample_mod.cpp
     test_wasm_mod_file.cpp
+    test_wasm_host_bindings.cpp
     test_wasm_e2e.cpp
     test_wasm_limits.cpp
     ${catch2_SOURCE_DIR}/extras/catch_amalgamated.cpp

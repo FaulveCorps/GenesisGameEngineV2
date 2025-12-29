@@ -1,9 +1,9 @@
-#include "ENGINE/RendererManager.h"
-#include "ENGINE/GraphicsFactory.h"
-#include "ENGINE/Mesh.h"
-#include "ENGINE/MeshRegistry.h"
-#include "ENGINE/ShaderRegistry.h"
-#include "ENGINE/TextureRegistry.h"
+#include "Engine/RendererManager.h"
+#include "Engine/GraphicsFactory.h"
+#include "Engine/Mesh.h"
+#include "Engine/MeshRegistry.h"
+#include "Engine/ShaderRegistry.h"
+#include "Engine/TextureRegistry.h"
 #include <iostream>
 #include <cstdlib>
 #include <cstring>

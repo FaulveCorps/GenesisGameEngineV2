@@ -16,7 +16,11 @@
 
 #include "wasm3.h"
 #include "m3_env.h"
-
+#ifdef _WIN32
+#include <windows.h>
+#include <dbghelp.h>
+#pragma comment(lib, "Dbghelp.lib")
+#endif
 
 #ifdef HAVE_WASM3
 #include "engine/WasmHostBindings.h"
@@ -48,17 +52,27 @@ struct WasmModule {
         std::cerr << "WasmModule::~WasmModule: clearing " << hostTokens.size() << " tokens" << std::endl;
         hostTokens.clear();
         std::cerr << "WasmModule::~WasmModule: tokens cleared" << std::endl;
+        // Save the module pointer so we can perform callback cleanup *after* the
+        // module/runtime are freed. This ensures userdata (ImportUserdata objects)
+        // remain valid until wasm3 has finished any internal cleanup that may touch
+        // the userdata pointers.
+        IM3Module saved_module = module;
+
         if (runtime) {
             std::cerr << "WasmModule::~WasmModule: freeing runtime (will also free loaded module)=" << runtime << std::endl;
             m3_FreeRuntime(runtime);
             runtime = nullptr;
             module = nullptr; // runtime freed associated module
             std::cerr << "WasmModule::~WasmModule: runtime freed; module pointer cleared" << std::endl;
-        } else if (module) {
-            std::cerr << "WasmModule::~WasmModule: freeing modulePtr (not attached to runtime)=" << module << std::endl;
-            m3_FreeModule(module);
+            // Now it's safe to remove callbacks associated with the module
+            if (saved_module) { HostBindings::CleanupModuleCallbacks(saved_module); }
+        } else if (saved_module) {
+            std::cerr << "WasmModule::~WasmModule: freeing modulePtr (not attached to runtime)=" << saved_module << std::endl;
+            m3_FreeModule(saved_module);
             module = nullptr;
             std::cerr << "WasmModule::~WasmModule: module freed" << std::endl;
+            // Now it's safe to remove callbacks associated with the module
+            HostBindings::CleanupModuleCallbacks(saved_module);
         }
     }
 };
@@ -155,22 +169,72 @@ static M3Result LinkHostFunctions(WasmModule* wm) {
     if (!wm || !wm->module) return "invalid-module";
     std::cerr << "LinkHostFunctions: begin module='" << wm->name << "' modulePtr=" << wm->module << std::endl;
     HostBindings hb(wm->module);
-    // Register any global host functions that were registered via WasmRuntime::RegisterHostFunction
+    // Copy global registrations under lock then link them without holding the global lock to avoid lock-order deadlocks
+    std::vector<GlobalHostRegistration> regsCopy;
     {
         std::lock_guard<std::mutex> lk(g_hostRegMutex);
-        for (const auto &g : g_globalHostFunctions) {
-            auto tok = hb.RegisterRaw(g.ns.c_str(), g.name.c_str(), g.sig.c_str(), g.cb);
+        regsCopy = g_globalHostFunctions;
+    }
+    for (const auto &g : regsCopy) {
+        try {
+            std::cerr << "LinkHostFunctions: linking host '" << g.ns << "'.'" << g.name << "' (thread " << std::this_thread::get_id() << ")" << std::endl;
+            auto tok = hb.RegisterRaw(g.ns.c_str(), g.name.c_str(), g.sig.c_str(), g.cb, &wm->timed_out);
             if (!tok.valid()) {
                 std::cerr << "WasmRuntime: LinkHostFunctions: failed to bind global host '" << g.ns << "'.'" << g.name << "' to module '" << wm->name << "' (see earlier logs)" << std::endl;
                 return kHostLinkFailed;
             }
             wm->hostTokens.push_back(std::move(tok));
+            std::cerr << "LinkHostFunctions: linked host '" << g.ns << "'.'" << g.name << "' (thread " << std::this_thread::get_id() << ")" << std::endl;
+        } catch (const std::system_error &se) {
+            std::cerr << "LinkHostFunctions: system_error while linking '" << g.ns << "'.'" << g.name << "': " << se.what() << " code=" << se.code().value() << std::endl;
+#ifdef _WIN32
+            void* addrs[64];
+            USHORT frames = CaptureStackBackTrace(0, 64, addrs, nullptr);
+            std::cerr << "Stack frames captured: " << frames << std::endl;
+            HANDLE hProc = GetCurrentProcess();
+            SymSetOptions(SYMOPT_DEFERRED_LOADS | SYMOPT_UNDNAME);
+            if (SymInitialize(hProc, NULL, TRUE)) {
+                for (USHORT i = 0; i < frames; ++i) {
+                    DWORD64 addr = (DWORD64)(addrs[i]);
+                    char buffer[sizeof(SYMBOL_INFO) + MAX_SYM_NAME * sizeof(TCHAR)];
+                    PSYMBOL_INFO pSymbol = (PSYMBOL_INFO)buffer;
+                    pSymbol->SizeOfStruct = sizeof(SYMBOL_INFO);
+                    pSymbol->MaxNameLen = MAX_SYM_NAME;
+                    DWORD64 displacement = 0;
+                    if (SymFromAddr(hProc, addr, &displacement, pSymbol)) {
+                        std::cerr << std::hex << pSymbol->Address << " " << pSymbol->Name << std::dec << " +0x" << displacement << std::endl;
+                    } else {
+                        std::cerr << std::hex << addr << std::dec << std::endl;
+                    }
+                }
+            } else {
+                for (USHORT i=0;i<frames;i++) std::cerr << addrs[i] << std::endl;
+            }
+#endif
+            return kHostLinkFailed;
+        } catch (const std::exception &ex) {
+            std::cerr << "LinkHostFunctions: exception while linking '" << g.ns << "'.'" << g.name << "': " << ex.what() << std::endl;
+            return kHostLinkFailed;
+        } catch (...) {
+            std::cerr << "LinkHostFunctions: unknown exception while linking '" << g.ns << "'.'" << g.name << "'" << std::endl;
+            return kHostLinkFailed;
         }
     }
 
     std::cerr << "LinkHostFunctions: done module='" << wm->name << "'" << std::endl;
-    return m3Err_none;
+    return m3Err_none; 
 }
+
+// Return pointer to a module's timed_out flag (or nullptr). This is used by host trampolines
+// to perform a fast, lock-free check without taking the global wasm mutex (avoids deadlocks).
+std::atomic<bool>* WasmRuntime::GetModuleTimedOutPtr(IM3Module module) {
+    std::lock_guard<std::mutex> lk(g_wasmMutex);
+    for (auto &p : g_modules) {
+        if (p.second && p.second->module == module) return &p.second->timed_out;
+    }
+    return nullptr;
+}
+
 
 // Host import implementations
 m3ApiRawFunction(engine_create_body) {
@@ -229,57 +293,140 @@ m3ApiRawFunction(engine_create_distance_joint) {
 }
 
 static bool LoadModuleBytes(const std::string& name, const std::vector<uint8_t>& bytes) {
-    std::lock_guard<std::mutex> lk(g_wasmMutex);
-    if (!g_inited) {
-        if (!WasmRuntime::Init()) return false;
-    }
+    try {
+        std::cerr << "WasmRuntime::LoadModuleBytes: ensuring runtime initialized" << std::endl;
+        if (!g_inited) {
+            if (!WasmRuntime::Init()) return false;
+        }
+        std::cerr << "WasmRuntime::LoadModuleBytes: attempting to acquire g_wasmMutex" << std::endl;
+        std::lock_guard<std::mutex> lk(g_wasmMutex);
+        std::cerr << "WasmRuntime::LoadModuleBytes: acquired g_wasmMutex" << std::endl;
 
-    IM3Module module = nullptr;
-    M3Result r = m3_ParseModule(g_env.env, &module, bytes.data(), bytes.size());
-    if (r) {
-        std::cerr << "WasmRuntime: m3_ParseModule failed for module '" << name << "': " << (r ? r : "(unknown)") << std::endl;
+        IM3Module module = nullptr;
+        std::cerr << "WasmRuntime::LoadModuleBytes: about to call m3_ParseModule" << std::endl;
+        M3Result r = m3_ParseModule(g_env.env, &module, bytes.data(), bytes.size());
+        std::cerr << "WasmRuntime::LoadModuleBytes: m3_ParseModule returned r=" << (r ? r : "(none)") << " module=" << (void*)module << std::endl;
+        if (r) {
+            std::cerr << "WasmRuntime: m3_ParseModule failed for module '" << name << "': " << (r ? r : "(unknown)") << std::endl;
+            return false;
+        }
+        std::cerr << "WasmRuntime::LoadModuleBytes: about to create WasmModule container (post-parse)" << std::endl;
+
+        // Create module container (so we can attach host tokens that must live as long as the module)
+        std::cerr << "WasmRuntime::LoadModuleBytes: about to create WasmModule container" << std::endl;
+        auto wm = std::make_unique<WasmModule>();
+        std::cerr << "WasmRuntime::LoadModuleBytes: created WasmModule container" << std::endl;
+        wm->name = name;
+        wm->bytes = bytes;
+        wm->module = module;
+
+        // Create runtime and load the module into it BEFORE linking host imports. Wasm3 requires the module
+        // to be associated with a runtime for m3_LinkRawFunction to succeed.
+        std::cerr << "WasmRuntime::LoadModuleBytes: about to create runtime" << std::endl;
+        // TODO: Enforce memory limits per-module (e.g., max memory pages) by examining module bytes and/or using
+        // wasm3 APIs if available. See Docs/adr/0003-wasm-runtime.md and ticket GS-XXXX for follow-up.
+        IM3Runtime runtime = m3_NewRuntime(g_env.env, 64*1024, NULL);
+        if (!runtime) {
+            std::cerr << "WasmRuntime: m3_NewRuntime failed for module '" << name << "'" << std::endl;
+            // WasmModule destructor will free module
+            return false;
+        }
+
+        r = m3_LoadModule(runtime, module);
+        if (r) {
+            std::cerr << "WasmRuntime: m3_LoadModule failed for module '" << name << "': " << (r ? r : "(unknown)") << std::endl;
+            m3_FreeRuntime(runtime);
+            // WasmModule destructor will free module
+            return false;
+        }
+
+        // Attach the runtime to the module container so LinkHostFunctions can see it
+        wm->runtime = runtime;
+
+        // Link host imports into the loaded module (tokens are stored on the WasmModule so they outlive this function)
+        {
+            std::cerr << "WasmRuntime::LoadModuleBytes: LinkHostFunctions start (thread " << std::this_thread::get_id() << ")" << std::endl;
+            try {
+                r = LinkHostFunctions(wm.get());
+            } catch (const std::system_error &se) {
+                std::cerr << "WasmRuntime::LoadModuleBytes: LinkHostFunctions threw system_error: " << se.what() << " code=" << se.code().value() << std::endl;
+#ifdef _WIN32
+                void* addrs[64];
+                USHORT frames = CaptureStackBackTrace(0, 64, addrs, nullptr);
+                std::cerr << "Stack frames captured: " << frames << std::endl;
+                HANDLE hProc = GetCurrentProcess();
+                SymSetOptions(SYMOPT_DEFERRED_LOADS | SYMOPT_UNDNAME);
+                if (SymInitialize(hProc, NULL, TRUE)) {
+                    for (USHORT i = 0; i < frames; ++i) {
+                        DWORD64 addr = (DWORD64)(addrs[i]);
+                        char buffer[sizeof(SYMBOL_INFO) + MAX_SYM_NAME * sizeof(TCHAR)];
+                        PSYMBOL_INFO pSymbol = (PSYMBOL_INFO)buffer;
+                        pSymbol->SizeOfStruct = sizeof(SYMBOL_INFO);
+                        pSymbol->MaxNameLen = MAX_SYM_NAME;
+                        DWORD64 displacement = 0;
+                        if (SymFromAddr(hProc, addr, &displacement, pSymbol)) {
+                            std::cerr << std::hex << pSymbol->Address << " " << pSymbol->Name << std::dec << " +0x" << displacement << std::endl;
+                        } else {
+                            std::cerr << std::hex << addr << std::dec << std::endl;
+                        }
+                    }
+                } else {
+                    for (USHORT i=0;i<frames;i++) std::cerr << addrs[i] << std::endl;
+                }
+#endif
+                return false;
+            } catch (const std::exception &ex) {
+                std::cerr << "WasmRuntime::LoadModuleBytes: LinkHostFunctions threw exception: " << ex.what() << std::endl;
+                return false;
+            } catch (...) {
+                std::cerr << "WasmRuntime::LoadModuleBytes: LinkHostFunctions threw unknown exception" << std::endl;
+                return false;
+            }
+            std::cerr << "WasmRuntime::LoadModuleBytes: LinkHostFunctions end (thread " << std::this_thread::get_id() << ")" << std::endl;
+        }
+        if (r) {
+            std::cerr << "WasmRuntime: LinkHostFunctions failed for module '" << name << "': " << (r ? r : "(unknown)") << std::endl;
+            // Do not free runtime here; let WasmModule destructor handle cleanup in the correct order (module then runtime)
+            return false;
+        }
+
+        g_modules[name] = std::move(wm);
+        std::cout << "WasmRuntime: loaded module '" << name << "'" << std::endl;
+        return true;
+    } catch (const std::system_error &se) {
+        std::cerr << "WasmRuntime::LoadModuleBytes: system_error: " << se.what() << " code=" << se.code().value() << std::endl;
+#ifdef _WIN32
+        void* addrs[64];
+        USHORT frames = CaptureStackBackTrace(0, 64, addrs, nullptr);
+        std::cerr << "Stack frames captured: " << frames << std::endl;
+        HANDLE hProc = GetCurrentProcess();
+        SymSetOptions(SYMOPT_DEFERRED_LOADS | SYMOPT_UNDNAME);
+        if (SymInitialize(hProc, NULL, TRUE)) {
+            for (USHORT i = 0; i < frames; ++i) {
+                DWORD64 addr = (DWORD64)(addrs[i]);
+                char buffer[sizeof(SYMBOL_INFO) + MAX_SYM_NAME * sizeof(TCHAR)];
+                PSYMBOL_INFO pSymbol = (PSYMBOL_INFO)buffer;
+                pSymbol->SizeOfStruct = sizeof(SYMBOL_INFO);
+                pSymbol->MaxNameLen = MAX_SYM_NAME;
+                DWORD64 displacement = 0;
+                if (SymFromAddr(hProc, addr, &displacement, pSymbol)) {
+                    std::cerr << std::hex << pSymbol->Address << " " << pSymbol->Name << std::dec << " +0x" << displacement << std::endl;
+                } else {
+                    std::cerr << std::hex << addr << std::dec << std::endl;
+                }
+            }
+        } else {
+            for (USHORT i=0;i<frames;i++) std::cerr << addrs[i] << std::endl;
+        }
+#endif
+        return false;
+    } catch (const std::exception &ex) {
+        std::cerr << "WasmRuntime::LoadModuleBytes: exception: " << ex.what() << std::endl;
+        return false;
+    } catch (...) {
+        std::cerr << "WasmRuntime::LoadModuleBytes: unknown exception" << std::endl;
         return false;
     }
-
-    // Create module container (so we can attach host tokens that must live as long as the module)
-    auto wm = std::make_unique<WasmModule>();
-    wm->name = name;
-    wm->bytes = bytes;
-    wm->module = module;
-
-    // Create runtime and load the module into it BEFORE linking host imports. Wasm3 requires the module
-    // to be associated with a runtime for m3_LinkRawFunction to succeed.
-    // TODO: Enforce memory limits per-module (e.g., max memory pages) by examining module bytes and/or using
-    // wasm3 APIs if available. See Docs/adr/0003-wasm-runtime.md and ticket GS-XXXX for follow-up.
-    IM3Runtime runtime = m3_NewRuntime(g_env.env, 64*1024, NULL);
-    if (!runtime) {
-        std::cerr << "WasmRuntime: m3_NewRuntime failed for module '" << name << "'" << std::endl;
-        // WasmModule destructor will free module
-        return false;
-    }
-
-    r = m3_LoadModule(runtime, module);
-    if (r) {
-        std::cerr << "WasmRuntime: m3_LoadModule failed for module '" << name << "': " << (r ? r : "(unknown)") << std::endl;
-        m3_FreeRuntime(runtime);
-        // WasmModule destructor will free module
-        return false;
-    }
-
-    // Attach the runtime to the module container so LinkHostFunctions can see it
-    wm->runtime = runtime;
-
-    // Link host imports into the loaded module (tokens are stored on the WasmModule so they outlive this function)
-    r = LinkHostFunctions(wm.get());
-    if (r) {
-        std::cerr << "WasmRuntime: LinkHostFunctions failed for module '" << name << "': " << (r ? r : "(unknown)") << std::endl;
-        // Do not free runtime here; let WasmModule destructor handle cleanup in the correct order (module then runtime)
-        return false;
-    }
-
-    g_modules[name] = std::move(wm);
-    std::cout << "WasmRuntime: loaded module '" << name << "'" << std::endl;
-    return true;
 }
 
 bool WasmRuntime::LoadModule(const std::filesystem::path& modulePath) {
@@ -338,17 +485,26 @@ bool WasmRuntime::CallExportedWithTimeout(const std::string& moduleName, const s
         {
             std::lock_guard<std::mutex> lk(g_wasmMutex);
             IM3Function f = nullptr;
+            std::cerr << "WasmRuntime: about to find function '" << funcName << "' in module '" << moduleName << "' (runtime=" << m->runtime << ")" << std::endl;
             M3Result r = m3_FindFunction(&f, m->runtime, funcName.c_str());
+            std::cerr << "WasmRuntime: m3_FindFunction returned r=" << (r ? r : "(none)") << " f=" << (void*)f << std::endl;
             if (r) {
-                std::cerr << "WasmRuntime: m3_FindFunction failed for module '" << moduleName << "' func '" << funcName << "': " << (r ? r : "(unknown)") << std::endl;
+                std::cerr << "WasmRuntime: m3_FindFunction failed for module '" << moduleName << "' func '" << funcName << "': " << (r ? r : "(unknown)") << " (ptr=" << (void*)r << ")" << std::endl;
                 call_ok = false;
             } else {
                 std::vector<const char*> argv;
                 argv.reserve(args.size());
                 for (auto &s : args) argv.push_back(s.c_str());
+                std::cerr << "WasmRuntime: about to call function f=" << (void*)f << " module='" << moduleName << "' func='" << funcName << "'" << std::endl;
                 r = m3_CallArgv(f, static_cast<uint32_t>(argv.size()), argv.empty() ? nullptr : argv.data());
+                std::cerr << "WasmRuntime: m3_CallArgv returned r=" << (r ? r : "(none)") << " (ptr=" << (void*)r << ")" << std::endl;
                 if (r) {
-                    std::cerr << "WasmRuntime: m3_CallArgv failed for module '" << moduleName << "' func '" << funcName << "': " << (r ? r : "(unknown)") << std::endl;
+                    std::cerr << "WasmRuntime: m3_CallArgv failed for module '" << moduleName << "' func '" << funcName << "': " << (r ? r : "(unknown)") << " (ptr=" << (void*)r << ")" << std::endl;
+                    // Dump up to 256 bytes of the error string in hex to help debugging non-printable messages
+                    const char* err = r;
+                    std::cerr << "WasmRuntime: m3_CallArgv error bytes:";
+                    for (int i=0; i<256 && err && err[i]; ++i) std::cerr << " " << std::hex << (int)(uint8_t)err[i];
+                    std::cerr << std::dec << std::endl;
                     call_ok = false;
                 } else {
                     call_ok = true;

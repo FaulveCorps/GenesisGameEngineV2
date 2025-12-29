@@ -3,7 +3,7 @@
 Overview
 --------
 The Networking subsystem provides a pluggable interface for networked features (multiplayer, remote control, telemetry).
-The interface is `INetwork` (see `Engine/Core/include/ENGINE/INetwork.h`).
+The interface is `INetwork` (see `Engine/Core/include/Engine/INetwork.h`).
 
 Current backends
 ----------------

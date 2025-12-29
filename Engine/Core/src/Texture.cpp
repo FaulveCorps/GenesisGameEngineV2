@@ -1,7 +1,7 @@
-#include "ENGINE/Texture.h"
-#include "ENGINE/TextureRegistry.h"
-#include "ENGINE/IGraphics.h"
-#include "ENGINE/RendererManager.h"
+#include "Engine/Texture.h"
+#include "Engine/TextureRegistry.h"
+#include "Engine/IGraphics.h"
+#include "Engine/RendererManager.h"
 #include <SDL.h>
 #include <iostream>
 #include <cstring>

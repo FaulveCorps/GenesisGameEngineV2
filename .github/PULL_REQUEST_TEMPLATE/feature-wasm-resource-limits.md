@@ -13,8 +13,8 @@ This PR adds basic resource enforcement and a time-based watchdog for the Wasm r
 
 Files changed
 -------------
-- Engine/Core/include/ENGINE/Wasm/ResourceLimits.h  (new)
-- Engine/Core/include/ENGINE/WasmRuntime.h        (declaration updates)
+- Engine/Core/include/Engine/Wasm/ResourceLimits.h  (new)
+- Engine/Core/include/Engine/WasmRuntime.h        (declaration updates)
 - Engine/Core/src/WasmRuntime.cpp                 (watchdog implementation, TODOs)
 - Tests/test_wasm_limits.cpp                      (new test)
 - Tests/CMakeLists.txt                            (append test)

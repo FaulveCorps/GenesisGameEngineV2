@@ -27,6 +27,9 @@ using PFNGLGETPROGRAMINFOLOGPROC = void (APIENTRY*)(unsigned int, int, int*, cha
 using PFNGLDETACHSHADERPROC = void (APIENTRY*)(unsigned int, unsigned int);
 using PFNGLDELETEPROGRAMPROC = void (APIENTRY*)(unsigned int);
 using PFNGLUSEPROGRAMPROC = void (APIENTRY*)(unsigned int);
+using PFNGLGETUNIFORMLOCATIONPROC = int (APIENTRY*)(unsigned int, const char*);
+using PFNGLUNIFORM1FPROC = void (APIENTRY*)(int, float);
+using PFNGLUNIFORM4FVPROC = void (APIENTRY*)(int, int, const float*);
 
 static PFNGLCREATESHADERPROC pglCreateShader = nullptr;
 static PFNGLSHADERSOURCEPROC pglShaderSource = nullptr;
@@ -43,6 +46,9 @@ static PFNGLGETPROGRAMINFOLOGPROC pglGetProgramInfoLog = nullptr;
 static PFNGLDETACHSHADERPROC pglDetachShader = nullptr;
 static PFNGLDELETEPROGRAMPROC pglDeleteProgram = nullptr;
 static PFNGLUSEPROGRAMPROC pglUseProgram = nullptr;
+static PFNGLGETUNIFORMLOCATIONPROC pglGetUniformLocation = nullptr;
+static PFNGLUNIFORM1FPROC pglUniform1f = nullptr;
+static PFNGLUNIFORM4FVPROC pglUniform4fv = nullptr;
 
 static bool Resolve(void** fnPtr, const char* name) {
     if (*fnPtr) return true;
@@ -236,6 +242,33 @@ void Shader::Use() const {
         }
     }
 } 
+
+// Simple uniform helpers using GL when available. These are prototype helpers
+// intended for quick shader-driven smoke tests and are not meant to replace a
+// full-featured shader subsystem.
+void Shader::SetUniformFloat(const std::string& name, float v) const {
+    if (!programID_) return;
+    Resolve((void**)&pglUseProgram, "glUseProgram");
+    if (!pglUseProgram) return;
+    Resolve((void**)&pglGetUniformLocation, "glGetUniformLocation");
+    Resolve((void**)&pglUniform1f, "glUniform1f");
+    if (!pglGetUniformLocation || !pglUniform1f) return;
+    pglUseProgram(programID_);
+    int loc = pglGetUniformLocation(programID_, name.c_str());
+    if (loc >= 0) pglUniform1f(loc, v);
+}
+
+void Shader::SetUniformVec4(const std::string& name, const std::array<float,4>& v) const {
+    if (!programID_) return;
+    Resolve((void**)&pglUseProgram, "glUseProgram");
+    if (!pglUseProgram) return;
+    Resolve((void**)&pglGetUniformLocation, "glGetUniformLocation");
+    Resolve((void**)&pglUniform4fv, "glUniform4fv");
+    if (!pglGetUniformLocation || !pglUniform4fv) return;
+    pglUseProgram(programID_);
+    int loc = pglGetUniformLocation(programID_, name.c_str());
+    if (loc >= 0) pglUniform4fv(loc, 1, v.data());
+}
 
 Shader::~Shader() {
     // Ensure removal from registry and cleanup

@@ -6,7 +6,7 @@ The Input subsystem provides a simple, backend-agnostic API for keyboard and mou
 
 Key points
 ----------
-- Interface: `IInput` (see `Engine/Core/include/ENGINE/IInput.h`) provides:
+- Interface: `IInput` (see `Engine/Core/include/Engine/IInput.h`) provides:
   - `Update(double dt)` — update per-frame state (call once per frame after event polling)
   - `IsKeyDown(int scancode)` — current key state
   - `WasKeyPressed(int scancode)` / `WasKeyReleased(int scancode)` — edge detection

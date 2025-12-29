@@ -1,0 +1,240 @@
+RegisterVoidString: holder=00000274DA25CFE0 module=00000274DA222120 key=env:host_log runtime=00000274DA217A70
+RegisterVoidString: keyPtrAddr=00000274DA25D480
+trampoline_v: runtime=00000274DA217A70 _ctx=000000A4603DCA50 ptr=0 len=5
+trampoline_v: ud=00000274DA25D6D0
+trampoline_v: modRuntime=00000274DA217A70
+trampoline_v: mem=00000274DBB14538 memSz=65536
+trampoline_v: about to call callback with s='hello'
+trampoline_v: callback returned
+Token::~Token: entering ns=env name=test_ping sig=v() module=0000015A49CB93B0
+Token::~Token: no holder found in g_callbacks for key='env:test_ping'
+RegisterVoidString: holder=0000015A5320AF90 module=0000015A49CB93B0 key=env:host_log runtime=0000015A47AC1010
+RegisterVoidString: keyPtrAddr=0000015A4A13F6E0
+trampoline_v: ptr=0 len=5
+trampoline_v: modRuntime=0000015A47AC1010
+trampoline_v: mem=0000015A5350EC18 memSz=65536
+trampoline_v: about to call callback with s_preview='hello (len=5)'
+trampoline_v: callback returned
+trampoline_v: about to call m3ApiSuccess()
+trampoline_v: _CrtCheckMemory OK
+Token::~Token: entering ns=env name=test_ping sig=v() module=0000011687B8BE30
+Token::~Token: no holder found in g_callbacks for key='env:test_ping'
+RegisterVoidString: holder=0000011687AD4890 module=0000011687B8B2F0 key=env:host_log runtime=00000116FAFC1010
+RegisterVoidString: keyPtrAddr=0000011686179E30
+trampoline_v: ptr=0 len=5
+trampoline_v: modRuntime=00000116FAFC1010
+trampoline_v: mem=0000011687CDBEA8 memSz=65536
+trampoline_v: about to call callback with s_preview='hello (len=5)'
+trampoline_v: callback returned
+trampoline_v: about to call m3ApiSuccess()
+trampoline_v: _CrtCheckMemory OK
+Token::~Token: entering ns=env name=test_ping sig=v() module=000002C0023606C0
+Token::~Token: no holder found in g_callbacks for key='env:test_ping'
+RegisterVoidString: holder=000002C001ECC720 module=000002C002360A20 key=env:host_log runtime=000002C072F61010
+RegisterVoidString: keyPtrAddr=000002C0012E8070
+trampoline_v: ptr=0 len=5
+trampoline_v: modRuntime=000002C072F61010
+trampoline_v: mem=000002C0023BE028 memSz=65536
+trampoline_v: about to call callback with s_preview='hello (len=5)'
+trampoline_v: callback returned
+trampoline_v: about to call m3ApiSuccess()
+trampoline_v: _CrtCheckMemory OK
+Token::~Token: entering ns=env name=test_ping sig=v() module=00000229D5DB4580
+Token::~Token: no holder found in g_callbacks for key='env:test_ping'
+RegisterVoidString: holder=00000229D5AECC60 module=00000229D5DB3EC0 key=env:host_log runtime=00000229D5E42010
+RegisterVoidString: keyPtrAddr=00000229CC5BD0E0
+trampoline_v: ptr=0 len=5
+trampoline_v: modRuntime=00000229D5E42010
+trampoline_v: mem=00000229D5D20098 memSz=65536
+trampoline_v: about to call callback with s_preview='hello (len=5)'
+trampoline_v: callback returned
+trampoline_v: about to call m3ApiSuccess()
+trampoline_v: _CrtCheckMemory OK
+Token::~Token: entering ns=env name=test_ping sig=v() module=0000021BF6E38B20
+Token::~Token: no holder found in g_callbacks for key='env:test_ping'
+RegisterVoidString: holder=0000021BF6AAB410 module=0000021BF6E3A980 key=env:host_log runtime=0000021BEA941010
+RegisterVoidString: keyPtrAddr=0000021BECD8DF50
+trampoline_v: ptr=0 len=5
+trampoline_v: modRuntime=0000021BEA941010
+trampoline_v: mem=0000021BF6B04D08 memSz=65536
+trampoline_v: about to call callback with s_preview='hello (len=5)'
+trampoline_v: callback returned
+trampoline_v: about to call m3ApiSuccess()
+trampoline_v: _CrtCheckMemory OK
+Token::~Token: entering ns=env name=test_ping sig=v() module=000002778BD8A1A0
+Token::~Token: no holder found in g_callbacks for key='env:test_ping'
+RegisterVoidString: holder=000002778BB92D50 module=000002778BD8B280 key=env:host_log runtime=00000277820B6040
+RegisterVoidString: keyPtrAddr=000002778209B340
+trampoline_v: ptr=0 len=5
+trampoline_v: modRuntime=00000277820B6040
+trampoline_v: mem=000002778BF71E08 memSz=65536
+trampoline_v: about to call callback with s_preview='hello (len=5)'
+trampoline_v: callback returned
+trampoline_v: about to call m3ApiSuccess()
+trampoline_v: _CrtCheckMemory OK
+Token::~Token: entering ns=env name=test_ping sig=v() module=000001AB0A463D70
+Token::~Token: no holder found in g_callbacks for key='env:test_ping'
+RegisterVoidString: holder=000001AB0A0A3420 module=000001AB0A462A50 key=env:host_log runtime=000001AB09C4DA70
+RegisterVoidString: keyPtrAddr=000001AB09D12ED0
+trampoline_v: ptr=0 len=5
+trampoline_v: modRuntime=000001AB09C4DA70
+trampoline_v: mem=000001AB09C10418 memSz=65536
+trampoline_v: about to call callback with s_preview='hello (len=5)'
+trampoline_v: callback returned
+trampoline_v: about to call m3ApiSuccess()
+trampoline_v: _CrtCheckMemory OK
+Token::~Token: entering ns=env name=test_ping sig=v() module=00000188B79B1CC0
+Token::~Token: no holder found in g_callbacks for key='env:test_ping'
+RegisterVoidString: holder=00000188B7931EB0 module=00000188B79B1DE0 key=env:host_log runtime=00000188AE1CDB70
+RegisterVoidString: keyPtrAddr=00000188AE07D670
+trampoline_v: ptr=0 len=5
+trampoline_v: modRuntime=00000188AE1CDB70
+trampoline_v: mem=00000188BA88AC88 memSz=65536
+trampoline_v: about to call callback with s_preview='hello (len=5)'
+trampoline_v: callback returned
+trampoline_v: about to call m3ApiSuccess()
+trampoline_v: _CrtCheckMemory OK
+Token::~Token: entering ns=env name=test_ping sig=v() module=000001414D461C00 thread=1900
+Token::~Token: no holder found in g_callbacks for key='env:test_ping'
+RegisterVoidString: holder=00000141412F00A0 module=000001414D462860 key=env:host_log runtime=000001414D44F130
+RegisterVoidString: keyPtrAddr=000001414378FE50
+trampoline_v: ptr=0 len=5
+trampoline_v: modRuntime=000001414D44F130
+trampoline_v: mem=0000014150555B28 memSz=65536
+trampoline_v: about to call callback with s_preview='hello (len=5)'
+trampoline_v: callback returned
+trampoline_v: about to call m3ApiSuccess()
+trampoline_v: _CrtCheckMemory OK
+Token::~Token: entering ns=env name=test_ping sig=v() module=0000023D8C8DA380 thread=120
+Token::~Token: no holder found in g_callbacks for key='env:test_ping'
+RegisterVoidString: holder=0000023D8C4B7130 module=0000023D8C8D92A0 key=env:host_log runtime=0000023D8CB6C460
+RegisterVoidString: keyPtrAddr=0000023D8C322E30
+trampoline_v: ptr=0 len=5
+trampoline_v: modRuntime=0000023D8CB6C460
+trampoline_v: mem=0000023D904F8188 memSz=65536
+trampoline_v: about to call callback with s_preview='hello (len=5)'
+trampoline_v: callback returned
+trampoline_v: about to call m3ApiSuccess()
+trampoline_v: _CrtCheckMemory OK
+CleanupModuleCallbacks: erasing key=env:test_ping holder=000001D83E8FCD70
+RegisterVoidString: holder=000001D83C4EDF60 module=000001D846D62BA0 key=env:host_log runtime=000001D8483A77A0
+RegisterVoidString: keyPtrAddr=000001D83E688B70
+trampoline_v: ptr=0 len=5
+trampoline_v: modRuntime=000001D8483A77A0
+trampoline_v: mem=000001D84BD590F8 memSz=65536
+trampoline_v: about to call callback with s_preview='hello (len=5)'
+trampoline_v: callback returned
+trampoline_v: about to call m3ApiSuccess()
+trampoline_v: _CrtCheckMemory OK
+RegisterVoidString: holder=0000021CDCE23DD0 module=0000021CDD205C80 key=env:host_log runtime=0000021CDD1C24B0
+RegisterVoidString: keyPtrAddr=0000021CD33F6350
+trampoline_v: ptr=0 len=5
+trampoline_v: modRuntime=0000021CDD1C24B0
+trampoline_v: mem=0000021CE0ADDA88 memSz=65536
+trampoline_v: about to call callback with s_preview='hello (len=5)'
+trampoline_v: callback returned
+trampoline_v: about to call m3ApiSuccess()
+trampoline_v: _CrtCheckMemory OK
+RegisterVoidString: holder=00000266B567D430 module=00000266B7060E00 key=env:host_log runtime=00000266B5611010
+RegisterVoidString: keyPtrAddr=00000266B7C88A90
+trampoline_v: ptr=0 len=5
+trampoline_v: modRuntime=00000266B5611010
+trampoline_v: mem=00000266C4D6E818 memSz=65536
+trampoline_v: about to call callback with s_preview='hello (len=5)'
+trampoline_v: callback returned
+trampoline_v: about to call m3ApiSuccess()
+trampoline_v: _CrtCheckMemory OK
+Token::~Token: entering ns=env name=test_ping sig=v() module=000001C3A83A3290 thread=14284
+Token::~Token: marked holder inactive (module_managed=false)
+RegisterVoidString: holder=000001C39C570EA0 module=000001C3A83A35F0 key=env:host_log runtime=000001C39C501010
+RegisterVoidString: keyPtrAddr=000001C39E6AC0F0
+trampoline_v: ptr=0 len=5
+trampoline_v: modRuntime=000001C39C501010
+trampoline_v: mem=000001C3ABD37FF8 memSz=65536
+trampoline_v: about to call callback with s_preview='hello (len=5)'
+trampoline_v: callback returned
+trampoline_v: about to call m3ApiSuccess()
+trampoline_v: _CrtCheckMemory OK
+RegisterVoidString: holder=000001E2D3B021D0 module=000001E2D3CCF710 key=env:host_log runtime=000001E2C7791010
+RegisterVoidString: keyPtrAddr=000001E2D2D3C670
+trampoline_v: ptr=0 len=5
+trampoline_v: modRuntime=000001E2C7791010
+trampoline_v: mem=000001E2D2BCAF08 memSz=65536
+trampoline_v: about to call callback with s_preview='hello (len=5)'
+trampoline_v: callback returned
+trampoline_v: about to call m3ApiSuccess()
+trampoline_v: _CrtCheckMemory OK
+RegisterVoidString: holder=0000026A5CB2E9B0 module=0000026A5C9163B0 key=env:host_log runtime=0000026A5CB20CE0
+RegisterVoidString: keyPtrAddr=0000026A53275090
+trampoline_v: ptr=0 len=5
+trampoline_v: modRuntime=0000026A5CB20CE0
+trampoline_v: mem=0000026A5FCB6F58 memSz=65536
+trampoline_v: about to call callback with s_preview='hello (len=5)'
+trampoline_v: callback returned
+trampoline_v: about to call m3ApiSuccess()
+trampoline_v: _CrtCheckMemory OK
+RegisterVoidString: holder=000002436E2E1200 module=000002436E5AD970 key=env:host_log runtime=000002436E2C8690
+RegisterVoidString: keyPtrAddr=000002436DE4EFA0
+trampoline_v: ptr=0 len=5
+trampoline_v: modRuntime=000002436E2C8690
+trampoline_v: mem=000002436E7DF468 memSz=65536
+trampoline_v: about to call callback with s_preview='hello (len=5)'
+trampoline_v: callback returned
+trampoline_v: about to call m3ApiSuccess()
+trampoline_v: _CrtCheckMemory OK
+RegisterVoidString: holder=000001C8B3FE20F0 module=000001C8BE256AC0 key=env:host_log runtime=000001C8B1ED1010
+RegisterVoidString: keyPtrAddr=000001C8B4236850
+trampoline_v: ptr=0 len=5
+trampoline_v: modRuntime=000001C8B1ED1010
+trampoline_v: mem=000001C8BE14BAB8 memSz=65536
+trampoline_v: about to call callback with s_preview='hello (len=5)'
+trampoline_v: callback returned
+trampoline_v: about to call m3ApiSuccess()
+trampoline_v: _CrtCheckMemory OK
+RegisterVoidString: holder=000001E632C845F0 module=000001E6318DAC50 key=env:host_log runtime=000001E626F01010
+RegisterVoidString: keyPtrAddr=000001E6293229D0
+trampoline_v: ptr=0 len=5
+trampoline_v: modRuntime=000001E626F01010
+trampoline_v: mem=000001E633065BD8 memSz=65536
+trampoline_v: about to call callback with s_preview='hello (len=5)'
+trampoline_v: callback returned
+trampoline_v: about to call m3ApiSuccess()
+trampoline_v: _CrtCheckMemory OK
+Token::~Token: entering ns=env name=host_log sig=v(ii) module=000001E6318DAC50 thread=9388
+Token::~Token: marked holder inactive (module_managed=false)
+RegisterVoidString: holder=0000026EB8FED4F0 module=0000026EB9066610 key=env:host_log runtime=0000026EAD471010
+RegisterVoidString: keyPtrAddr=0000026EAF6A6410
+trampoline_v: ptr=0 len=5
+trampoline_v: modRuntime=0000026EAD471010
+trampoline_v: mem=0000026EBC837468 memSz=65536
+trampoline_v: about to call callback with s_preview='hello (len=5)'
+trampoline_v: callback returned
+trampoline_v: about to call m3ApiSuccess()
+trampoline_v: _CrtCheckMemory OK
+Token::~Token: entering ns=env name=host_log sig=v(ii) module=0000026EB9066610 thread=12020
+Token::~Token: marked holder inactive (module_managed=false)
+RegisterVoidString: holder=000001CC945E2ED0 module=000001CC948B8010 key=env:host_log runtime=000001CC889E1010
+RegisterVoidString: keyPtrAddr=000001CC93FB1200
+trampoline_v: ptr=0 len=5
+trampoline_v: modRuntime=000001CC889E1010
+trampoline_v: mem=000001CC949BA7B8 memSz=65536
+trampoline_v: about to call callback with s_preview='hello (len=5)'
+trampoline_v: callback returned
+trampoline_v: about to call m3ApiSuccess()
+trampoline_v: _CrtCheckMemory OK
+Token::~Token: entering ns=env name=host_log sig=v(ii) module=000001CC948B8010 thread=12100
+Token::~Token: marked holder inactive (module_managed=false)
+RegisterVoidString: holder=0000023BD05339F0 module=0000023BD0580560 key=env:host_log runtime=0000023BD08B5B30
+RegisterVoidString: keyPtrAddr=0000023BC6BC1890
+trampoline_v: ptr=0 len=5
+trampoline_v: modRuntime=0000023BD08B5B30
+trampoline_v: mem=0000023BD399E318 memSz=65536
+trampoline_v: about to call callback with s_preview='hello (len=5)'
+trampoline_v: callback returned
+trampoline_v: about to call m3ApiSuccess()
+trampoline_v: _CrtCheckMemory OK
+Token::~Token: entering ns=env name=host_log sig=v(ii) module=0000023BD0580560 thread=9320
+Token::~Token: marked holder inactive (module_managed=false)
+CleanupModuleCallbacks: erasing key=env:host_log holder=0000023BD05339F0
+Token::~Token: entering ns=env name=test_ping sig=v() module=000002CAAFF81CB0 thread=204
+Token::~Token: entering ns=env name=test_ping sig=v() module=000001923E8C7960 thread=6824
