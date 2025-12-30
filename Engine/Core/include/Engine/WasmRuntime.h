@@ -37,6 +37,13 @@ public:
     // This pointer is intentionally a raw pointer so trampolines can perform a fast, lock-free check.
     static std::atomic<bool>* GetModuleTimedOutPtr(IM3Module module);
 
+    // Return the per-module memory limit in bytes. If the module is not managed by the runtime,
+    // the runtime's default memory limit will be returned.
+    static std::size_t GetModuleMemoryLimitBytes(IM3Module module);
+
+    // Return configured per-module execution timeout in milliseconds. Falls back to runtime default when module not found.
+    static uint32_t GetModuleExecutionTimeoutMs(IM3Module module);
+
     // For physics: install callback forwarders that invoke module exports named 'on_contact_begin'/'on_contact_end'
     static void RegisterPhysicsCallbacks(std::shared_ptr<IPhysics> phys);
 

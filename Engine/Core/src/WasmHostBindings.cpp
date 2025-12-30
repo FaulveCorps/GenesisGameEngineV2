@@ -14,6 +14,7 @@
 #include <thread>
 #include <vector>
 #include <cstdint>
+#include <chrono>
 #include <windows.h>
 #ifdef _WIN32
 #include <dbghelp.h>
@@ -416,12 +417,36 @@ m3ApiRawFunction(host_trampoline_i32_i32) {
         if (!hptr || !hptr->active) m3ApiTrap("host function unregistered");
         // If the module has been marked timed-out/quarantined, reject the call immediately
         if (hptr->timed_out_ptr && hptr->timed_out_ptr->load()) m3ApiTrap("module timed out");
+
+        // Check per-module memory limit before executing the host callback
+        try {
+            IM3Runtime modRuntime = m3_GetModuleRuntime(hptr->module);
+            uint32_t memSz = 0;
+            uint8_t* memPtr = m3_GetMemory(modRuntime, &memSz, 0);
+            std::size_t memLimit = WasmRuntime::GetModuleMemoryLimitBytes(hptr->module);
+            if (memPtr && memSz > memLimit) {
+                if (hptr->timed_out_ptr) hptr->timed_out_ptr->store(true);
+                m3ApiTrap("module memory limit exceeded");
+            }
+        } catch(...) {
+            // ignore any memory-inspection errors and proceed to callback (will trap if unsafe)
+        }
+
         int32_t out = 0;
+        auto start = std::chrono::steady_clock::now();
         try {
             out = hptr->cb(in0);
         } catch (...) {
             m3ApiTrap("host callback threw exception");
         }
+        auto elapsed_ms = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count());
+        try {
+            uint32_t execLimit = WasmRuntime::GetModuleExecutionTimeoutMs(hptr->module);
+            if (execLimit > 0 && elapsed_ms > execLimit) {
+                if (hptr->timed_out_ptr) hptr->timed_out_ptr->store(true);
+                m3ApiTrap("host callback execution time exceeded");
+            }
+        } catch(...) { }
 #ifdef _DEBUG
         if (!_CrtCheckMemory()) {
             LogToFile("trampoline_i32: _CrtCheckMemory FAILED (heap corruption detected)");
@@ -444,12 +469,36 @@ m3ApiRawFunction(host_trampoline_i32_i32) {
     auto h = std::static_pointer_cast<CallbackI32I32>(base);
     // If module was quarantined, reject quickly
     if (h->timed_out_ptr && h->timed_out_ptr->load()) m3ApiTrap("module timed out");
+
+    // Check per-module memory limit before executing the host callback
+    try {
+        IM3Runtime modRuntime = m3_GetModuleRuntime(h->module);
+        uint32_t memSz = 0;
+        uint8_t* memPtr = m3_GetMemory(modRuntime, &memSz, 0);
+        std::size_t memLimit = WasmRuntime::GetModuleMemoryLimitBytes(h->module);
+        if (memPtr && memSz > memLimit) {
+            if (h->timed_out_ptr) h->timed_out_ptr->store(true);
+            m3ApiTrap("module memory limit exceeded");
+        }
+    } catch(...) {
+        // ignore memory inspection errors
+    }
+
     int32_t out = 0;
+    auto start = std::chrono::steady_clock::now();
     try {
         out = h->cb(in0);
     } catch (...) {
         m3ApiTrap("host callback threw exception");
     }
+    auto elapsed_ms = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count());
+    try {
+        uint32_t execLimit = WasmRuntime::GetModuleExecutionTimeoutMs(h->module);
+        if (execLimit > 0 && elapsed_ms > execLimit) {
+            if (h->timed_out_ptr) h->timed_out_ptr->store(true);
+            m3ApiTrap("host callback execution time exceeded");
+        }
+    } catch(...) { }
     m3ApiReturn((uint32_t)out);
 }
 
@@ -489,6 +538,14 @@ m3ApiRawFunction(host_trampoline_v_ptr_len) {
         }
 #endif
         if (!mem) m3ApiTrap("host memory not available");
+        // Check module memory limit prior to any OOB checks
+        try {
+            std::size_t memLimit = WasmRuntime::GetModuleMemoryLimitBytes(hptr->module);
+            if (memSz > memLimit) {
+                if (hptr->timed_out_ptr) hptr->timed_out_ptr->store(true);
+                m3ApiTrap("module memory limit exceeded");
+            }
+        } catch(...) { }
         if (ptr < 0) m3ApiTrap("invalid pointer");
         if (len < 0) m3ApiTrap("invalid length");
         uint32_t uptr = static_cast<uint32_t>(ptr);
@@ -502,11 +559,20 @@ m3ApiRawFunction(host_trampoline_v_ptr_len) {
             std::ostringstream oss; oss << "trampoline_v: about to call callback with s_preview='" << SanitizePreview(s) << "'";
             LogToFile(oss.str());
         }
+        auto start = std::chrono::steady_clock::now();
         try {
             hptr->cb(s);
         } catch (...) {
             m3ApiTrap("host callback threw exception");
         }
+        auto elapsed_ms = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count());
+        try {
+            uint32_t execLimit = WasmRuntime::GetModuleExecutionTimeoutMs(hptr->module);
+            if (execLimit > 0 && elapsed_ms > execLimit) {
+                if (hptr->timed_out_ptr) hptr->timed_out_ptr->store(true);
+                m3ApiTrap("host callback execution time exceeded");
+            }
+        } catch(...) { }
         {
             std::ostringstream oss; oss << "trampoline_v: callback returned";
             LogToFile(oss.str());
@@ -551,6 +617,14 @@ m3ApiRawFunction(host_trampoline_v_ptr_len) {
         }
 #endif
         if (!mem) m3ApiTrap("host memory not available");
+        // Check module memory limit prior to any OOB checks
+        try {
+            std::size_t memLimit = WasmRuntime::GetModuleMemoryLimitBytes(h->module);
+            if (memSz > memLimit) {
+                if (h->timed_out_ptr) h->timed_out_ptr->store(true);
+                m3ApiTrap("module memory limit exceeded");
+            }
+        } catch(...) { }
         if (ptr < 0) m3ApiTrap("invalid pointer");
         if (len < 0) m3ApiTrap("invalid length");
         uint32_t uptr = static_cast<uint32_t>(ptr);
@@ -564,11 +638,20 @@ m3ApiRawFunction(host_trampoline_v_ptr_len) {
             std::ostringstream oss; oss << "trampoline_v: about to call callback with s_preview='" << SanitizePreview(s) << "'";
             LogToFile(oss.str());
         }
+        auto start = std::chrono::steady_clock::now();
         try {
             h->cb(s);
         } catch (...) {
             m3ApiTrap("host callback threw exception");
         }
+        auto elapsed_ms = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count());
+        try {
+            uint32_t execLimit = WasmRuntime::GetModuleExecutionTimeoutMs(h->module);
+            if (execLimit > 0 && elapsed_ms > execLimit) {
+                if (h->timed_out_ptr) h->timed_out_ptr->store(true);
+                m3ApiTrap("host callback execution time exceeded");
+            }
+        } catch(...) { }
         {
             std::ostringstream oss; oss << "trampoline_v: callback returned";
             LogToFile(oss.str());
@@ -599,8 +682,27 @@ m3ApiRawFunction(host_trampoline_raw) {
             std::ostringstream oss; oss << "host_trampoline_raw: invoking raw cb holder=" << hptr << " module=" << hptr->module << " runtime=" << modRuntime;
             LogToFile(oss.str());
         }
+        // Enforce per-module memory limit before invoking raw callback
+        try {
+            uint32_t memSz = 0;
+            uint8_t* memPtr = m3_GetMemory(modRuntime, &memSz, 0);
+            std::size_t memLimit = WasmRuntime::GetModuleMemoryLimitBytes(hptr->module);
+            if (memPtr && memSz > memLimit) {
+                if (hptr->timed_out_ptr) hptr->timed_out_ptr->store(true);
+                m3ApiTrap("module memory limit exceeded");
+            }
+        } catch(...) { }
+        auto start = std::chrono::steady_clock::now();
         try {
             auto r = hptr->cb(modRuntime, _ctx, _sp, _mem);
+            auto elapsed_ms = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count());
+            try {
+                uint32_t execLimit = WasmRuntime::GetModuleExecutionTimeoutMs(hptr->module);
+                if (execLimit > 0 && elapsed_ms > execLimit) {
+                    if (hptr->timed_out_ptr) hptr->timed_out_ptr->store(true);
+                    m3ApiTrap("host callback execution time exceeded");
+                }
+            } catch(...) { }
             std::ostringstream oss; oss << "host_trampoline_raw: callback returned ptr=" << (void*)r;
             LogToFile(oss.str());
             return r;
@@ -622,9 +724,28 @@ m3ApiRawFunction(host_trampoline_raw) {
         auto h = std::static_pointer_cast<CallbackRaw>(base);
         if (h->timed_out_ptr && h->timed_out_ptr->load()) m3ApiTrap("module timed out");
         IM3Runtime modRuntime = m3_GetModuleRuntime(h->module);
+        // Enforce per-module memory limit before invoking raw callback
+        try {
+            uint32_t memSz = 0;
+            uint8_t* memPtr = m3_GetMemory(modRuntime, &memSz, 0);
+            std::size_t memLimit = WasmRuntime::GetModuleMemoryLimitBytes(h->module);
+            if (memPtr && memSz > memLimit) {
+                if (h->timed_out_ptr) h->timed_out_ptr->store(true);
+                m3ApiTrap("module memory limit exceeded");
+            }
+        } catch(...) { }
         try {
             std::cerr << "host_trampoline_raw: invoking holder=" << h.get() << " key=" << *keyPtr << " module=" << h->module << std::endl;
+            auto start = std::chrono::steady_clock::now();
             auto res = h->cb(modRuntime, _ctx, _sp, _mem);
+            auto elapsed_ms = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count());
+            try {
+                uint32_t execLimit = WasmRuntime::GetModuleExecutionTimeoutMs(h->module);
+                if (execLimit > 0 && elapsed_ms > execLimit) {
+                    if (h->timed_out_ptr) h->timed_out_ptr->store(true);
+                    m3ApiTrap("host callback execution time exceeded");
+                }
+            } catch(...) { }
             std::cerr << "host_trampoline_raw: callback returned" << std::endl;
             return res;
         } catch (...) {

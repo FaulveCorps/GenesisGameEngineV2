@@ -43,6 +43,8 @@ struct WasmModule {
     // Resource/monitoring state
     std::atomic<bool> timed_out{false};    // set when the module exceeded execution time
     std::atomic<int> active_calls{0};      // number of in-flight calls into this module
+    // Per-module resource limits (copied from runtime defaults at load time)
+    ResourceLimits resourceLimits;
 
 
     // Ensure resources are freed when module is destroyed; noexcept to avoid terminating during stack unwinding
@@ -177,6 +179,8 @@ static M3Result LinkHostFunctions(WasmModule* wm) {
     if (!wm || !wm->module) return "invalid-module";
     std::cerr << "LinkHostFunctions: begin module='" << wm->name << "' modulePtr=" << wm->module << std::endl;
     HostBindings hb(wm->module);
+    // Configure HostBindings with the module's execution time limit (best-effort)
+    hb.set_execution_timeout_ms(static_cast<uint32_t>(wm->resourceLimits.execution_time_ms));
     // Copy global registrations under lock then link them without holding the global lock to avoid lock-order deadlocks
     std::vector<GlobalHostRegistration> regsCopy;
     {
@@ -241,6 +245,24 @@ std::atomic<bool>* WasmRuntime::GetModuleTimedOutPtr(IM3Module module) {
         if (p.second && p.second->module == module) return &p.second->timed_out;
     }
     return nullptr;
+}
+
+// Return configured per-module memory limit (bytes). Falls back to runtime default when module not found.
+std::size_t WasmRuntime::GetModuleMemoryLimitBytes(IM3Module module) {
+    std::lock_guard<std::mutex> lk(g_wasmMutex);
+    for (auto &p : g_modules) {
+        if (p.second && p.second->module == module) return p.second->resourceLimits.memory_limit_bytes;
+    }
+    return g_defaultResourceLimits.memory_limit_bytes;
+}
+
+// Return configured per-module execution timeout (milliseconds). Falls back to runtime default when module not found.
+uint32_t WasmRuntime::GetModuleExecutionTimeoutMs(IM3Module module) {
+    std::lock_guard<std::mutex> lk(g_wasmMutex);
+    for (auto &p : g_modules) {
+        if (p.second && p.second->module == module) return p.second->resourceLimits.execution_time_ms;
+    }
+    return g_defaultResourceLimits.execution_time_ms;
 }
 
 
@@ -327,6 +349,9 @@ static bool LoadModuleBytes(const std::string& name, const std::vector<uint8_t>&
         wm->name = name;
         wm->bytes = bytes;
         wm->module = module;
+        // Initialize this module's resource limits from the current runtime defaults
+        wm->resourceLimits = g_defaultResourceLimits;
+        std::cout << "WasmRuntime::LoadModuleBytes: module resource limits set: memory=" << wm->resourceLimits.memory_limit_bytes << " bytes exec_ms=" << wm->resourceLimits.execution_time_ms << "ms" << std::endl;
 
         // Create runtime and load the module into it BEFORE linking host imports. Wasm3 requires the module
         // to be associated with a runtime for m3_LinkRawFunction to succeed.
@@ -346,6 +371,21 @@ static bool LoadModuleBytes(const std::string& name, const std::vector<uint8_t>&
             m3_FreeRuntime(runtime);
             // WasmModule destructor will free module
             return false;
+        }
+
+        // Enforce per-module initial memory limits (if module declares memory)
+        try {
+            uint32_t memSz = 0;
+            uint8_t* memPtr = nullptr;
+            try { memPtr = m3_GetMemory(runtime, &memSz, 0); } catch(...) { memPtr = nullptr; memSz = 0; }
+            if (memPtr && memSz > wm->resourceLimits.memory_limit_bytes) {
+                std::cerr << "WasmRuntime: module '" << name << "' initial memory " << memSz << " exceeds limit " << wm->resourceLimits.memory_limit_bytes << " bytes" << std::endl;
+                m3_FreeRuntime(runtime);
+                // WasmModule destructor will free module
+                return false;
+            }
+        } catch (...) {
+            std::cerr << "WasmRuntime: exception while checking initial memory for module '" << name << "'" << std::endl;
         }
 
         // Attach the runtime to the module container so LinkHostFunctions can see it
@@ -462,8 +502,14 @@ bool WasmRuntime::LoadModuleFromBytes(const std::string& moduleName, const std::
 }
 
 bool WasmRuntime::CallExported(const std::string& moduleName, const std::string& funcName, const std::vector<std::string>& args) {
-    // Call with the default execution time limit
-    return CallExportedWithTimeout(moduleName, funcName, args, g_defaultResourceLimits.execution_time_ms);
+    // Prefer a module-specific execution limit if configured, otherwise fall back to runtime default
+    uint32_t timeoutMs = g_defaultResourceLimits.execution_time_ms;
+    {
+        std::lock_guard<std::mutex> lk(g_wasmMutex);
+        auto it = g_modules.find(moduleName);
+        if (it != g_modules.end()) timeoutMs = it->second->resourceLimits.execution_time_ms;
+    }
+    return CallExportedWithTimeout(moduleName, funcName, args, timeoutMs);
 }
 
 bool WasmRuntime::CallExportedWithTimeout(const std::string& moduleName, const std::string& funcName, const std::vector<std::string>& args, uint32_t timeoutMs) {
@@ -666,7 +712,26 @@ bool WasmRuntime::CallExportedWithTimeout(const std::string& moduleName, const s
 #endif
                     call_ok = false;
                 } else {
-                    call_ok = true;
+                    // After successful call, enforce per-module memory limit in case the module grew memory during execution
+                    try {
+                        uint32_t memSz2 = 0;
+                        uint8_t* memPtr2 = nullptr;
+                        try { memPtr2 = m3_GetMemory(m->runtime, &memSz2, 0); } catch(...) { memPtr2 = nullptr; memSz2 = 0; }
+                        if (memPtr2) {
+                            std::size_t memLimit = m->resourceLimits.memory_limit_bytes;
+                            if (memSz2 > memLimit) {
+                                std::cerr << "WasmRuntime: module '" << moduleName << "' exceeded memory limit during call (" << memSz2 << " > " << memLimit << "), quarantining" << std::endl;
+                                if (!m->timed_out.load()) m->timed_out.store(true);
+                                call_ok = false;
+                            } else {
+                                call_ok = true;
+                            }
+                        } else {
+                            call_ok = true;
+                        }
+                    } catch(...) {
+                        call_ok = true;
+                    }
                 }
             }
         }
