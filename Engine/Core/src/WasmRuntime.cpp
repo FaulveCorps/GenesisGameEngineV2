@@ -11,8 +11,9 @@
 #include <thread>
 #include <atomic>
 #include "engine/Wasm/ResourceLimits.h"
-
-
+#include <filesystem>
+#include <iomanip>
+#include <sstream>
 
 #include "wasm3.h"
 #include "m3_env.h"
@@ -528,32 +529,34 @@ bool WasmRuntime::CallExportedWithTimeout(const std::string& moduleName, const s
                     std::cerr << "WasmRuntime: m3_CallArgv error bytes:";
                     for (int i=0; i<256 && err && err[i]; ++i) std::cerr << " " << std::hex << (int)(uint8_t)err[i];
                     std::cerr << std::dec << std::endl;
+
+                    // Prepare variables we may use for deeper analysis (try to read err ptr and module memory)
 #ifdef _WIN32
-                    // Try to read raw memory at the error pointer to get more context (not relying on NUL termination)
-                    {
-                        char membuf[128]; SIZE_T bytesRead = 0;
+                    char membuf[256]; SIZE_T bytesRead = 0; bool err_mem_ok = false; DWORD rpmErr = 0;
+                    uint8_t* memPtr2 = nullptr; uint32_t memSz2 = 0;
+                    if (err) {
                         if (ReadProcessMemory(GetCurrentProcess(), (LPCVOID)err, membuf, sizeof(membuf), &bytesRead) && bytesRead > 0) {
+                            err_mem_ok = true;
                             std::cerr << "WasmRuntime: m3_CallArgv raw memory at " << (void*)err << " bytes:";
                             for (SIZE_T i = 0; i < bytesRead && i < 64; ++i) std::cerr << " " << std::hex << (int)(uint8_t)membuf[i];
                             std::cerr << std::dec << std::endl;
-                            // Dump a few bytes from the module memory start too for correlation
-                            try {
-                                uint32_t memSz2 = 0;
-                                uint8_t* memPtr2 = m3_GetMemory(m->runtime, &memSz2, 0);
-                                if (memPtr2 && memSz2 > 0) {
-                                    std::cerr << "WasmRuntime: module mem[0..15]=";
-                                    for (uint32_t ii=0; ii<16 && ii<memSz2; ++ii) std::cerr << " " << std::hex << (int)memPtr2[ii];
-                                    std::cerr << std::dec << std::endl;
-                                }
-                            } catch(...) {
-                                std::cerr << "WasmRuntime: m3_GetMemory threw or unavailable in error branch" << std::endl;
-                            }
                         } else {
-                            std::cerr << "WasmRuntime: ReadProcessMemory failed on m3_CallArgv err ptr, GetLastError=" << GetLastError() << std::endl;
+                            rpmErr = GetLastError();
+                            std::cerr << "WasmRuntime: ReadProcessMemory failed on m3_CallArgv err ptr, GetLastError=" << rpmErr << std::endl;
                         }
                     }
+                    try {
+                        memPtr2 = m3_GetMemory(m->runtime, &memSz2, 0);
+                        if (memPtr2 && memSz2 > 0) {
+                            std::cerr << "WasmRuntime: module mem[0..15]=";
+                            for (uint32_t ii=0; ii<16 && ii<memSz2; ++ii) std::cerr << " " << std::hex << (int)memPtr2[ii];
+                            std::cerr << std::dec << std::endl;
+                        }
+                    } catch(...) {
+                        std::cerr << "WasmRuntime: m3_GetMemory threw or unavailable in error branch" << std::endl;
+                    }
 #endif
-                    // Try to get richer error info from wasm3 runtime
+                    // Try to get richer error info from wasm3 runtime and write an on-disk callsite snapshot for offline analysis
                     try {
                         M3ErrorInfo ei{0};
                         m3_GetErrorInfo(m->runtime, &ei);
@@ -576,6 +579,75 @@ bool WasmRuntime::CallExportedWithTimeout(const std::string& moduleName, const s
                         } catch (...) {
                             std::cerr << "WasmRuntime: m3_GetBacktrace threw or unavailable" << std::endl;
                         }
+
+#ifdef _DEBUG
+                        try {
+                            // Ensure analysis dir exists
+                            std::filesystem::path analysis_dir = std::filesystem::path("Tools") / "external" / "procdump" / "dumps" / "analysis";
+                            std::error_code ec;
+                            std::filesystem::create_directories(analysis_dir, ec);
+
+                            SYSTEMTIME st; GetLocalTime(&st);
+                            char tbuf[64]; sprintf_s(tbuf, "%04d%02d%02d_%02d%02d%02d", st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond);
+                            auto sanitize = [](const std::string &s) {
+                                std::string out; out.reserve(s.size());
+                                for (char c : s) {
+                                    if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c=='.') out.push_back(c);
+                                    else out.push_back('_');
+                                }
+                                return out;
+                            };
+
+                            std::string fname = std::string("callsite_") + tbuf + "_" + sanitize(moduleName) + "_" + sanitize(funcName) + ".txt";
+                            std::filesystem::path outp = analysis_dir / fname;
+                            std::ofstream ofs(outp);
+                            if (ofs) {
+                                ofs << "timestamp: " << tbuf << "\n";
+                                ofs << "context: CallExported_m3_CallArgv_failed\n";
+                                ofs << "module: " << moduleName << "\n";
+                                ofs << "func: " << funcName << "\n";
+                                ofs << "modulePtr: " << m->module << " runtime: " << m->runtime << "\n";
+                                ofs << "function ptr: " << (void*)f << "\n";
+                                ofs << "m3_CallArgv result ptr: " << (void*)r << "\n";
+#ifdef _WIN32
+                                if (err_mem_ok) {
+                                    ofs << "err raw bytes (first " << bytesRead << " bytes): ";
+                                    for (SIZE_T i = 0; i < bytesRead && i < 256; ++i) ofs << std::hex << (int)(uint8_t)membuf[i] << " ";
+                                    ofs << std::dec << "\n";
+                                } else {
+                                    ofs << "err mem read failed, GetLastError=" << rpmErr << "\n";
+                                }
+                                if (memPtr2 && memSz2 > 0) {
+                                    ofs << "module mem[0..15]: ";
+                                    for (uint32_t ii=0; ii<16 && ii<memSz2; ++ii) ofs << std::hex << (int)memPtr2[ii] << " ";
+                                    ofs << std::dec << "\n";
+                                }
+#endif
+                                ofs << "m3_GetErrorInfo: result=" << (ei.result ? ei.result : "(null)") << " file=" << (ei.file ? ei.file : "(null)") << " line=" << ei.line << " message=" << (ei.message ? ei.message : "(null)") << "\n";
+                                if (ei.function) ofs << "m3_error_function: " << (m3_GetFunctionName(ei.function) ? m3_GetFunctionName(ei.function) : "(unknown)") << "\n";
+                                // Capture current registers for convenience
+                                CONTEXT ctx; RtlCaptureContext(&ctx);
+#ifdef _M_X64
+                                ofs << "Registers: Rax=" << std::hex << ctx.Rax << " Rcx=" << ctx.Rcx << " Rdx=" << ctx.Rdx << " Rbx=" << ctx.Rbx << " Rsp=" << ctx.Rsp << " Rbp=" << ctx.Rbp << " Rsi=" << ctx.Rsi << " Rdi=" << ctx.Rdi << " Rip=" << ctx.Rip << std::dec << "\n";
+#else
+                                ofs << "Registers: Eip=" << std::hex << ctx.Eip << std::dec << "\n";
+#endif
+                                // callback counts
+                                ofs << "callbacks_count: " << HostBindings::DebugGetCallbacksCount() << " deferred_count: " << HostBindings::DebugGetDeferredCount() << "\n";
+                                ofs << "hostTokens.size: " << m->hostTokens.size() << "\n";
+                                ofs << "END\n";
+                                ofs.close();
+                                std::cerr << "WasmRuntime: wrote callsite analysis " << outp << std::endl;
+
+                                // Also write a safe callbacks snapshot to the main log to correlate behaviors
+                                HostBindings::DebugDumpCallbacksSnapshot(std::string("CallExported - callsite snapshot: ") + moduleName + ":" + funcName);
+                            } else {
+                                std::cerr << "WasmRuntime: failed to open callsite analysis file " << outp << std::endl;
+                            }
+                        } catch (...) {
+                            std::cerr << "WasmRuntime: exception while writing callsite analysis" << std::endl;
+                        }
+#endif
                         m3_ResetErrorInfo(m->runtime);
                     } catch (...) {
                         std::cerr << "WasmRuntime: m3_GetErrorInfo threw or unavailable" << std::endl;

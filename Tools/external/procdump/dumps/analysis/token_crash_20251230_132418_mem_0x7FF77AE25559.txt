@@ -1,0 +1,2 @@
+Segment found but read() not available or failed: MinidumpMemorySegment.read() missing 3 required positional arguments: 'virtual_address', 'size', and 'file_handler'
+
