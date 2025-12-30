@@ -91,7 +91,7 @@ if ($Generator -eq '--ninja') {
         Write-Error "Ninja not found. Install with: choco install ninja"
         exit 1
     }
-    Write-Info "✓ Ninja found: $($ninjaPath.Source)"
+    Write-Info "Ninja found: $($ninjaPath.Source)"
 }
 
 # Verify CMake is installed
@@ -100,7 +100,7 @@ if (-not $cmakePath) {
     Write-Error "CMake not found. Install with: choco install cmake"
     exit 1
 }
-Write-Info "✓ CMake found: $($cmakePath.Source)"
+Write-Info "CMake found: $($cmakePath.Source)"
 
 $sourceDir = Get-Location
 Write-Info "Project directory: $sourceDir"
@@ -125,7 +125,7 @@ function Invoke-Configure {
     $elapsed = (Get-Date) - $startTime
     
     if ($LASTEXITCODE -eq 0) {
-        Write-Success "✓ Configuration complete in $($elapsed.TotalSeconds)s"
+        Write-Success "Configuration complete in $($elapsed.TotalSeconds)s"
         return $true
     } else {
         Write-Error "Configuration failed"
@@ -152,7 +152,7 @@ function Invoke-Build {
     $elapsed = (Get-Date) - $startTime
     
     if ($LASTEXITCODE -eq 0) {
-        Write-Success "✓ Build complete in $($elapsed.TotalSeconds)s"
+        Write-Success "Build complete in $($elapsed.TotalSeconds)s"
         return $true
     } else {
         Write-Error "Build failed"
@@ -175,7 +175,7 @@ function Invoke-Tests {
     $elapsed = (Get-Date) - $startTime
     
     if ($LASTEXITCODE -eq 0) {
-        Write-Success "✓ All tests passed in $($elapsed.TotalSeconds)s"
+        Write-Success "All tests passed in $($elapsed.TotalSeconds)s"
         return $true
     } else {
         Write-Error "Some tests failed"
@@ -203,7 +203,7 @@ function Invoke-Clean {
         }
     }
     
-    Write-Success "✓ Cleaned $removed build directories"
+    Write-Success "Cleaned $removed build directories"
 }
 
 # ============================================================================
@@ -263,5 +263,5 @@ switch ($Target) {
 }
 
 Write-Success "=========================================="
-Write-Success "✓ Build script completed successfully"
+Write-Success "Build script completed successfully"
 Write-Success "=========================================="

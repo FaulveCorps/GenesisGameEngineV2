@@ -81,6 +81,22 @@ public:
     // Useful to ensure any holders are destroyed only after the module/runtime are gone.
     static void CleanupModuleCallbacks(IM3Module module);
 
+    // Process any previously-deferred unregistrations queued by Token destructors that
+    // avoided touching global callback maps during unsafe teardown windows.
+    static void ProcessDeferredUnregistrations();
+
+#ifdef _DEBUG
+    // Debug helpers used by unit tests
+    static size_t DebugGetCallbacksCount();
+    static size_t DebugGetDeferredCount();
+    // Dump a safe snapshot of callback holder memory (to log file) for investigation
+    static void DebugDumpCallbacksSnapshot(const std::string& context);
+    // Request a snapshot minidump (debug only)
+    static void DebugWriteMiniDump(const std::string& context);
+    // Request a minidump that includes a captured CONTEXT so register state is preserved
+    static void DebugWriteMiniDumpWithContext(const std::string& context, const void* ctx = nullptr);
+#endif
+
 private:
     IM3Module module_ = nullptr;
     size_t maxStringLength_ = 1024 * 1024; // 1 MB default

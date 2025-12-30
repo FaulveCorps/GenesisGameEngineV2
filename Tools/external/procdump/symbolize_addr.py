@@ -67,26 +67,69 @@ SymGetLineFromAddr64.restype = wintypes.BOOL
 
 # Initialize
 hProcess = GetCurrentProcess()
-SymSetOptions(SYMOPT_DEFERRED_LOADS | SYMOPT_UNDNAME)
+SYMOPT_LOAD_LINES = 0x00000010
+# Request deferred loads, human-readable names, and load line info
+SymSetOptions(SYMOPT_DEFERRED_LOADS | SYMOPT_UNDNAME | SYMOPT_LOAD_LINES)
 if not SymInitialize(hProcess, None, False):
     print('SymInitialize failed')
     sys.exit(1)
 
-# Set symbol search path to module folder
+# Set symbol search path to module folder and Microsoft's public symbol server
 import os
 sym_dir = os.path.dirname(module_path)
+# Use a local cache directory for SRV to avoid repeated downloads
+sym_server = r"SRV*C:\symbols*https://msdl.microsoft.com/download/symbols"
+full_sym_path = sym_dir + ";" + sym_server
 SymSetSearchPath = dbghelp.SymSetSearchPathW
 SymSetSearchPath.argtypes = [wintypes.HANDLE, wintypes.LPCWSTR]
 SymSetSearchPath.restype = wintypes.DWORD
-rv = SymSetSearchPath(hProcess, sym_dir)
+rv = SymSetSearchPath(hProcess, full_sym_path)
 print('SymSetSearchPath returned', rv)
 
-# Load module
-modbase = SymLoadModuleEx(hProcess, None, module_path, None, base_addr, 0, None, 0)
+# Load module (pass file size to assist symbol loader)
+file_size = os.path.getsize(module_path)
+modbase = SymLoadModuleEx(hProcess, None, module_path, None, base_addr, file_size, None, 0)
 if modbase == 0:
     print('SymLoadModuleEx failed')
     sys.exit(1)
-print('Module loaded at base', hex(modbase))
+print('Module loaded at base', hex(modbase), 'size=', file_size)
+
+# Try to get module info (LoadedPdbName etc.) using SymGetModuleInfo64
+try:
+    class IMAGEHLP_MODULE64(ctypes.Structure):
+        _fields_ = [
+            ('SizeOfStruct', DWORD64),
+            ('BaseOfImage', DWORD64),
+            ('ImageSize', DWORD64),
+            ('TimeDateStamp', DWORD),
+            ('CheckSum', DWORD),
+            ('NumSyms', DWORD),
+            ('SymType', ctypes.c_uint),
+            ('ModuleName', ctypes.c_char * 32),
+            ('ImageName', ctypes.c_char * 256),
+            ('LoadedImageName', ctypes.c_char * 256),
+            ('LoadedPdbName', ctypes.c_char * 256),
+            ('CVSig', DWORD),
+            ('CVData', ctypes.c_char * 64),
+        ]
+    SymGetModuleInfo64 = dbghelp.SymGetModuleInfo64
+    SymGetModuleInfo64.argtypes = [wintypes.HANDLE, DWORD64, ctypes.POINTER(IMAGEHLP_MODULE64)]
+    SymGetModuleInfo64.restype = wintypes.BOOL
+    modinfo = IMAGEHLP_MODULE64()
+    modinfo.SizeOfStruct = ctypes.sizeof(IMAGEHLP_MODULE64)
+    if SymGetModuleInfo64(hProcess, modbase, ctypes.byref(modinfo)):
+        try:
+            img_name = modinfo.ImageName.decode(errors='replace')
+            pdb_name = modinfo.LoadedPdbName.decode(errors='replace')
+        except Exception:
+            img_name = repr(modinfo.ImageName)
+            pdb_name = repr(modinfo.LoadedPdbName)
+        print('Module info: ImageName=', img_name)
+        print('LoadedPdbName=', pdb_name)
+    else:
+        print('SymGetModuleInfo64 failed, GetLastError=', ctypes.get_last_error())
+except Exception as e:
+    print('SymGetModuleInfo64 not available or failed:', e)
 
 # Prepare symbol buffer
 buffsize = ctypes.sizeof(SYMBOL_INFO) + MAX_SYM_NAME
