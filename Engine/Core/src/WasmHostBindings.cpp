@@ -328,6 +328,42 @@ static void DumpCallbacksSnapshot(const std::string& context) {
 void HostBindings::DebugDumpCallbacksSnapshot(const std::string& context) {
     DumpCallbacksSnapshot(context);
 }
+
+void HostBindings::DebugWriteMiniDump(const std::string& context) {
+    WriteMiniDumpSnapshot(context);
+}
+
+void HostBindings::DebugWriteMiniDumpWithContext(const std::string& context, const void* ctxPtr) {
+#ifdef _WIN32
+    // If caller provided a captured CONTEXT (passed as void*), use it; otherwise capture current thread context.
+    CONTEXT ctxLocal;
+    const CONTEXT* ctx = nullptr;
+    if (ctxPtr) {
+        ctx = reinterpret_cast<const CONTEXT*>(ctxPtr);
+    } else {
+        RtlCaptureContext(&ctxLocal);
+        ctx = &ctxLocal;
+    }
+
+    EXCEPTION_RECORD er;
+    ZeroMemory(&er, sizeof(er));
+    er.ExceptionCode = 0xE0420001; // custom diagnostic exception code
+#ifdef _M_X64
+    er.ExceptionAddress = reinterpret_cast<PVOID>(ctx->Rip);
+#else
+    er.ExceptionAddress = reinterpret_cast<PVOID>(static_cast<uintptr_t>(ctx->Eip));
+#endif
+
+    EXCEPTION_POINTERS ep;
+    ep.ExceptionRecord = &er;
+    ep.ContextRecord = const_cast<CONTEXT*>(ctx);
+
+    WriteMiniDumpForException(&ep, context + std::string("_withctx"));
+#else
+    // Fallback to snapshot if not on Windows
+    WriteMiniDumpSnapshot(context + std::string("_noctx"));
+#endif
+}
 #endif
 
 // Deferred unregistration queue to avoid touching g_callbacks in potentially-unsafe teardown moments

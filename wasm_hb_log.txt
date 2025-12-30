@@ -403,3 +403,30 @@ Token::~Token: sizes: g_callbacks=1 g_callback_keys=1 g_import_userdata=1
 Token::~Token: deferring unregister for key='env:test_ping' module_managed=false
 DeferUnregisterCallback: queued key=env:test_ping module_managed=false
 ScopedVectoredDump: removed handler=000002804CCFC520
+DumpCallbacksSnapshot: context=CallExported - before m3_CallArgv entries=1
+DumpCallbacksSnapshot: key=env:test_ping ptr=00000191C3D45200
+DumpCallbacksSnapshot: key=env:test_ping memory preview:38 5E 67 79 F6 7F 00 00 01 00 00 00 00 00 00 00 40 6E 3B C2 91 01 00 00 00 00 10 00 00 00 00 00 30 DC D4 C3 91 01 00 00 20 DC D4 C3 91 01 00 00 C8 C9 45 C2 91 01 00 00 19 B0 0E 79 F6 7F 00 00
+DumpCallbacksSnapshot: context=CallExported - after m3_CallArgv failed entries=1
+DumpCallbacksSnapshot: key=env:test_ping ptr=00000191C3D45200
+DumpCallbacksSnapshot: key=env:test_ping memory preview:38 5E 67 79 F6 7F 00 00 01 00 00 00 00 00 00 00 40 6E 3B C2 91 01 00 00 00 00 10 00 00 00 00 00 30 DC D4 C3 91 01 00 00 20 DC D4 C3 91 01 00 00 C8 C9 45 C2 91 01 00 00 19 B0 0E 79 F6 7F 00 00
+DumpCallbacksSnapshot: context=CallExported - before m3_CallArgv entries=1
+DumpCallbacksSnapshot: key=env:test_ping ptr=000001A78B444610
+DumpCallbacksSnapshot: key=env:test_ping memory preview:38 5E 8D 7A F7 7F 00 00 01 00 00 00 00 00 00 00 10 83 B0 89 A7 01 00 00 00 00 10 00 00 00 00 00 00 09 45 8B A7 01 00 00 F0 08 45 8B A7 01 00 00 48 32 B7 89 A7 01 00 00 19 B0 34 7A F7 7F 00 00
+DumpCallbacksSnapshot: context=CallExported - after m3_CallArgv failed entries=1
+DumpCallbacksSnapshot: key=env:test_ping ptr=000001A78B444610
+DumpCallbacksSnapshot: key=env:test_ping memory preview:38 5E 8D 7A F7 7F 00 00 01 00 00 00 00 00 00 00 10 83 B0 89 A7 01 00 00 00 00 10 00 00 00 00 00 00 09 45 8B A7 01 00 00 F0 08 45 8B A7 01 00 00 48 32 B7 89 A7 01 00 00 19 B0 34 7A F7 7F 00 00
+WriteMiniDumpSnapshot: wrote dump Tools\external\procdump\dumps\token_snapshot_20251230_122738.dmp context: CallExported_m3_CallArgv_failed
+DumpCallbacksSnapshot: context=CallExported - before m3_CallArgv entries=1
+DumpCallbacksSnapshot: key=env:test_ping ptr=000001AFC72CFE40
+DumpCallbacksSnapshot: key=env:test_ping memory preview:38 5E 89 A5 F7 7F 00 00 01 00 00 00 00 00 00 00 80 59 1F C7 AF 01 00 00 00 00 10 00 00 00 00 00 70 BD 2D C7 AF 01 00 00 60 BD 2D C7 AF 01 00 00 98 CD 25 C7 AF 01 00 00 19 B0 30 A5 F7 7F 00 00
+DumpCallbacksSnapshot: context=CallExported - after m3_CallArgv failed entries=1
+DumpCallbacksSnapshot: key=env:test_ping ptr=000001AFC72CFE40
+DumpCallbacksSnapshot: key=env:test_ping memory preview:38 5E 89 A5 F7 7F 00 00 01 00 00 00 00 00 00 00 80 59 1F C7 AF 01 00 00 00 00 10 00 00 00 00 00 70 BD 2D C7 AF 01 00 00 60 BD 2D C7 AF 01 00 00 98 CD 25 C7 AF 01 00 00 19 B0 30 A5 F7 7F 00 00
+WriteMiniDumpForException: wrote dump Tools\external\procdump\dumps\token_crash_20251230_123222.dmp context: CallExported_m3_CallArgv_failed_withctx
+DumpCallbacksSnapshot: context=CallExported - before m3_CallArgv entries=1
+DumpCallbacksSnapshot: key=env:test_ping ptr=0000020C5DCA9BB0
+DumpCallbacksSnapshot: key=env:test_ping memory preview:38 5E 26 EA F7 7F 00 00 01 00 00 00 00 00 00 00 10 E8 BC 5D 0C 02 00 00 00 00 10 00 00 00 00 00 B0 24 63 5F 0C 02 00 00 A0 24 63 5F 0C 02 00 00 28 DA C2 5D 0C 02 00 00 19 B0 CD E9 F7 7F 00 00
+DumpCallbacksSnapshot: context=CallExported - after m3_CallArgv failed entries=1
+DumpCallbacksSnapshot: key=env:test_ping ptr=0000020C5DCA9BB0
+DumpCallbacksSnapshot: key=env:test_ping memory preview:38 5E 26 EA F7 7F 00 00 01 00 00 00 00 00 00 00 10 E8 BC 5D 0C 02 00 00 00 00 10 00 00 00 00 00 B0 24 63 5F 0C 02 00 00 A0 24 63 5F 0C 02 00 00 28 DA C2 5D 0C 02 00 00 19 B0 CD E9 F7 7F 00 00
+WriteMiniDumpForException: wrote dump Tools\external\procdump\dumps\token_crash_20251230_123538.dmp context: CallExported_m3_CallArgv_failed_withctx

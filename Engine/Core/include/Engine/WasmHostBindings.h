@@ -91,6 +91,10 @@ public:
     static size_t DebugGetDeferredCount();
     // Dump a safe snapshot of callback holder memory (to log file) for investigation
     static void DebugDumpCallbacksSnapshot(const std::string& context);
+    // Request a snapshot minidump (debug only)
+    static void DebugWriteMiniDump(const std::string& context);
+    // Request a minidump that includes a captured CONTEXT so register state is preserved
+    static void DebugWriteMiniDumpWithContext(const std::string& context, const void* ctx = nullptr);
 #endif
 
 private:

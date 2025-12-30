@@ -1,0 +1,11 @@
+Error enumerating debugged processes: (-2147023174, 'The RPC server is unavailable.', None, None)
+
+Register expressions via Debugger.GetExpression:
+  GetExpression failed for rax: <unknown>.GetExpression
+  GetExpression failed for rbx: <unknown>.GetExpression
+  GetExpression failed for rcx: <unknown>.GetExpression
+  GetExpression failed for rdx: <unknown>.GetExpression
+  GetExpression failed for rsi: <unknown>.GetExpression
+  GetExpression failed for rdi: <unknown>.GetExpression
+  GetExpression failed for rsp: <unknown>.GetExpression
+  GetExpression failed for rbp: <unknown>.GetExpression

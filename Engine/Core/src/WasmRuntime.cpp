@@ -580,6 +580,18 @@ bool WasmRuntime::CallExportedWithTimeout(const std::string& moduleName, const s
                     } catch (...) {
                         std::cerr << "WasmRuntime: m3_GetErrorInfo threw or unavailable" << std::endl;
                     }
+#ifdef _WIN32
+#ifdef _DEBUG
+                    // Capture caller CONTEXT here so we preserve the registers at the
+                    // moment m3_CallArgv failed (this is the most useful view for root-cause analysis)
+                    CONTEXT dbg_ctx;
+                    RtlCaptureContext(&dbg_ctx);
+                    HostBindings::DebugWriteMiniDumpWithContext("CallExported_m3_CallArgv_failed", &dbg_ctx);
+                    if (moduleName == "ping_mod" && funcName == "mod_init") {
+                        DebugBreak();
+                    }
+#endif
+#endif
                     call_ok = false;
                 } else {
                     call_ok = true;
