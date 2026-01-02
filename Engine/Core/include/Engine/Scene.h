@@ -13,7 +13,7 @@ public:
     entt::registry& Registry() { return m_registry; }
 
     void Update(double dt);
-    void Render();
+    void Render(class IGraphicsAPI* renderer);
 
 private:
     entt::registry m_registry;

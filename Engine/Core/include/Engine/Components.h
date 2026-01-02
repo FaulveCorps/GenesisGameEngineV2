@@ -15,4 +15,17 @@ struct ModelComponent {
     std::shared_ptr<Model> model;
 };
 
+enum class LightType {
+    Directional,
+    Point
+};
+
+struct LightComponent {
+    LightType type = LightType::Directional;
+    float color[3] = {1.0f, 1.0f, 1.0f};
+    float intensity = 1.0f;
+    // For point lights
+    float range = 10.0f; 
+};
+
 } // namespace Genesis::Engine

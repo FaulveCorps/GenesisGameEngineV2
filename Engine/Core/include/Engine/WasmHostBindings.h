@@ -75,7 +75,7 @@ public:
 
     // Stubs / configuration helpers
     void set_max_string_length(size_t bytes) { maxStringLength_ = bytes; }
-    void set_execution_timeout_ms(uint32_t ms) { executionTimeoutMs_ = ms; /* TODO: implement enforcement */ }
+    void set_execution_timeout_ms(uint32_t ms) { executionTimeoutMs_ = ms; /* enforcement applied at registration time (copy into holder->execLimitMs) */ }
 
     // Cleanup helper that will remove any callbacks associated with a given module.
     // Useful to ensure any holders are destroyed only after the module/runtime are gone.
@@ -89,6 +89,8 @@ public:
     // Debug helpers used by unit tests
     static size_t DebugGetCallbacksCount();
     static size_t DebugGetDeferredCount();
+    // Debug helper: check whether a given callback key is present and active
+    static bool DebugIsCallbackActive(const std::string& key);
     // Dump a safe snapshot of callback holder memory (to log file) for investigation
     static void DebugDumpCallbacksSnapshot(const std::string& context);
     // Request a snapshot minidump (debug only)

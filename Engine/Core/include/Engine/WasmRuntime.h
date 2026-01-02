@@ -32,6 +32,8 @@ public:
     static bool CallExportedWithTimeout(const std::string& moduleName, const std::string& funcName, const std::vector<std::string>& args, uint32_t timeoutMs);
     // Set default resource limits for runtime (affects future calls / modules)
     static void SetDefaultResourceLimits(const ResourceLimits& limits);
+    // Get current runtime default resource limits (safe to call) - useful for tests that modify defaults
+    static ResourceLimits GetDefaultResourceLimits();
 
     // Return pointer to the module's timed_out flag, or nullptr if not managed by WasmRuntime.
     // This pointer is intentionally a raw pointer so trampolines can perform a fast, lock-free check.

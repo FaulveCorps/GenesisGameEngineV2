@@ -23,6 +23,24 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Install Snyk CLI
+        if: matrix.os == 'ubuntu-latest'
+        uses: snyk/actions/setup@master
+
+      - name: Snyk Code Scan
+        if: matrix.os == 'ubuntu-latest'
+        run: snyk code test
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
+      - name: Snyk Open Source Scan
+        if: matrix.os == 'ubuntu-latest'
+        run: snyk test --all-projects
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
       - name: Setup vcpkg
         run: |
           git clone https://github.com/microsoft/vcpkg.git vcpkg

@@ -30,6 +30,8 @@ add_executable(UnitTests
     test_samplegame_autocycle.cpp
     test_shader_subsystem.cpp
     test_pbr_material.cpp
+    test_pbr_shader_compile.cpp
+    test_renderer_mesh.cpp
     test_gltf_material_import.cpp
     test_audio.cpp
     test_audio_playback.cpp

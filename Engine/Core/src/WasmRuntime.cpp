@@ -95,15 +95,15 @@ struct EnvRAII {
     ~EnvRAII() noexcept { if (env) { m3_FreeEnvironment(env); env = nullptr; } }
 };
 
-static std::mutex g_wasmMutex;
-static std::unordered_map<std::string, std::unique_ptr<WasmModule>> g_modules;
+static std::mutex& g_wasmMutex = *new std::mutex;
+static std::unordered_map<std::string, std::unique_ptr<WasmModule>>& g_modules = *new std::unordered_map<std::string, std::unique_ptr<WasmModule>>;
 static bool g_inited = false;
-static EnvRAII g_env;
+static EnvRAII& g_env = *new EnvRAII;
 
 // Default resource limits (can be updated via SetDefaultResourceLimits)
 static ResourceLimits g_defaultResourceLimits;
 // Modules scheduled for deferred cleanup (e.g., timed-out modules that still have active calls)
-static std::vector<std::unique_ptr<WasmModule>> g_shutdownModules;
+static std::vector<std::unique_ptr<WasmModule>>& g_shutdownModules = *new std::vector<std::unique_ptr<WasmModule>>;
 
 bool WasmRuntime::Init() {
     std::lock_guard<std::mutex> lk(g_wasmMutex);
@@ -128,6 +128,11 @@ void WasmRuntime::Shutdown() {
     g_modules.clear();
     std::cerr << "WasmRuntime::Shutdown: modules cleared" << std::endl;
 
+    // Also clear any modules that were scheduled for deferred shutdown (e.g. timed out modules)
+    std::cerr << "WasmRuntime::Shutdown: destroying " << g_shutdownModules.size() << " deferred modules" << std::endl;
+    g_shutdownModules.clear();
+    std::cerr << "WasmRuntime::Shutdown: deferred modules cleared" << std::endl;
+
     // Process any deferred unregistrations that were queued by Token destructors during teardown
     HostBindings::ProcessDeferredUnregistrations();
 
@@ -137,9 +142,9 @@ void WasmRuntime::Shutdown() {
 }
 
 // Global host function registrations (available for subsequent module loads)
-static std::mutex g_hostRegMutex;
+static std::mutex& g_hostRegMutex = *new std::mutex;
 struct GlobalHostRegistration { size_t id; std::string ns; std::string name; std::string sig; M3RawCall cb; };
-static std::vector<GlobalHostRegistration> g_globalHostFunctions;
+static std::vector<GlobalHostRegistration>& g_globalHostFunctions = *new std::vector<GlobalHostRegistration>;
 static size_t g_nextHostId = 1;
 
 static void UnregisterGlobalHost(size_t id) {
@@ -173,7 +178,10 @@ void WasmRuntime::SetDefaultResourceLimits(const ResourceLimits& limits) {
     g_defaultResourceLimits = limits;
     std::cout << "WasmRuntime: default resource limits updated: memory=" << g_defaultResourceLimits.memory_limit_bytes << " bytes exec_ms=" << g_defaultResourceLimits.execution_time_ms << std::endl;
 }
-
+ResourceLimits WasmRuntime::GetDefaultResourceLimits() {
+    std::lock_guard<std::mutex> lk(g_wasmMutex);
+    return g_defaultResourceLimits;
+}
 static const char kHostLinkFailed[] = "host link failed";
 static M3Result LinkHostFunctions(WasmModule* wm) {
     if (!wm || !wm->module) return "invalid-module";
@@ -380,8 +388,11 @@ static bool LoadModuleBytes(const std::string& name, const std::vector<uint8_t>&
             try { memPtr = m3_GetMemory(runtime, &memSz, 0); } catch(...) { memPtr = nullptr; memSz = 0; }
             if (memPtr && memSz > wm->resourceLimits.memory_limit_bytes) {
                 std::cerr << "WasmRuntime: module '" << name << "' initial memory " << memSz << " exceeds limit " << wm->resourceLimits.memory_limit_bytes << " bytes" << std::endl;
+                // Free the runtime (which also frees the loaded module in wasm3). Clear wm->module so the WasmModule
+                // destructor does not attempt to free the module again (avoids double-free).
                 m3_FreeRuntime(runtime);
-                // WasmModule destructor will free module
+                wm->module = nullptr;
+                // WasmModule destructor will not free module now
                 return false;
             }
         } catch (...) {
@@ -752,9 +763,14 @@ bool WasmRuntime::CallExportedWithTimeout(const std::string& moduleName, const s
     });
 
     // Wait for result with timeout
+    std::cerr << "WasmRuntime: CallExportedWithTimeout: waiting up to " << timeoutMs << "ms for '" << moduleName << "'.'" << funcName << "'" << std::endl;
+    auto waitStart = std::chrono::steady_clock::now();
     auto status = fut.wait_for(std::chrono::milliseconds(timeoutMs));
+    auto waitEnd = std::chrono::steady_clock::now();
+    auto waitDur = std::chrono::duration_cast<std::chrono::milliseconds>(waitEnd - waitStart).count();
     if (status == std::future_status::ready) {
         bool res = fut.get();
+        std::cerr << "WasmRuntime: CallExportedWithTimeout: completed '" << moduleName << "'.'" << funcName << "' result=" << res << " wait_ms=" << waitDur << std::endl;
         return res;
     } else {
         // Timeout: mark module as timed out and log. Do not free resources synchronously while the module
@@ -765,7 +781,7 @@ bool WasmRuntime::CallExportedWithTimeout(const std::string& moduleName, const s
             auto it = g_modules.find(moduleName);
             if (it != g_modules.end()) it->second->timed_out.store(true);
         }
-        std::cerr << "WasmRuntime: module '" << moduleName << "' func '" << funcName << "' timed out after " << timeoutMs << "ms" << std::endl;
+        std::cerr << "WasmRuntime: module '" << moduleName << "' func '" << funcName << "' timed out after " << timeoutMs << "ms (waited=" << waitDur << "ms)" << std::endl;
         return false;
     }
 }

@@ -118,7 +118,7 @@ function Invoke-Configure {
     
     $startTime = Get-Date
     if ($VerboseOutput) {
-        cmake --preset $Preset -v
+        cmake --preset $Preset
     } else {
         cmake --preset $Preset
     }
@@ -164,14 +164,13 @@ function Invoke-Build {
 # RUN TESTS
 # ============================================================================
 function Invoke-Tests {
+    param([string]$BuildDir)
     Write-Info "=========================================="
     Write-Info "RUNNING UNIT TESTS"
     Write-Info "=========================================="
     
-    $buildDirPath = Join-Path $sourceDir "build-ninja-debug"
-    
     $startTime = Get-Date
-    ctest -C Debug --test-dir $buildDirPath --output-on-failure $(if ($VerboseOutput) { '-V' })
+    ctest -C Debug --test-dir $BuildDir --output-on-failure $(if ($VerboseOutput) { '-V' })
     $elapsed = (Get-Date) - $startTime
     
     if ($LASTEXITCODE -eq 0) {
@@ -252,7 +251,7 @@ switch ($Target) {
         if (-not (Invoke-Configure $debugPreset $debugBuildDir)) { exit 1 }
         if (-not (Invoke-Build $debugPreset 'Debug')) { exit 1 }
         Write-Info ""
-        if (-not (Invoke-Tests)) { exit 1 }
+        if (-not (Invoke-Tests $debugBuildDir)) { exit 1 }
     }
     
     'install' {
