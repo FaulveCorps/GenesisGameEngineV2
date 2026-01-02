@@ -88,6 +88,12 @@
       "configurePreset": "ninja-debug",
       "targets": ["UnitTests"],
       "jobs": 0
+    },
+    {
+      "name": "vs2022",
+      "displayName": "Build with VS2022",
+      "description": "Build using Visual Studio 2022",
+      "configurePreset": "vs2022"
     }
   ],
   "testPresets": [

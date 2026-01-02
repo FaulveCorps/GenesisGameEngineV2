@@ -46,8 +46,40 @@ bool Model::Load(const std::string& path) {
 
             // Textures (store paths if present)
             aiString texPath;
-            if (AI_SUCCESS == am->GetTexture(aiTextureType_BASE_COLOR, 0, &texPath)) mat.baseColorTexture = texPath.C_Str();
-            if (AI_SUCCESS == am->GetTexture(aiTextureType_NORMALS, 0, &texPath)) mat.normalTexture = texPath.C_Str();
+            if (AI_SUCCESS == am->GetTexture(aiTextureType_BASE_COLOR, 0, &texPath)) {
+                mat.baseColorTexture = texPath.C_Str();
+            } else if (AI_SUCCESS == am->GetTexture(aiTextureType_DIFFUSE, 0, &texPath)) {
+                // Fallback to diffuse texture if base color not found
+                mat.baseColorTexture = texPath.C_Str();
+            }
+
+            if (AI_SUCCESS == am->GetTexture(aiTextureType_NORMALS, 0, &texPath)) {
+                mat.normalTexture = texPath.C_Str();
+            }
+
+            // Load textures if paths are present
+            std::string modelDir = path.substr(0, path.find_last_of("/\\"));
+            if (!mat.baseColorTexture.empty()) {
+                std::string fullPath = modelDir + "/" + mat.baseColorTexture;
+                // Fix backslashes if any
+                for (auto& c : fullPath) if (c == '\\') c = '/';
+                mat.baseColorTextureObj = Texture::CreateFromFile(fullPath);
+                if (!mat.baseColorTextureObj) {
+                    std::cerr << "Model::Load -> failed to load base color texture: " << fullPath << std::endl;
+                } else {
+                    std::cout << "Model::Load -> loaded base color texture: " << fullPath << std::endl;
+                }
+            }
+            if (!mat.normalTexture.empty()) {
+                std::string fullPath = modelDir + "/" + mat.normalTexture;
+                for (auto& c : fullPath) if (c == '\\') c = '/';
+                mat.normalTextureObj = Texture::CreateFromFile(fullPath);
+                 if (!mat.normalTextureObj) {
+                    std::cerr << "Model::Load -> failed to load normal texture: " << fullPath << std::endl;
+                } else {
+                    std::cout << "Model::Load -> loaded normal texture: " << fullPath << std::endl;
+                }
+            }
 
             m_materials.push_back(std::move(mat));
         }
@@ -63,10 +95,12 @@ bool Model::Load(const std::string& path) {
 
         std::vector<float> verts;
         std::vector<float> norms;
+        std::vector<float> uvs;
         std::vector<uint32_t> idxs;
 
         verts.reserve(mesh->mNumVertices * 3);
         if (mesh->HasNormals()) norms.reserve(mesh->mNumVertices * 3);
+        if (mesh->HasTextureCoords(0)) uvs.reserve(mesh->mNumVertices * 2);
 
         for (unsigned int v = 0; v < mesh->mNumVertices; ++v) {
             const aiVector3D& pv = mesh->mVertices[v];
@@ -79,6 +113,11 @@ bool Model::Load(const std::string& path) {
                 norms.push_back(n.y);
                 norms.push_back(n.z);
             }
+            if (mesh->HasTextureCoords(0)) {
+                const aiVector3D& t = mesh->mTextureCoords[0][v];
+                uvs.push_back(t.x);
+                uvs.push_back(t.y);
+            }
         }
 
         for (unsigned int f = 0; f < mesh->mNumFaces; ++f) {
@@ -89,10 +128,10 @@ bool Model::Load(const std::string& path) {
             idxs.push_back(face.mIndices[2]);
         }
 
-        std::cout << "Mesh " << mi << ": verts=" << verts.size()/3 << ", norms=" << norms.size()/3 << ", tris=" << idxs.size()/3 << std::endl;
+        std::cout << "Mesh " << mi << ": verts=" << verts.size()/3 << ", norms=" << norms.size()/3 << ", uvs=" << uvs.size()/2 << ", tris=" << idxs.size()/3 << std::endl;
 
         Mesh m;
-        m.SetData(verts, norms, idxs);
+        m.SetData(verts, norms, uvs, idxs);
         std::cout << "Model::Load -> about to UploadToGPU (SDL_GL_GetCurrentContext=" << (void*)SDL_GL_GetCurrentContext() << ")" << std::endl;
         m.UploadToGPU();
         std::cout << "Model::Load -> returned from UploadToGPU" << std::endl;
@@ -102,9 +141,13 @@ bool Model::Load(const std::string& path) {
     return true;
 }
 
-void Model::Draw() {
-    for (const auto& m : m_meshes) {
-        m.Draw();
+void Model::Draw(const float* transform) {
+    for (size_t i = 0; i < m_meshes.size(); ++i) {
+        const auto& m = m_meshes[i];
+        int matIndex = GetMaterialIndexForMesh(i);
+        Material* mat = (matIndex >= 0 && matIndex < (int)m_materials.size()) ? &m_materials[matIndex] : nullptr;
+        
+        m.Draw(mat, transform);
         Genesis::Engine::Stats::AddDrawCalls((int)m.GetTriangleCount());
     }
 }

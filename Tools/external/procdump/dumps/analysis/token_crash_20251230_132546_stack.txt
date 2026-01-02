@@ -1,0 +1,6 @@
+
+Traceback (most recent call last):
+  File "C:\Users\jpfau\Desktop\Project\GenesisGameEngine\Tools\external\procdump\extract_stack_segment.py", line 7, in <module>
+    rec = md.exception.exception_records[0]
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'NoneType' object has no attribute 'exception_records'

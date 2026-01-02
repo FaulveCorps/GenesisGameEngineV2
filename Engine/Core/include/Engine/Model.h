@@ -15,7 +15,7 @@ public:
     ~Model() = default;
 
     bool Load(const std::string& path);
-    void Draw();
+    void Draw(const float* transform = nullptr);
 
     // Material accessors (parsed from scene materials)
     const std::vector<Material>& Materials() const { return m_materials; }

@@ -11,8 +11,9 @@
 #include <thread>
 #include <atomic>
 #include "engine/Wasm/ResourceLimits.h"
-
-
+#include <filesystem>
+#include <iomanip>
+#include <sstream>
 
 #include "wasm3.h"
 #include "m3_env.h"
@@ -42,6 +43,8 @@ struct WasmModule {
     // Resource/monitoring state
     std::atomic<bool> timed_out{false};    // set when the module exceeded execution time
     std::atomic<int> active_calls{0};      // number of in-flight calls into this module
+    // Per-module resource limits (copied from runtime defaults at load time)
+    ResourceLimits resourceLimits;
 
 
     // Ensure resources are freed when module is destroyed; noexcept to avoid terminating during stack unwinding
@@ -92,15 +95,15 @@ struct EnvRAII {
     ~EnvRAII() noexcept { if (env) { m3_FreeEnvironment(env); env = nullptr; } }
 };
 
-static std::mutex g_wasmMutex;
-static std::unordered_map<std::string, std::unique_ptr<WasmModule>> g_modules;
+static std::mutex& g_wasmMutex = *new std::mutex;
+static std::unordered_map<std::string, std::unique_ptr<WasmModule>>& g_modules = *new std::unordered_map<std::string, std::unique_ptr<WasmModule>>;
 static bool g_inited = false;
-static EnvRAII g_env;
+static EnvRAII& g_env = *new EnvRAII;
 
 // Default resource limits (can be updated via SetDefaultResourceLimits)
 static ResourceLimits g_defaultResourceLimits;
 // Modules scheduled for deferred cleanup (e.g., timed-out modules that still have active calls)
-static std::vector<std::unique_ptr<WasmModule>> g_shutdownModules;
+static std::vector<std::unique_ptr<WasmModule>>& g_shutdownModules = *new std::vector<std::unique_ptr<WasmModule>>;
 
 bool WasmRuntime::Init() {
     std::lock_guard<std::mutex> lk(g_wasmMutex);
@@ -125,6 +128,11 @@ void WasmRuntime::Shutdown() {
     g_modules.clear();
     std::cerr << "WasmRuntime::Shutdown: modules cleared" << std::endl;
 
+    // Also clear any modules that were scheduled for deferred shutdown (e.g. timed out modules)
+    std::cerr << "WasmRuntime::Shutdown: destroying " << g_shutdownModules.size() << " deferred modules" << std::endl;
+    g_shutdownModules.clear();
+    std::cerr << "WasmRuntime::Shutdown: deferred modules cleared" << std::endl;
+
     // Process any deferred unregistrations that were queued by Token destructors during teardown
     HostBindings::ProcessDeferredUnregistrations();
 
@@ -134,9 +142,9 @@ void WasmRuntime::Shutdown() {
 }
 
 // Global host function registrations (available for subsequent module loads)
-static std::mutex g_hostRegMutex;
+static std::mutex& g_hostRegMutex = *new std::mutex;
 struct GlobalHostRegistration { size_t id; std::string ns; std::string name; std::string sig; M3RawCall cb; };
-static std::vector<GlobalHostRegistration> g_globalHostFunctions;
+static std::vector<GlobalHostRegistration>& g_globalHostFunctions = *new std::vector<GlobalHostRegistration>;
 static size_t g_nextHostId = 1;
 
 static void UnregisterGlobalHost(size_t id) {
@@ -170,12 +178,17 @@ void WasmRuntime::SetDefaultResourceLimits(const ResourceLimits& limits) {
     g_defaultResourceLimits = limits;
     std::cout << "WasmRuntime: default resource limits updated: memory=" << g_defaultResourceLimits.memory_limit_bytes << " bytes exec_ms=" << g_defaultResourceLimits.execution_time_ms << std::endl;
 }
-
+ResourceLimits WasmRuntime::GetDefaultResourceLimits() {
+    std::lock_guard<std::mutex> lk(g_wasmMutex);
+    return g_defaultResourceLimits;
+}
 static const char kHostLinkFailed[] = "host link failed";
 static M3Result LinkHostFunctions(WasmModule* wm) {
     if (!wm || !wm->module) return "invalid-module";
     std::cerr << "LinkHostFunctions: begin module='" << wm->name << "' modulePtr=" << wm->module << std::endl;
     HostBindings hb(wm->module);
+    // Configure HostBindings with the module's execution time limit (best-effort)
+    hb.set_execution_timeout_ms(static_cast<uint32_t>(wm->resourceLimits.execution_time_ms));
     // Copy global registrations under lock then link them without holding the global lock to avoid lock-order deadlocks
     std::vector<GlobalHostRegistration> regsCopy;
     {
@@ -240,6 +253,24 @@ std::atomic<bool>* WasmRuntime::GetModuleTimedOutPtr(IM3Module module) {
         if (p.second && p.second->module == module) return &p.second->timed_out;
     }
     return nullptr;
+}
+
+// Return configured per-module memory limit (bytes). Falls back to runtime default when module not found.
+std::size_t WasmRuntime::GetModuleMemoryLimitBytes(IM3Module module) {
+    std::lock_guard<std::mutex> lk(g_wasmMutex);
+    for (auto &p : g_modules) {
+        if (p.second && p.second->module == module) return p.second->resourceLimits.memory_limit_bytes;
+    }
+    return g_defaultResourceLimits.memory_limit_bytes;
+}
+
+// Return configured per-module execution timeout (milliseconds). Falls back to runtime default when module not found.
+uint32_t WasmRuntime::GetModuleExecutionTimeoutMs(IM3Module module) {
+    std::lock_guard<std::mutex> lk(g_wasmMutex);
+    for (auto &p : g_modules) {
+        if (p.second && p.second->module == module) return p.second->resourceLimits.execution_time_ms;
+    }
+    return g_defaultResourceLimits.execution_time_ms;
 }
 
 
@@ -326,6 +357,9 @@ static bool LoadModuleBytes(const std::string& name, const std::vector<uint8_t>&
         wm->name = name;
         wm->bytes = bytes;
         wm->module = module;
+        // Initialize this module's resource limits from the current runtime defaults
+        wm->resourceLimits = g_defaultResourceLimits;
+        std::cout << "WasmRuntime::LoadModuleBytes: module resource limits set: memory=" << wm->resourceLimits.memory_limit_bytes << " bytes exec_ms=" << wm->resourceLimits.execution_time_ms << "ms" << std::endl;
 
         // Create runtime and load the module into it BEFORE linking host imports. Wasm3 requires the module
         // to be associated with a runtime for m3_LinkRawFunction to succeed.
@@ -345,6 +379,24 @@ static bool LoadModuleBytes(const std::string& name, const std::vector<uint8_t>&
             m3_FreeRuntime(runtime);
             // WasmModule destructor will free module
             return false;
+        }
+
+        // Enforce per-module initial memory limits (if module declares memory)
+        try {
+            uint32_t memSz = 0;
+            uint8_t* memPtr = nullptr;
+            try { memPtr = m3_GetMemory(runtime, &memSz, 0); } catch(...) { memPtr = nullptr; memSz = 0; }
+            if (memPtr && memSz > wm->resourceLimits.memory_limit_bytes) {
+                std::cerr << "WasmRuntime: module '" << name << "' initial memory " << memSz << " exceeds limit " << wm->resourceLimits.memory_limit_bytes << " bytes" << std::endl;
+                // Free the runtime (which also frees the loaded module in wasm3). Clear wm->module so the WasmModule
+                // destructor does not attempt to free the module again (avoids double-free).
+                m3_FreeRuntime(runtime);
+                wm->module = nullptr;
+                // WasmModule destructor will not free module now
+                return false;
+            }
+        } catch (...) {
+            std::cerr << "WasmRuntime: exception while checking initial memory for module '" << name << "'" << std::endl;
         }
 
         // Attach the runtime to the module container so LinkHostFunctions can see it
@@ -461,8 +513,14 @@ bool WasmRuntime::LoadModuleFromBytes(const std::string& moduleName, const std::
 }
 
 bool WasmRuntime::CallExported(const std::string& moduleName, const std::string& funcName, const std::vector<std::string>& args) {
-    // Call with the default execution time limit
-    return CallExportedWithTimeout(moduleName, funcName, args, g_defaultResourceLimits.execution_time_ms);
+    // Prefer a module-specific execution limit if configured, otherwise fall back to runtime default
+    uint32_t timeoutMs = g_defaultResourceLimits.execution_time_ms;
+    {
+        std::lock_guard<std::mutex> lk(g_wasmMutex);
+        auto it = g_modules.find(moduleName);
+        if (it != g_modules.end()) timeoutMs = it->second->resourceLimits.execution_time_ms;
+    }
+    return CallExportedWithTimeout(moduleName, funcName, args, timeoutMs);
 }
 
 bool WasmRuntime::CallExportedWithTimeout(const std::string& moduleName, const std::string& funcName, const std::vector<std::string>& args, uint32_t timeoutMs) {
@@ -528,32 +586,34 @@ bool WasmRuntime::CallExportedWithTimeout(const std::string& moduleName, const s
                     std::cerr << "WasmRuntime: m3_CallArgv error bytes:";
                     for (int i=0; i<256 && err && err[i]; ++i) std::cerr << " " << std::hex << (int)(uint8_t)err[i];
                     std::cerr << std::dec << std::endl;
+
+                    // Prepare variables we may use for deeper analysis (try to read err ptr and module memory)
 #ifdef _WIN32
-                    // Try to read raw memory at the error pointer to get more context (not relying on NUL termination)
-                    {
-                        char membuf[128]; SIZE_T bytesRead = 0;
+                    char membuf[256]; SIZE_T bytesRead = 0; bool err_mem_ok = false; DWORD rpmErr = 0;
+                    uint8_t* memPtr2 = nullptr; uint32_t memSz2 = 0;
+                    if (err) {
                         if (ReadProcessMemory(GetCurrentProcess(), (LPCVOID)err, membuf, sizeof(membuf), &bytesRead) && bytesRead > 0) {
+                            err_mem_ok = true;
                             std::cerr << "WasmRuntime: m3_CallArgv raw memory at " << (void*)err << " bytes:";
                             for (SIZE_T i = 0; i < bytesRead && i < 64; ++i) std::cerr << " " << std::hex << (int)(uint8_t)membuf[i];
                             std::cerr << std::dec << std::endl;
-                            // Dump a few bytes from the module memory start too for correlation
-                            try {
-                                uint32_t memSz2 = 0;
-                                uint8_t* memPtr2 = m3_GetMemory(m->runtime, &memSz2, 0);
-                                if (memPtr2 && memSz2 > 0) {
-                                    std::cerr << "WasmRuntime: module mem[0..15]=";
-                                    for (uint32_t ii=0; ii<16 && ii<memSz2; ++ii) std::cerr << " " << std::hex << (int)memPtr2[ii];
-                                    std::cerr << std::dec << std::endl;
-                                }
-                            } catch(...) {
-                                std::cerr << "WasmRuntime: m3_GetMemory threw or unavailable in error branch" << std::endl;
-                            }
                         } else {
-                            std::cerr << "WasmRuntime: ReadProcessMemory failed on m3_CallArgv err ptr, GetLastError=" << GetLastError() << std::endl;
+                            rpmErr = GetLastError();
+                            std::cerr << "WasmRuntime: ReadProcessMemory failed on m3_CallArgv err ptr, GetLastError=" << rpmErr << std::endl;
                         }
                     }
+                    try {
+                        memPtr2 = m3_GetMemory(m->runtime, &memSz2, 0);
+                        if (memPtr2 && memSz2 > 0) {
+                            std::cerr << "WasmRuntime: module mem[0..15]=";
+                            for (uint32_t ii=0; ii<16 && ii<memSz2; ++ii) std::cerr << " " << std::hex << (int)memPtr2[ii];
+                            std::cerr << std::dec << std::endl;
+                        }
+                    } catch(...) {
+                        std::cerr << "WasmRuntime: m3_GetMemory threw or unavailable in error branch" << std::endl;
+                    }
 #endif
-                    // Try to get richer error info from wasm3 runtime
+                    // Try to get richer error info from wasm3 runtime and write an on-disk callsite snapshot for offline analysis
                     try {
                         M3ErrorInfo ei{0};
                         m3_GetErrorInfo(m->runtime, &ei);
@@ -576,6 +636,75 @@ bool WasmRuntime::CallExportedWithTimeout(const std::string& moduleName, const s
                         } catch (...) {
                             std::cerr << "WasmRuntime: m3_GetBacktrace threw or unavailable" << std::endl;
                         }
+
+#ifdef _DEBUG
+                        try {
+                            // Ensure analysis dir exists
+                            std::filesystem::path analysis_dir = std::filesystem::path("Tools") / "external" / "procdump" / "dumps" / "analysis";
+                            std::error_code ec;
+                            std::filesystem::create_directories(analysis_dir, ec);
+
+                            SYSTEMTIME st; GetLocalTime(&st);
+                            char tbuf[64]; sprintf_s(tbuf, "%04d%02d%02d_%02d%02d%02d", st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond);
+                            auto sanitize = [](const std::string &s) {
+                                std::string out; out.reserve(s.size());
+                                for (char c : s) {
+                                    if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c=='.') out.push_back(c);
+                                    else out.push_back('_');
+                                }
+                                return out;
+                            };
+
+                            std::string fname = std::string("callsite_") + tbuf + "_" + sanitize(moduleName) + "_" + sanitize(funcName) + ".txt";
+                            std::filesystem::path outp = analysis_dir / fname;
+                            std::ofstream ofs(outp);
+                            if (ofs) {
+                                ofs << "timestamp: " << tbuf << "\n";
+                                ofs << "context: CallExported_m3_CallArgv_failed\n";
+                                ofs << "module: " << moduleName << "\n";
+                                ofs << "func: " << funcName << "\n";
+                                ofs << "modulePtr: " << m->module << " runtime: " << m->runtime << "\n";
+                                ofs << "function ptr: " << (void*)f << "\n";
+                                ofs << "m3_CallArgv result ptr: " << (void*)r << "\n";
+#ifdef _WIN32
+                                if (err_mem_ok) {
+                                    ofs << "err raw bytes (first " << bytesRead << " bytes): ";
+                                    for (SIZE_T i = 0; i < bytesRead && i < 256; ++i) ofs << std::hex << (int)(uint8_t)membuf[i] << " ";
+                                    ofs << std::dec << "\n";
+                                } else {
+                                    ofs << "err mem read failed, GetLastError=" << rpmErr << "\n";
+                                }
+                                if (memPtr2 && memSz2 > 0) {
+                                    ofs << "module mem[0..15]: ";
+                                    for (uint32_t ii=0; ii<16 && ii<memSz2; ++ii) ofs << std::hex << (int)memPtr2[ii] << " ";
+                                    ofs << std::dec << "\n";
+                                }
+#endif
+                                ofs << "m3_GetErrorInfo: result=" << (ei.result ? ei.result : "(null)") << " file=" << (ei.file ? ei.file : "(null)") << " line=" << ei.line << " message=" << (ei.message ? ei.message : "(null)") << "\n";
+                                if (ei.function) ofs << "m3_error_function: " << (m3_GetFunctionName(ei.function) ? m3_GetFunctionName(ei.function) : "(unknown)") << "\n";
+                                // Capture current registers for convenience
+                                CONTEXT ctx; RtlCaptureContext(&ctx);
+#ifdef _M_X64
+                                ofs << "Registers: Rax=" << std::hex << ctx.Rax << " Rcx=" << ctx.Rcx << " Rdx=" << ctx.Rdx << " Rbx=" << ctx.Rbx << " Rsp=" << ctx.Rsp << " Rbp=" << ctx.Rbp << " Rsi=" << ctx.Rsi << " Rdi=" << ctx.Rdi << " Rip=" << ctx.Rip << std::dec << "\n";
+#else
+                                ofs << "Registers: Eip=" << std::hex << ctx.Eip << std::dec << "\n";
+#endif
+                                // callback counts
+                                ofs << "callbacks_count: " << HostBindings::DebugGetCallbacksCount() << " deferred_count: " << HostBindings::DebugGetDeferredCount() << "\n";
+                                ofs << "hostTokens.size: " << m->hostTokens.size() << "\n";
+                                ofs << "END\n";
+                                ofs.close();
+                                std::cerr << "WasmRuntime: wrote callsite analysis " << outp << std::endl;
+
+                                // Also write a safe callbacks snapshot to the main log to correlate behaviors
+                                HostBindings::DebugDumpCallbacksSnapshot(std::string("CallExported - callsite snapshot: ") + moduleName + ":" + funcName);
+                            } else {
+                                std::cerr << "WasmRuntime: failed to open callsite analysis file " << outp << std::endl;
+                            }
+                        } catch (...) {
+                            std::cerr << "WasmRuntime: exception while writing callsite analysis" << std::endl;
+                        }
+#endif
                         m3_ResetErrorInfo(m->runtime);
                     } catch (...) {
                         std::cerr << "WasmRuntime: m3_GetErrorInfo threw or unavailable" << std::endl;
@@ -594,7 +723,26 @@ bool WasmRuntime::CallExportedWithTimeout(const std::string& moduleName, const s
 #endif
                     call_ok = false;
                 } else {
-                    call_ok = true;
+                    // After successful call, enforce per-module memory limit in case the module grew memory during execution
+                    try {
+                        uint32_t memSz2 = 0;
+                        uint8_t* memPtr2 = nullptr;
+                        try { memPtr2 = m3_GetMemory(m->runtime, &memSz2, 0); } catch(...) { memPtr2 = nullptr; memSz2 = 0; }
+                        if (memPtr2) {
+                            std::size_t memLimit = m->resourceLimits.memory_limit_bytes;
+                            if (memSz2 > memLimit) {
+                                std::cerr << "WasmRuntime: module '" << moduleName << "' exceeded memory limit during call (" << memSz2 << " > " << memLimit << "), quarantining" << std::endl;
+                                if (!m->timed_out.load()) m->timed_out.store(true);
+                                call_ok = false;
+                            } else {
+                                call_ok = true;
+                            }
+                        } else {
+                            call_ok = true;
+                        }
+                    } catch(...) {
+                        call_ok = true;
+                    }
                 }
             }
         }
@@ -615,9 +763,14 @@ bool WasmRuntime::CallExportedWithTimeout(const std::string& moduleName, const s
     });
 
     // Wait for result with timeout
+    std::cerr << "WasmRuntime: CallExportedWithTimeout: waiting up to " << timeoutMs << "ms for '" << moduleName << "'.'" << funcName << "'" << std::endl;
+    auto waitStart = std::chrono::steady_clock::now();
     auto status = fut.wait_for(std::chrono::milliseconds(timeoutMs));
+    auto waitEnd = std::chrono::steady_clock::now();
+    auto waitDur = std::chrono::duration_cast<std::chrono::milliseconds>(waitEnd - waitStart).count();
     if (status == std::future_status::ready) {
         bool res = fut.get();
+        std::cerr << "WasmRuntime: CallExportedWithTimeout: completed '" << moduleName << "'.'" << funcName << "' result=" << res << " wait_ms=" << waitDur << std::endl;
         return res;
     } else {
         // Timeout: mark module as timed out and log. Do not free resources synchronously while the module
@@ -628,7 +781,7 @@ bool WasmRuntime::CallExportedWithTimeout(const std::string& moduleName, const s
             auto it = g_modules.find(moduleName);
             if (it != g_modules.end()) it->second->timed_out.store(true);
         }
-        std::cerr << "WasmRuntime: module '" << moduleName << "' func '" << funcName << "' timed out after " << timeoutMs << "ms" << std::endl;
+        std::cerr << "WasmRuntime: module '" << moduleName << "' func '" << funcName << "' timed out after " << timeoutMs << "ms (waited=" << waitDur << "ms)" << std::endl;
         return false;
     }
 }

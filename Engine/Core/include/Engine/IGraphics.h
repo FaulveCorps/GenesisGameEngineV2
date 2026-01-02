@@ -15,10 +15,12 @@ struct MeshHandle {
 struct MeshDesc {
     std::vector<float> vertices;
     std::vector<float> normals;
+    std::vector<float> uvs;
     std::vector<uint32_t> indices;
 };
 
 class Texture;
+struct Material;
 
 class IGraphicsAPI {
 public:
@@ -34,6 +36,9 @@ public:
     virtual MeshHandle CreateMesh(const MeshDesc& /*desc*/) { return MeshHandle{}; }
     virtual void DestroyMesh(const MeshHandle& /*h*/) { }
     virtual void DrawMesh(const MeshHandle& /*h*/) { }
+    virtual void DrawMesh(const MeshHandle& /*h*/, Material* /*material*/, const float* /*transform*/) { }
+
+    virtual void SetGlobalLight(const float /*direction*/[3], const float /*color*/[3], float /*intensity*/) {}
 
     // Texture handle for renderer-managed textures
     struct TextureHandle {

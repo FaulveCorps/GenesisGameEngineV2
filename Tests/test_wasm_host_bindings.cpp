@@ -228,7 +228,8 @@ TEST_CASE("Wasm HostBindings: host_log receives string from module", "[wasm][hos
 
     TEST_CASE("WasmRuntime: blocking host callback times out and module is quarantined", "[wasm][runtime][timeout]") {
         REQUIRE(Genesis::Engine::WasmRuntime::Init() == true);
-        Genesis::Engine::ResourceLimits rl;
+auto old_rl = Genesis::Engine::WasmRuntime::GetDefaultResourceLimits();
+    Genesis::Engine::ResourceLimits rl;
         rl.execution_time_ms = 50;
         Genesis::Engine::WasmRuntime::SetDefaultResourceLimits(rl);
 
@@ -252,6 +253,8 @@ TEST_CASE("Wasm HostBindings: host_log receives string from module", "[wasm][hos
         bool ok2 = Genesis::Engine::WasmRuntime::CallExported("sleep_test", "run");
         REQUIRE(ok2 == false);
 
+        // Restore defaults and shutdown
+        Genesis::Engine::WasmRuntime::SetDefaultResourceLimits(old_rl);
         Genesis::Engine::WasmRuntime::Shutdown();
     }
 

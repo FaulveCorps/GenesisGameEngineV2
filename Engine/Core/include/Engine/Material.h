@@ -2,6 +2,8 @@
 
 #include <array>
 #include <string>
+#include <memory>
+#include "Engine/Texture.h"
 
 namespace Genesis::Engine {
 
@@ -16,6 +18,10 @@ struct Material {
     // Optional texture references (paths or resource ids)
     std::string baseColorTexture;
     std::string normalTexture;
+
+    // Loaded texture objects
+    std::shared_ptr<Texture> baseColorTextureObj;
+    std::shared_ptr<Texture> normalTextureObj;
 
     Material() = default;
 };

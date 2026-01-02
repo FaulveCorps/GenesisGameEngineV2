@@ -19,8 +19,8 @@ public:
     Mesh(Mesh&& other) noexcept;
     Mesh& operator=(Mesh&& other) noexcept;
 
-    // Fill vertex/normal/index arrays
-    void SetData(const std::vector<float>& vertices, const std::vector<float>& normals, const std::vector<uint32_t>& indices);
+    // Fill vertex/normal/uv/index arrays
+    void SetData(const std::vector<float>& vertices, const std::vector<float>& normals, const std::vector<float>& uvs, const std::vector<uint32_t>& indices);
 
     // Upload CPU data to GPU (creates VBO/VAO/EBO) when possible.
     void UploadToGPU();
@@ -31,12 +31,16 @@ public:
 
     // Draw — uses VAO/VBO path when uploaded, otherwise falls back to client arrays
     void Draw() const;
+    
+    // Draw with material and transform (delegates to renderer if possible)
+    void Draw(Material* material, const float* transform) const;
 
     size_t GetTriangleCount() const { return (indices_.size() / 3); }
 
 private:
     std::vector<float> vertices_; // x,y,z triples
     std::vector<float> normals_;  // x,y,z triples (optional)
+    std::vector<float> uvs_;      // u,v pairs (optional)
     std::vector<uint32_t> indices_;
 
     // GL resources (0 == not allocated)

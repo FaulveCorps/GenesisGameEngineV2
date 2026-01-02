@@ -236,6 +236,8 @@ int main(int argc, char** argv) {
     if (fs::exists(pbrPath)) {
         std::cout << "SampleGame: detected PBR sample, attempting to load: " << pbrPath << std::endl;
         loaded = modelPtr->Load(pbrPath);
+    } else {
+        std::cout << "SampleGame: PBR sample not found at " << pbrPath << ". Please place a glTF model there to test PBR." << std::endl;
     }
     if (!loaded) {
         if (!modelPtr->Load("Assets/models/triangle.obj")) {
@@ -248,51 +250,24 @@ int main(int argc, char** argv) {
     if (loaded) {
         std::cout << "Model loaded successfully!" << std::endl;
 
-        // If the model exposes PBR materials, create a prototype PBR shader and set uniforms
-        const auto& mats = modelPtr->Materials();
-        if (!mats.empty()) {
-            const std::string pbrVert = R"(
-                #version 330 core
-                layout(location = 0) in vec3 aPos;
-                layout(location = 1) in vec3 aNormal;
-                out vec3 vNormal;
-                void main() { vNormal = aNormal; gl_Position = vec4(aPos, 1.0); }
-            )";
-            const std::string pbrFrag = R"(
-                #version 330 core
-                in vec3 vNormal;
-                out vec4 FragColor;
-                uniform vec4 uBaseColor = vec4(1.0);
-                uniform float uMetallic = 0.0;
-                uniform float uRoughness = 1.0;
-                void main() {
-                    vec3 n = normalize(vNormal);
-                    vec3 lightDir = normalize(vec3(0.5, 0.5, 0.8));
-                    float NdotL = max(dot(n, lightDir), 0.0);
-                    vec3 diffuse = uBaseColor.rgb * NdotL;
-                    vec3 viewDir = normalize(vec3(0.0,0.0,1.0));
-                    vec3 halfDir = normalize(lightDir + viewDir);
-                    float spec = pow(max(dot(n, halfDir), 0.0), mix(16.0, 128.0, 1.0 - uRoughness));
-                    vec3 specular = vec3(uMetallic) * spec;
-                    FragColor = vec4(diffuse + specular, uBaseColor.a);
-                }
-            )";
-            pbrShader = Genesis::Engine::Shader::FromSource(pbrVert, pbrFrag);
-            if (pbrShader && pbrShader->GetID() != 0) {
-                pbrShader->Use();
-                pbrShader->SetUniformVec4("uBaseColor", mats[0].baseColor);
-                pbrShader->SetUniformFloat("uMetallic", mats[0].metallic);
-                pbrShader->SetUniformFloat("uRoughness", mats[0].roughness);
-                std::cout << "SampleGame: created PBR shader (prototype) and set material uniforms" << std::endl;
-            } else {
-                std::cerr << "SampleGame: failed to compile PBR shader" << std::endl;
-            }
-        }
-
         scene.Registry().emplace<Genesis::Engine::ModelComponent>(entity, Genesis::Engine::ModelComponent{ modelPtr });
         scene.Registry().emplace<Genesis::Engine::Transform>(entity, Genesis::Engine::Transform{});
     }
 #endif
+
+    // Create a light entity
+    auto lightEntity = scene.Registry().create();
+    Genesis::Engine::LightComponent lightComp;
+    lightComp.type = Genesis::Engine::LightType::Directional;
+    lightComp.color[0] = 1.0f; lightComp.color[1] = 0.95f; lightComp.color[2] = 0.8f; // Warm sunlight
+    lightComp.intensity = 1.5f;
+    scene.Registry().emplace<Genesis::Engine::LightComponent>(lightEntity, lightComp);
+    
+    // Rotate light to point down-ish
+    Genesis::Engine::Transform lightTrans;
+    lightTrans.rx = -0.5f; // Pitch down
+    lightTrans.ry = 0.5f;  // Yaw
+    scene.Registry().emplace<Genesis::Engine::Transform>(lightEntity, lightTrans);
 
 
     // Setup profiler and ImGui
@@ -552,7 +527,7 @@ int main(int argc, char** argv) {
 
         // scene update/render
         scene.Update(0.016);
-        scene.Render();
+        scene.Render(currentRenderer);
         std::cout << "Main: after scene.Render" << std::endl;
 
         // Note: Model rendering now uses vertex arrays (faster than immediate mode)

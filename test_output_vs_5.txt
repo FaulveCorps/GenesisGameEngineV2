@@ -1,0 +1,1241 @@
+SubsystemRegistry: registered 'Audio/null'
+SubsystemRegistry: registered 'Shader/null'
+SubsystemRegistry: registered 'Shader/opengl'
+SubsystemRegistry: registered 'Audio/miniaudio'
+SubsystemRegistry: registered 'Physics/null'
+SubsystemRegistry: registered 'Input/null'
+SubsystemRegistry: registered 'Input/sdl'
+SubsystemRegistry: registered 'Network/null'
+SubsystemRegistry: registered 'Save/null'
+SubsystemRegistry: registered 'Save/file'
+SubsystemRegistry: registered 'Scripting/null'
+SubsystemRegistry: registered 'Scripting/lua'
+Randomness seeded to: 1674879747
+SubsystemRegistry: registered 'Audio/null'
+SubsystemRegistry: registered 'Shader/null'
+SubsystemRegistry: registered 'Audio/miniaudio'
+SubsystemRegistry: registered 'Shader/opengl'
+SubsystemRegistry: registered 'Physics/null'
+SubsystemRegistry: registered 'Input/null'
+SubsystemRegistry: registered 'Input/sdl'
+SubsystemRegistry: registered 'Network/null'
+SubsystemRegistry: registered 'Save/null'
+SubsystemRegistry: registered 'Save/file'
+SubsystemRegistry: registered 'Scripting/null'
+SubsystemRegistry: registered 'Scripting/lua'
+SubsystemManager: created instance Shader/null
+CreateShaderSubsystem: created shader subsystem 'null'
+NullAudio: Init
+SubsystemManager: created instance Audio/null
+CreateAudioSubsystem: created audio subsystem 'null'
+NullPhysics: Init
+SubsystemManager: created instance Physics/null
+CreatePhysicsSubsystem: created physics subsystem 'null'
+NullInput: Init
+SubsystemManager: created instance Input/null
+CreateInputSubsystem: created input subsystem 'null'
+NullNetwork: Init
+SubsystemManager: created instance Network/null
+CreateNetworkSubsystem: created network subsystem 'null'
+NullSave: Init
+SubsystemManager: created instance Save/null
+CreateSaveSubsystem: created save subsystem 'null'
+NullScripting: Init
+SubsystemManager: created instance Scripting/null
+CreateScriptingSubsystem: created scripting subsystem 'null'
+Genesis Engine initialized (config='')
+Genesis Engine shutdown
+Model loaded: C:/Users/jpfau/Desktop/Project/GenesisGameEngine/Assets/models/triangle.obj, meshes: 1, materials: 1
+Mesh 0: verts=3, norms=3, tris=1
+Model::Load -> about to UploadToGPU (SDL_GL_GetCurrentContext=0000000000000000)
+Model::Load -> returned from UploadToGPU
+Warning: modern GL buffer functions not available; falling back to client arrays
+Failed to load plugin: nonexistent_plugin_file.so (Error: 126)
+WGPU smoke test: starting
+GraphicsFactory: attempting renderer 'wgpu'
+GraphicsFactory: skipping WgpuRenderer (HAVE_WGPU not defined)
+GraphicsFactory: no suitable renderer found
+Wgpu renderer not available - skipping test
+Software smoke test: starting
+GraphicsFactory: attempting renderer 'software'
+SoftwareRenderer: initialized (CPU rasterizer)
+GraphicsFactory: selected SoftwareRenderer
+SoftwareRenderer: initialized (CPU rasterizer)
+SoftwareRenderer: rendered offscreen 64x64
+SoftwareRenderer: shutdown
+GraphicsFactory: attempting renderer 'software'
+SoftwareRenderer: initialized (CPU rasterizer)
+GraphicsFactory: selected SoftwareRenderer
+SoftwareRenderer: CreateMesh id=1 (3 verts, 1 tris)
+Mesh::UploadToGPU -> uploaded to renderer handle=1
+RendererManager: skipping 'opengl' in CandidateRenderers (set GENESIS_ENABLE_OPENGL=1 to enable)
+RendererManager: switching to renderer 'wgpu'
+GraphicsFactory: attempting renderer 'wgpu'
+GraphicsFactory: skipping WgpuRenderer (HAVE_WGPU not defined)
+GraphicsFactory: no suitable renderer found
+RendererManager: failed to create renderer 'wgpu'
+RendererManager: switching to renderer 'vulkan'
+GraphicsFactory: attempting renderer 'vulkan'
+VulkanRenderer: SDL reports no dynamic Vulkan support; falling back to Win32 surface creation
+VulkanRenderer: instance created
+VulkanRenderer: Win32 surface created
+VulkanRenderer: enumerating physical devices
+VulkanRenderer: vkEnumeratePhysicalDevices returned count=2
+VulkanRenderer: got 2 physical device handles
+VulkanRenderer: candidate device: Intel(R) HD Graphics 520 (vendor=0x8086)
+VulkanRenderer: candidate device: NVIDIA GeForce GTX 950M (vendor=0x10de)
+VulkanRenderer: logical device created
+VulkanRenderer: obtained graphics and present queues
+VulkanRenderer: GENESIS_FORCE_VULKAN_SWAPCHAIN raw env='(null)'
+VulkanRenderer: forceSwap=false
+VulkanRenderer: Win32 fallback - skipping swapchain creation to avoid driver issues. Device initialized for smoke test.
+GraphicsFactory: selected VulkanRenderer
+RendererManager: SDL_GL_MakeCurrent succeeded before destroying old resources
+SoftwareRenderer: DestroyMesh id=1
+SoftwareRenderer: shutdown
+RendererManager: SDL_GL_MakeCurrent succeeded after switch
+RendererManager: switched to 'vulkan'
+Mesh::Draw -> using client arrays fallback
+VulkanRenderer::EndFrame -> enter m_device=000001550E0E9B30 m_swapchain=0000000000000000
+VulkanRenderer::EndFrame -> no swapchain, returning early
+RendererManager: skipping 'opengl' in CandidateRenderers (set GENESIS_ENABLE_OPENGL=1 to enable)
+RendererManager: switching to renderer 'd3d12'
+GraphicsFactory: attempting renderer 'd3d12'
+D3D12Renderer: initializing
+D3D12Renderer: initialized (d3d12)
+GraphicsFactory: selected D3D12Renderer
+RendererManager: SDL_GL_MakeCurrent succeeded before destroying old resources
+VulkanRenderer::Shutdown -> enter
+VulkanRenderer::Shutdown -> exit
+RendererManager: SDL_GL_MakeCurrent succeeded after switch
+RendererManager: switched to 'd3d12'
+D3D12Renderer: recorded frame commands (frame 0)
+Mesh::Draw -> using client arrays fallback
+D3D12Renderer::EndFrame -> frame presented
+RendererManager: skipping 'opengl' in CandidateRenderers (set GENESIS_ENABLE_OPENGL=1 to enable)
+RendererManager: switching to renderer 'directx'
+GraphicsFactory: attempting renderer 'directx'
+DirectXRenderer: initialized (d3d11)
+GraphicsFactory: selected DirectXRenderer
+RendererManager: SDL_GL_MakeCurrent succeeded before destroying old resources
+D3D12Renderer::Shutdown -> enter
+D3D12Renderer: shutdown
+D3D12Renderer::Shutdown -> exit
+RendererManager: SDL_GL_MakeCurrent succeeded after switch
+RendererManager: switched to 'directx'
+DirectXRenderer: Draw call issued
+Mesh::Draw -> using client arrays fallback
+DirectXRenderer::EndFrame -> enter
+DirectXRenderer::EndFrame -> exit
+RendererManager: skipping 'opengl' in CandidateRenderers (set GENESIS_ENABLE_OPENGL=1 to enable)
+RendererManager: switching to renderer 'software'
+GraphicsFactory: attempting renderer 'software'
+SoftwareRenderer: initialized (CPU rasterizer)
+GraphicsFactory: selected SoftwareRenderer
+RendererManager: SDL_GL_MakeCurrent succeeded before destroying old resources
+DirectXRenderer::Shutdown -> enter
+DirectXRenderer: shutdown
+DirectXRenderer::Shutdown -> exit
+RendererManager: SDL_GL_MakeCurrent succeeded after switch
+SoftwareRenderer: CreateMesh id=2 (3 verts, 1 tris)
+Mesh::UploadToRenderer -> uploaded to renderer handle=2
+RendererManager: switched to 'software'
+SoftwareRenderer: rendered offscreen 64x64 (mesh drawn)
+RendererManager: skipping 'opengl' in CandidateRenderers (set GENESIS_ENABLE_OPENGL=1 to enable)
+RendererManager: switching to renderer 'wgpu'
+GraphicsFactory: attempting renderer 'wgpu'
+GraphicsFactory: skipping WgpuRenderer (HAVE_WGPU not defined)
+GraphicsFactory: no suitable renderer found
+RendererManager: failed to create renderer 'wgpu'
+RendererManager: switching to renderer 'vulkan'
+GraphicsFactory: attempting renderer 'vulkan'
+VulkanRenderer: SDL reports no dynamic Vulkan support; falling back to Win32 surface creation
+VulkanRenderer: instance created
+VulkanRenderer: Win32 surface created
+VulkanRenderer: enumerating physical devices
+VulkanRenderer: vkEnumeratePhysicalDevices returned count=2
+VulkanRenderer: got 2 physical device handles
+VulkanRenderer: candidate device: Intel(R) HD Graphics 520 (vendor=0x8086)
+VulkanRenderer: candidate device: NVIDIA GeForce GTX 950M (vendor=0x10de)
+VulkanRenderer: logical device created
+VulkanRenderer: obtained graphics and present queues
+VulkanRenderer: GENESIS_FORCE_VULKAN_SWAPCHAIN raw env='(null)'
+VulkanRenderer: forceSwap=false
+VulkanRenderer: Win32 fallback - skipping swapchain creation to avoid driver issues. Device initialized for smoke test.
+GraphicsFactory: selected VulkanRenderer
+RendererManager: SDL_GL_MakeCurrent succeeded before destroying old resources
+SoftwareRenderer: DestroyMesh id=2
+SoftwareRenderer: shutdown
+RendererManager: SDL_GL_MakeCurrent succeeded after switch
+RendererManager: switched to 'vulkan'
+Mesh::Draw -> using client arrays fallback
+VulkanRenderer::EndFrame -> enter m_device=000001550DDC5AD0 m_swapchain=0000000000000000
+VulkanRenderer::EndFrame -> no swapchain, returning early
+VulkanRenderer::Shutdown -> enter
+VulkanRenderer::Shutdown -> exit
+GraphicsFactory: attempting renderer 'opengl'
+GraphicsFactory: creating OpenGLRenderer and calling Init
+GraphicsFactory: explicit OpenGL request skipped (GENESIS_ENABLE_OPENGL not set)
+GraphicsFactory: no suitable renderer found
+GraphicsFactory: OpenGL disabled via GENESIS_ENABLE_OPENGL; skipping opengl in default order
+GraphicsFactory: attempting renderer 'wgpu'
+GraphicsFactory: skipping WgpuRenderer (HAVE_WGPU not defined)
+GraphicsFactory: attempting renderer 'vulkan'
+VulkanRenderer: SDL reports no dynamic Vulkan support; falling back to Win32 surface creation
+VulkanRenderer: instance created
+VulkanRenderer: Win32 surface created
+VulkanRenderer: enumerating physical devices
+VulkanRenderer: vkEnumeratePhysicalDevices returned count=2
+VulkanRenderer: got 2 physical device handles
+VulkanRenderer: candidate device: Intel(R) HD Graphics 520 (vendor=0x8086)
+VulkanRenderer: candidate device: NVIDIA GeForce GTX 950M (vendor=0x10de)
+VulkanRenderer: logical device created
+VulkanRenderer: obtained graphics and present queues
+VulkanRenderer: GENESIS_FORCE_VULKAN_SWAPCHAIN raw env='(null)'
+VulkanRenderer: forceSwap=false
+VulkanRenderer: Win32 fallback - skipping swapchain creation to avoid driver issues. Device initialized for smoke test.
+GraphicsFactory: selected VulkanRenderer
+RendererManager: switching to renderer 'software'
+GraphicsFactory: attempting renderer 'software'
+SoftwareRenderer: initialized (CPU rasterizer)
+GraphicsFactory: selected SoftwareRenderer
+RendererManager: SDL_GL_MakeCurrent succeeded before destroying old resources
+VulkanRenderer::Shutdown -> enter
+VulkanRenderer::Shutdown -> exit
+RendererManager: SDL_GL_MakeCurrent succeeded after switch
+SoftwareRenderer: CreateTexture id=1 (2x2)
+RendererManager: switched to 'software'
+RendererManager: switching to renderer 'opengl'
+GraphicsFactory: attempting renderer 'opengl'
+GraphicsFactory: creating OpenGLRenderer and calling Init
+GraphicsFactory: explicit OpenGL request skipped (GENESIS_ENABLE_OPENGL not set)
+GraphicsFactory: no suitable renderer found
+RendererManager: failed to create renderer 'opengl'
+SoftwareRenderer: shutdown
+SoftwareRenderer: DestroyTexture id=1
+SoftwareRenderer: DestroyTexture id=1
+GraphicsFactory: attempting renderer 'opengl'
+GraphicsFactory: creating OpenGLRenderer and calling Init
+GraphicsFactory: explicit OpenGL request skipped (GENESIS_ENABLE_OPENGL not set)
+GraphicsFactory: no suitable renderer found
+GraphicsFactory: OpenGL disabled via GENESIS_ENABLE_OPENGL; skipping opengl in default order
+GraphicsFactory: attempting renderer 'wgpu'
+GraphicsFactory: skipping WgpuRenderer (HAVE_WGPU not defined)
+GraphicsFactory: attempting renderer 'vulkan'
+VulkanRenderer: SDL reports no dynamic Vulkan support; falling back to Win32 surface creation
+VulkanRenderer: instance created
+VulkanRenderer: Win32 surface created
+VulkanRenderer: enumerating physical devices
+VulkanRenderer: vkEnumeratePhysicalDevices returned count=2
+VulkanRenderer: got 2 physical device handles
+VulkanRenderer: candidate device: Intel(R) HD Graphics 520 (vendor=0x8086)
+VulkanRenderer: candidate device: NVIDIA GeForce GTX 950M (vendor=0x10de)
+VulkanRenderer: logical device created
+VulkanRenderer: obtained graphics and present queues
+VulkanRenderer: GENESIS_FORCE_VULKAN_SWAPCHAIN raw env='(null)'
+VulkanRenderer: forceSwap=false
+VulkanRenderer: Win32 fallback - skipping swapchain creation to avoid driver issues. Device initialized for smoke test.
+GraphicsFactory: selected VulkanRenderer
+GraphicsFactory: attempting renderer 'software'
+SoftwareRenderer: initialized (CPU rasterizer)
+GraphicsFactory: selected SoftwareRenderer
+SoftwareRenderer: CreateTexture id=2 (2x2)
+SoftwareRenderer: DestroyTexture id=2
+SoftwareRenderer: shutdown
+GraphicsFactory: attempting renderer 'software'
+SoftwareRenderer: initialized (CPU rasterizer)
+GraphicsFactory: selected SoftwareRenderer
+SoftwareRenderer: queued sprite tex=0 x=24 y=24 w=16 h=16
+SoftwareRenderer: rendered offscreen 64x64 (sprites drawn)
+SoftwareRenderer: shutdown
+GraphicsFactory: attempting renderer 'opengl'
+GraphicsFactory: creating OpenGLRenderer and calling Init
+GraphicsFactory: explicit OpenGL request skipped (GENESIS_ENABLE_OPENGL not set)
+GraphicsFactory: no suitable renderer found
+GraphicsFactory: attempting renderer 'opengl'
+GraphicsFactory: creating OpenGLRenderer and calling Init
+GraphicsFactory: explicit OpenGL request skipped (GENESIS_ENABLE_OPENGL not set)
+GraphicsFactory: no suitable renderer found
+GraphicsFactory: attempting renderer 'software'
+SoftwareRenderer: initialized (CPU rasterizer)
+GraphicsFactory: selected SoftwareRenderer
+Shader::UploadToRenderer -> subsystem failed to create program; falling back
+RendererManager: skipping 'opengl' in CandidateRenderers (set GENESIS_ENABLE_OPENGL=1 to enable)
+RendererManager: switching to renderer 'd3d12'
+GraphicsFactory: attempting renderer 'd3d12'
+D3D12Renderer: initializing
+D3D12Renderer: initialized (d3d12)
+GraphicsFactory: selected D3D12Renderer
+RendererManager: SDL_GL_MakeCurrent succeeded before destroying old resources
+SoftwareRenderer: shutdown
+RendererManager: SDL_GL_MakeCurrent succeeded after switch
+Shader::UploadToRenderer -> subsystem failed to create program; falling back
+RendererManager: switched to 'd3d12'
+Cycle 0: testShader id=4
+RendererManager: skipping 'opengl' in CandidateRenderers (set GENESIS_ENABLE_OPENGL=1 to enable)
+RendererManager: switching to renderer 'directx'
+GraphicsFactory: attempting renderer 'directx'
+DirectXRenderer: initialized (d3d11)
+GraphicsFactory: selected DirectXRenderer
+RendererManager: SDL_GL_MakeCurrent succeeded before destroying old resources
+D3D12Renderer::Shutdown -> enter
+D3D12Renderer: shutdown
+D3D12Renderer::Shutdown -> exit
+RendererManager: SDL_GL_MakeCurrent succeeded after switch
+Shader::UploadToRenderer -> subsystem failed to create program; falling back
+RendererManager: switched to 'directx'
+Cycle 1: testShader id=5
+RendererManager: skipping 'opengl' in CandidateRenderers (set GENESIS_ENABLE_OPENGL=1 to enable)
+RendererManager: switching to renderer 'software'
+GraphicsFactory: attempting renderer 'software'
+SoftwareRenderer: initialized (CPU rasterizer)
+GraphicsFactory: selected SoftwareRenderer
+RendererManager: SDL_GL_MakeCurrent succeeded before destroying old resources
+DirectXRenderer::Shutdown -> enter
+DirectXRenderer: shutdown
+DirectXRenderer::Shutdown -> exit
+RendererManager: SDL_GL_MakeCurrent succeeded after switch
+Shader::UploadToRenderer -> subsystem failed to create program; falling back
+RendererManager: switched to 'software'
+Cycle 2: testShader id=6
+SoftwareRenderer: rendered offscreen 64x64
+RendererManager: skipping 'opengl' in CandidateRenderers (set GENESIS_ENABLE_OPENGL=1 to enable)
+RendererManager: switching to renderer 'wgpu'
+GraphicsFactory: attempting renderer 'wgpu'
+GraphicsFactory: skipping WgpuRenderer (HAVE_WGPU not defined)
+GraphicsFactory: no suitable renderer found
+RendererManager: failed to create renderer 'wgpu'
+RendererManager: switching to renderer 'vulkan'
+GraphicsFactory: attempting renderer 'vulkan'
+VulkanRenderer: SDL reports no dynamic Vulkan support; falling back to Win32 surface creation
+VulkanRenderer: instance created
+VulkanRenderer: Win32 surface created
+VulkanRenderer: enumerating physical devices
+VulkanRenderer: vkEnumeratePhysicalDevices returned count=2
+VulkanRenderer: got 2 physical device handles
+VulkanRenderer: candidate device: Intel(R) HD Graphics 520 (vendor=0x8086)
+VulkanRenderer: candidate device: NVIDIA GeForce GTX 950M (vendor=0x10de)
+VulkanRenderer: logical device created
+VulkanRenderer: obtained graphics and present queues
+VulkanRenderer: GENESIS_FORCE_VULKAN_SWAPCHAIN raw env='(null)'
+VulkanRenderer: forceSwap=false
+VulkanRenderer: Win32 fallback - skipping swapchain creation to avoid driver issues. Device initialized for smoke test.
+GraphicsFactory: selected VulkanRenderer
+RendererManager: SDL_GL_MakeCurrent succeeded before destroying old resources
+SoftwareRenderer: shutdown
+RendererManager: SDL_GL_MakeCurrent succeeded after switch
+Shader::UploadToRenderer -> subsystem failed to create program; falling back
+RendererManager: switched to 'vulkan'
+Cycle 3: testShader id=7
+RendererManager: skipping 'opengl' in CandidateRenderers (set GENESIS_ENABLE_OPENGL=1 to enable)
+RendererManager: switching to renderer 'd3d12'
+GraphicsFactory: attempting renderer 'd3d12'
+D3D12Renderer: initializing
+D3D12Renderer: initialized (d3d12)
+GraphicsFactory: selected D3D12Renderer
+RendererManager: SDL_GL_MakeCurrent succeeded before destroying old resources
+VulkanRenderer::Shutdown -> enter
+VulkanRenderer::Shutdown -> exit
+RendererManager: SDL_GL_MakeCurrent succeeded after switch
+Shader::UploadToRenderer -> subsystem failed to create program; falling back
+RendererManager: switched to 'd3d12'
+Cycle 4: testShader id=8
+D3D12Renderer::Shutdown -> enter
+D3D12Renderer: shutdown
+D3D12Renderer::Shutdown -> exit
+SubsystemRegistry: registered 'Audio/null'
+SubsystemRegistry: registered 'Shader/null'
+SubsystemRegistry: registered 'Audio/miniaudio'
+SubsystemRegistry: registered 'Shader/opengl'
+SubsystemRegistry: registered 'Physics/null'
+SubsystemRegistry: registered 'Input/null'
+SubsystemRegistry: registered 'Input/sdl'
+SubsystemRegistry: registered 'Network/null'
+SubsystemRegistry: registered 'Save/null'
+SubsystemRegistry: registered 'Save/file'
+SubsystemRegistry: registered 'Scripting/null'
+SubsystemRegistry: registered 'Scripting/lua'
+SubsystemManager: created instance Shader/null
+CreateShaderSubsystem: created shader subsystem 'null'
+NullAudio: Init
+SubsystemManager: created instance Audio/null
+CreateAudioSubsystem: created audio subsystem 'null'
+NullPhysics: Init
+SubsystemManager: created instance Physics/null
+CreatePhysicsSubsystem: created physics subsystem 'null'
+NullInput: Init
+SubsystemManager: created instance Input/null
+CreateInputSubsystem: created input subsystem 'null'
+NullNetwork: Init
+SubsystemManager: created instance Network/null
+CreateNetworkSubsystem: created network subsystem 'null'
+NullSave: Init
+SubsystemManager: created instance Save/null
+CreateSaveSubsystem: created save subsystem 'null'
+NullScripting: Init
+SubsystemManager: created instance Scripting/null
+CreateScriptingSubsystem: created scripting subsystem 'null'
+Genesis Engine initialized (config='')
+SubsystemManager: created instance Shader/null
+CreateShaderSubsystem: created shader subsystem 'null'
+SubsystemManager: created instance Shader/opengl
+CreateShaderSubsystem: created shader subsystem 'opengl'
+SubsystemRegistry: registered 'Audio/null'
+SubsystemRegistry: registered 'Shader/null'
+SubsystemRegistry: registered 'Audio/miniaudio'
+SubsystemRegistry: registered 'Shader/opengl'
+SubsystemRegistry: registered 'Physics/null'
+SubsystemRegistry: registered 'Input/null'
+SubsystemRegistry: registered 'Input/sdl'
+SubsystemRegistry: registered 'Network/null'
+SubsystemRegistry: registered 'Save/null'
+SubsystemRegistry: registered 'Save/file'
+SubsystemRegistry: registered 'Scripting/null'
+SubsystemRegistry: registered 'Scripting/lua'
+SubsystemManager: created instance Shader/null
+CreateShaderSubsystem: created shader subsystem 'null'
+NullAudio: Init
+SubsystemManager: created instance Audio/null
+CreateAudioSubsystem: created audio subsystem 'null'
+NullPhysics: Init
+SubsystemManager: created instance Physics/null
+CreatePhysicsSubsystem: created physics subsystem 'null'
+NullInput: Init
+SubsystemManager: created instance Input/null
+CreateInputSubsystem: created input subsystem 'null'
+NullNetwork: Init
+SubsystemManager: created instance Network/null
+CreateNetworkSubsystem: created network subsystem 'null'
+NullSave: Init
+SubsystemManager: created instance Save/null
+CreateSaveSubsystem: created save subsystem 'null'
+NullScripting: Init
+SubsystemManager: created instance Scripting/null
+CreateScriptingSubsystem: created scripting subsystem 'null'
+Genesis Engine initialized (config='')
+NullAudio: Init
+SubsystemManager: created instance Audio/null
+CreateAudioSubsystem: created audio subsystem 'null'
+SubsystemRegistry: registered 'Audio/null'
+SubsystemRegistry: registered 'Shader/null'
+SubsystemRegistry: registered 'Audio/miniaudio'
+SubsystemRegistry: registered 'Shader/opengl'
+SubsystemRegistry: registered 'Physics/null'
+SubsystemRegistry: registered 'Input/null'
+SubsystemRegistry: registered 'Input/sdl'
+SubsystemRegistry: registered 'Network/null'
+SubsystemRegistry: registered 'Save/null'
+SubsystemRegistry: registered 'Save/file'
+SubsystemRegistry: registered 'Scripting/null'
+SubsystemRegistry: registered 'Scripting/lua'
+SubsystemManager: created instance Shader/null
+CreateShaderSubsystem: created shader subsystem 'null'
+NullAudio: Init
+SubsystemManager: created instance Audio/null
+CreateAudioSubsystem: created audio subsystem 'null'
+NullPhysics: Init
+SubsystemManager: created instance Physics/null
+CreatePhysicsSubsystem: created physics subsystem 'null'
+NullInput: Init
+SubsystemManager: created instance Input/null
+CreateInputSubsystem: created input subsystem 'null'
+NullNetwork: Init
+SubsystemManager: created instance Network/null
+CreateNetworkSubsystem: created network subsystem 'null'
+NullSave: Init
+SubsystemManager: created instance Save/null
+CreateSaveSubsystem: created save subsystem 'null'
+NullScripting: Init
+SubsystemManager: created instance Scripting/null
+CreateScriptingSubsystem: created scripting subsystem 'null'
+Genesis Engine initialized (config='')
+SubsystemManager: created instance Audio/miniaudio
+CreateAudioSubsystem: created audio subsystem 'miniaudio'
+NullAudio: Init
+SubsystemManager: created instance Audio/null
+CreateAudioSubsystem: created audio subsystem 'null'
+SubsystemRegistry: registered 'Audio/null'
+SubsystemRegistry: registered 'Shader/null'
+SubsystemRegistry: registered 'Audio/miniaudio'
+SubsystemRegistry: registered 'Shader/opengl'
+SubsystemRegistry: registered 'Physics/null'
+SubsystemRegistry: registered 'Input/null'
+SubsystemRegistry: registered 'Input/sdl'
+SubsystemRegistry: registered 'Network/null'
+SubsystemRegistry: registered 'Save/null'
+SubsystemRegistry: registered 'Save/file'
+SubsystemRegistry: registered 'Scripting/null'
+SubsystemRegistry: registered 'Scripting/lua'
+SubsystemManager: created instance Shader/null
+CreateShaderSubsystem: created shader subsystem 'null'
+NullAudio: Init
+SubsystemManager: created instance Audio/null
+CreateAudioSubsystem: created audio subsystem 'null'
+NullPhysics: Init
+SubsystemManager: created instance Physics/null
+CreatePhysicsSubsystem: created physics subsystem 'null'
+NullInput: Init
+SubsystemManager: created instance Input/null
+CreateInputSubsystem: created input subsystem 'null'
+NullNetwork: Init
+SubsystemManager: created instance Network/null
+CreateNetworkSubsystem: created network subsystem 'null'
+NullSave: Init
+SubsystemManager: created instance Save/null
+CreateSaveSubsystem: created save subsystem 'null'
+NullScripting: Init
+SubsystemManager: created instance Scripting/null
+CreateScriptingSubsystem: created scripting subsystem 'null'
+Genesis Engine initialized (config='')
+SubsystemManager: created instance Audio/miniaudio
+CreateAudioSubsystem: created audio subsystem 'miniaudio'
+NullAudio: Init
+SubsystemManager: created instance Audio/null
+CreateAudioSubsystem: created audio subsystem 'null'
+NullPhysics: Init
+NullPhysics: Shutdown
+NullAudio: Init
+NullAudio: Shutdown
+SubsystemRegistry: registered 'Audio/null'
+SubsystemRegistry: registered 'Shader/null'
+SubsystemRegistry: registered 'Audio/miniaudio'
+SubsystemRegistry: registered 'Shader/opengl'
+SubsystemRegistry: registered 'Physics/null'
+SubsystemRegistry: registered 'Input/null'
+SubsystemRegistry: registered 'Input/sdl'
+SubsystemRegistry: registered 'Network/null'
+SubsystemRegistry: registered 'Save/null'
+SubsystemRegistry: registered 'Save/file'
+SubsystemRegistry: registered 'Scripting/null'
+SubsystemRegistry: registered 'Scripting/lua'
+SubsystemManager: created instance Shader/null
+CreateShaderSubsystem: created shader subsystem 'null'
+NullAudio: Init
+SubsystemManager: created instance Audio/null
+CreateAudioSubsystem: created audio subsystem 'null'
+NullPhysics: Init
+SubsystemManager: created instance Physics/null
+CreatePhysicsSubsystem: created physics subsystem 'null'
+NullInput: Init
+SubsystemManager: created instance Input/null
+CreateInputSubsystem: created input subsystem 'null'
+NullNetwork: Init
+SubsystemManager: created instance Network/null
+CreateNetworkSubsystem: created network subsystem 'null'
+NullSave: Init
+SubsystemManager: created instance Save/null
+CreateSaveSubsystem: created save subsystem 'null'
+NullScripting: Init
+SubsystemManager: created instance Scripting/null
+CreateScriptingSubsystem: created scripting subsystem 'null'
+Genesis Engine initialized (config='')
+NullInput: Init
+SubsystemManager: created instance Input/null
+CreateInputSubsystem: created input subsystem 'null'
+SubsystemManager: no factory for Input/nope
+SubsystemRegistry: registered 'Audio/null'
+SubsystemRegistry: registered 'Shader/null'
+SubsystemRegistry: registered 'Audio/miniaudio'
+SubsystemRegistry: registered 'Shader/opengl'
+SubsystemRegistry: registered 'Physics/null'
+SubsystemRegistry: registered 'Input/null'
+SubsystemRegistry: registered 'Input/sdl'
+SubsystemRegistry: registered 'Network/null'
+SubsystemRegistry: registered 'Save/null'
+SubsystemRegistry: registered 'Save/file'
+SubsystemRegistry: registered 'Scripting/null'
+SubsystemRegistry: registered 'Scripting/lua'
+SubsystemManager: created instance Shader/null
+CreateShaderSubsystem: created shader subsystem 'null'
+NullAudio: Init
+SubsystemManager: created instance Audio/null
+CreateAudioSubsystem: created audio subsystem 'null'
+NullPhysics: Init
+SubsystemManager: created instance Physics/null
+CreatePhysicsSubsystem: created physics subsystem 'null'
+NullInput: Init
+SubsystemManager: created instance Input/null
+CreateInputSubsystem: created input subsystem 'null'
+NullNetwork: Init
+SubsystemManager: created instance Network/null
+CreateNetworkSubsystem: created network subsystem 'null'
+NullSave: Init
+SubsystemManager: created instance Save/null
+CreateSaveSubsystem: created save subsystem 'null'
+NullScripting: Init
+SubsystemManager: created instance Scripting/null
+CreateScriptingSubsystem: created scripting subsystem 'null'
+Genesis Engine initialized (config='')
+SubsystemManager: created instance Input/sdl
+CreateInputSubsystem: created input subsystem 'sdl'
+NullInput: Init
+SubsystemManager: created instance Input/null
+CreateInputSubsystem: created input subsystem 'null'
+SubsystemRegistry: registered 'Audio/null'
+SubsystemRegistry: registered 'Shader/null'
+SubsystemRegistry: registered 'Audio/miniaudio'
+SubsystemRegistry: registered 'Shader/opengl'
+SubsystemRegistry: registered 'Physics/null'
+SubsystemRegistry: registered 'Input/null'
+SubsystemRegistry: registered 'Input/sdl'
+SubsystemRegistry: registered 'Network/null'
+SubsystemRegistry: registered 'Save/null'
+SubsystemRegistry: registered 'Save/file'
+SubsystemRegistry: registered 'Scripting/null'
+SubsystemRegistry: registered 'Scripting/lua'
+SubsystemManager: created instance Shader/null
+CreateShaderSubsystem: created shader subsystem 'null'
+NullAudio: Init
+SubsystemManager: created instance Audio/null
+CreateAudioSubsystem: created audio subsystem 'null'
+NullPhysics: Init
+SubsystemManager: created instance Physics/null
+CreatePhysicsSubsystem: created physics subsystem 'null'
+NullInput: Init
+SubsystemManager: created instance Input/null
+CreateInputSubsystem: created input subsystem 'null'
+NullNetwork: Init
+SubsystemManager: created instance Network/null
+CreateNetworkSubsystem: created network subsystem 'null'
+NullSave: Init
+SubsystemManager: created instance Save/null
+CreateSaveSubsystem: created save subsystem 'null'
+NullScripting: Init
+SubsystemManager: created instance Scripting/null
+CreateScriptingSubsystem: created scripting subsystem 'null'
+Genesis Engine initialized (config='')
+SubsystemManager: created instance Input/sdl
+CreateInputSubsystem: created input subsystem 'sdl'
+NullInput: Init
+SubsystemManager: created instance Input/null
+CreateInputSubsystem: created input subsystem 'null'
+SubsystemRegistry: registered 'Audio/null'
+SubsystemRegistry: registered 'Shader/null'
+SubsystemRegistry: registered 'Audio/miniaudio'
+SubsystemRegistry: registered 'Shader/opengl'
+SubsystemRegistry: registered 'Physics/null'
+SubsystemRegistry: registered 'Input/null'
+SubsystemRegistry: registered 'Input/sdl'
+SubsystemRegistry: registered 'Network/null'
+SubsystemRegistry: registered 'Save/null'
+SubsystemRegistry: registered 'Save/file'
+SubsystemRegistry: registered 'Scripting/null'
+SubsystemRegistry: registered 'Scripting/lua'
+SubsystemManager: created instance Shader/null
+CreateShaderSubsystem: created shader subsystem 'null'
+NullAudio: Init
+SubsystemManager: created instance Audio/null
+CreateAudioSubsystem: created audio subsystem 'null'
+NullPhysics: Init
+SubsystemManager: created instance Physics/null
+CreatePhysicsSubsystem: created physics subsystem 'null'
+NullInput: Init
+SubsystemManager: created instance Input/null
+CreateInputSubsystem: created input subsystem 'null'
+NullNetwork: Init
+SubsystemManager: created instance Network/null
+CreateNetworkSubsystem: created network subsystem 'null'
+NullSave: Init
+SubsystemManager: created instance Save/null
+CreateSaveSubsystem: created save subsystem 'null'
+NullScripting: Init
+SubsystemManager: created instance Scripting/null
+CreateScriptingSubsystem: created scripting subsystem 'null'
+Genesis Engine initialized (config='')
+NullNetwork: Init
+SubsystemManager: created instance Network/null
+CreateNetworkSubsystem: created network subsystem 'null'
+NullNetwork: Init
+NullNetwork: Shutdown
+SubsystemManager: no factory for Network/nope
+SubsystemRegistry: registered 'Audio/null'
+SubsystemRegistry: registered 'Shader/null'
+SubsystemRegistry: registered 'Audio/miniaudio'
+SubsystemRegistry: registered 'Shader/opengl'
+SubsystemRegistry: registered 'Physics/null'
+SubsystemRegistry: registered 'Input/null'
+SubsystemRegistry: registered 'Input/sdl'
+SubsystemRegistry: registered 'Network/null'
+SubsystemRegistry: registered 'Save/null'
+SubsystemRegistry: registered 'Save/file'
+SubsystemRegistry: registered 'Scripting/null'
+SubsystemRegistry: registered 'Scripting/lua'
+SubsystemManager: created instance Shader/null
+CreateShaderSubsystem: created shader subsystem 'null'
+NullAudio: Init
+SubsystemManager: created instance Audio/null
+CreateAudioSubsystem: created audio subsystem 'null'
+NullPhysics: Init
+SubsystemManager: created instance Physics/null
+CreatePhysicsSubsystem: created physics subsystem 'null'
+NullInput: Init
+SubsystemManager: created instance Input/null
+CreateInputSubsystem: created input subsystem 'null'
+NullNetwork: Init
+SubsystemManager: created instance Network/null
+CreateNetworkSubsystem: created network subsystem 'null'
+NullSave: Init
+SubsystemManager: created instance Save/null
+CreateSaveSubsystem: created save subsystem 'null'
+NullScripting: Init
+SubsystemManager: created instance Scripting/null
+CreateScriptingSubsystem: created scripting subsystem 'null'
+Genesis Engine initialized (config='')
+NullSave: Init
+SubsystemManager: created instance Save/null
+CreateSaveSubsystem: created save subsystem 'null'
+SubsystemRegistry: registered 'Audio/null'
+SubsystemRegistry: registered 'Shader/null'
+SubsystemRegistry: registered 'Audio/miniaudio'
+SubsystemRegistry: registered 'Shader/opengl'
+SubsystemRegistry: registered 'Physics/null'
+SubsystemRegistry: registered 'Input/null'
+SubsystemRegistry: registered 'Input/sdl'
+SubsystemRegistry: registered 'Network/null'
+SubsystemRegistry: registered 'Save/null'
+SubsystemRegistry: registered 'Save/file'
+SubsystemRegistry: registered 'Scripting/null'
+SubsystemRegistry: registered 'Scripting/lua'
+SubsystemManager: created instance Shader/null
+CreateShaderSubsystem: created shader subsystem 'null'
+NullAudio: Init
+SubsystemManager: created instance Audio/null
+CreateAudioSubsystem: created audio subsystem 'null'
+NullPhysics: Init
+SubsystemManager: created instance Physics/null
+CreatePhysicsSubsystem: created physics subsystem 'null'
+NullInput: Init
+SubsystemManager: created instance Input/null
+CreateInputSubsystem: created input subsystem 'null'
+NullNetwork: Init
+SubsystemManager: created instance Network/null
+CreateNetworkSubsystem: created network subsystem 'null'
+NullSave: Init
+SubsystemManager: created instance Save/null
+CreateSaveSubsystem: created save subsystem 'null'
+NullScripting: Init
+SubsystemManager: created instance Scripting/null
+CreateScriptingSubsystem: created scripting subsystem 'null'
+Genesis Engine initialized (config='')
+FileSave: Init (dir='C:\Users\jpfau\AppData\Local\Temp\gen_save_test_262724427563800')
+SubsystemManager: created instance Save/file
+CreateSaveSubsystem: created save subsystem 'file'
+SubsystemRegistry: registered 'Audio/null'
+SubsystemRegistry: registered 'Shader/null'
+SubsystemRegistry: registered 'Audio/miniaudio'
+SubsystemRegistry: registered 'Shader/opengl'
+SubsystemRegistry: registered 'Physics/null'
+SubsystemRegistry: registered 'Input/null'
+SubsystemRegistry: registered 'Input/sdl'
+SubsystemRegistry: registered 'Network/null'
+SubsystemRegistry: registered 'Save/null'
+SubsystemRegistry: registered 'Save/file'
+SubsystemRegistry: registered 'Scripting/null'
+SubsystemRegistry: registered 'Scripting/lua'
+SubsystemManager: created instance Shader/null
+CreateShaderSubsystem: created shader subsystem 'null'
+NullAudio: Init
+SubsystemManager: created instance Audio/null
+CreateAudioSubsystem: created audio subsystem 'null'
+NullPhysics: Init
+SubsystemManager: created instance Physics/null
+CreatePhysicsSubsystem: created physics subsystem 'null'
+NullInput: Init
+SubsystemManager: created instance Input/null
+CreateInputSubsystem: created input subsystem 'null'
+NullNetwork: Init
+SubsystemManager: created instance Network/null
+CreateNetworkSubsystem: created network subsystem 'null'
+NullSave: Init
+SubsystemManager: created instance Save/null
+CreateSaveSubsystem: created save subsystem 'null'
+NullScripting: Init
+SubsystemManager: created instance Scripting/null
+CreateScriptingSubsystem: created scripting subsystem 'null'
+Genesis Engine initialized (config='')
+NullScripting: Init
+SubsystemManager: created instance Scripting/null
+CreateScriptingSubsystem: created scripting subsystem 'null'
+SubsystemRegistry: registered 'Audio/null'
+SubsystemRegistry: registered 'Shader/null'
+SubsystemRegistry: registered 'Audio/miniaudio'
+SubsystemRegistry: registered 'Shader/opengl'
+SubsystemRegistry: registered 'Physics/null'
+SubsystemRegistry: registered 'Input/null'
+SubsystemRegistry: registered 'Input/sdl'
+SubsystemRegistry: registered 'Network/null'
+SubsystemRegistry: registered 'Save/null'
+SubsystemRegistry: registered 'Save/file'
+SubsystemRegistry: registered 'Scripting/null'
+SubsystemRegistry: registered 'Scripting/lua'
+SubsystemManager: created instance Shader/null
+CreateShaderSubsystem: created shader subsystem 'null'
+NullAudio: Init
+SubsystemManager: created instance Audio/null
+CreateAudioSubsystem: created audio subsystem 'null'
+NullPhysics: Init
+SubsystemManager: created instance Physics/null
+CreatePhysicsSubsystem: created physics subsystem 'null'
+NullInput: Init
+SubsystemManager: created instance Input/null
+CreateInputSubsystem: created input subsystem 'null'
+NullNetwork: Init
+SubsystemManager: created instance Network/null
+CreateNetworkSubsystem: created network subsystem 'null'
+NullSave: Init
+SubsystemManager: created instance Save/null
+CreateSaveSubsystem: created save subsystem 'null'
+NullScripting: Init
+SubsystemManager: created instance Scripting/null
+CreateScriptingSubsystem: created scripting subsystem 'null'
+Genesis Engine initialized (config='')
+LuaScripting: Init
+SubsystemManager: created instance Scripting/lua
+CreateScriptingSubsystem: created scripting subsystem 'lua'
+SubsystemRegistry: registered 'Audio/null'
+SubsystemRegistry: registered 'Shader/null'
+SubsystemRegistry: registered 'Audio/miniaudio'
+SubsystemRegistry: registered 'Shader/opengl'
+SubsystemRegistry: registered 'Physics/null'
+SubsystemRegistry: registered 'Input/null'
+SubsystemRegistry: registered 'Input/sdl'
+SubsystemRegistry: registered 'Network/null'
+SubsystemRegistry: registered 'Save/null'
+SubsystemRegistry: registered 'Save/file'
+SubsystemRegistry: registered 'Scripting/null'
+SubsystemRegistry: registered 'Scripting/lua'
+SubsystemManager: created instance Shader/null
+CreateShaderSubsystem: created shader subsystem 'null'
+NullAudio: Init
+SubsystemManager: created instance Audio/null
+CreateAudioSubsystem: created audio subsystem 'null'
+NullPhysics: Init
+SubsystemManager: created instance Physics/null
+CreatePhysicsSubsystem: created physics subsystem 'null'
+NullInput: Init
+SubsystemManager: created instance Input/null
+CreateInputSubsystem: created input subsystem 'null'
+NullNetwork: Init
+SubsystemManager: created instance Network/null
+CreateNetworkSubsystem: created network subsystem 'null'
+NullSave: Init
+SubsystemManager: created instance Save/null
+CreateSaveSubsystem: created save subsystem 'null'
+NullScripting: Init
+SubsystemManager: created instance Scripting/null
+CreateScriptingSubsystem: created scripting subsystem 'null'
+Genesis Engine initialized (config='')
+LuaScripting: Init
+SubsystemManager: created instance Scripting/lua
+CreateScriptingSubsystem: created scripting subsystem 'lua'
+WasmRuntime: initialized
+WasmRuntime::LoadModuleBytes: ensuring runtime initialized
+WasmRuntime::LoadModuleBytes: attempting to acquire g_wasmMutex
+WasmRuntime::LoadModuleBytes: acquired g_wasmMutex
+WasmRuntime::LoadModuleBytes: about to call m3_ParseModule
+WasmRuntime::LoadModuleBytes: m3_ParseModule returned r=(none) module=000001550422E990
+WasmRuntime::LoadModuleBytes: about to create WasmModule container (post-parse)
+WasmRuntime::LoadModuleBytes: about to create WasmModule container
+WasmRuntime::LoadModuleBytes: created WasmModule container
+WasmRuntime::LoadModuleBytes: module resource limits set: memory=67108864 bytes exec_ms=5000ms
+WasmRuntime::LoadModuleBytes: about to create runtime
+WasmRuntime::LoadModuleBytes: LinkHostFunctions start (thread 1328)
+LinkHostFunctions: begin module='noop_mod' modulePtr=000001550422E990
+LinkHostFunctions: done module='noop_mod'
+WasmRuntime::LoadModuleBytes: LinkHostFunctions end (thread 1328)
+WasmRuntime: loaded module 'noop_mod'
+WasmRuntime: CallExportedWithTimeout: waiting up to 5000ms for 'noop_mod'.'mod_init'
+WasmRuntime: about to find function 'mod_init' in module 'noop_mod' (runtime=000001550E235090)
+WasmRuntime: m3_FindFunction returned r=(none) f=000001550DD76F80
+WasmRuntime: about to call function f=000001550DD76F80 module='noop_mod' func='mod_init'
+WasmRuntime: module memory ptr=0000000000000000 size=0
+WasmRuntime: m3_CallArgv returned r=(none) (ptr=0000000000000000)
+WasmRuntime: CallExportedWithTimeout: completed 'noop_mod'.'mod_init' result=1 wait_ms=15
+WasmRuntime::Shutdown: destroying 1 modules
+WasmRuntime::Shutdown: module='noop_mod' ptr=000001550DCEE6B0 runtime=000001550E235090 modulePtr=000001550422E990
+WasmModule::~WasmModule: destroying module='noop_mod' modulePtr=000001550422E990 runtime=000001550E235090
+WasmModule::~WasmModule: clearing 0 tokens
+WasmModule::~WasmModule: tokens cleared
+WasmModule::~WasmModule: freeing runtime (will also free loaded module)=000001550E235090
+WasmModule::~WasmModule: runtime freed; module pointer cleared
+WasmRuntime::Shutdown: modules cleared
+WasmRuntime::Shutdown: destroying 0 deferred modules
+WasmRuntime::Shutdown: deferred modules cleared
+WasmRuntime::Shutdown: environment freed
+WasmRuntime: initialized
+WasmRuntime: registered global host 'env'.'test_ping' id=1
+WasmRuntime::LoadModuleBytes: ensuring runtime initialized
+WasmRuntime::LoadModuleBytes: attempting to acquire g_wasmMutex
+WasmRuntime::LoadModuleBytes: acquired g_wasmMutex
+WasmRuntime::LoadModuleBytes: about to call m3_ParseModule
+WasmRuntime::LoadModuleBytes: m3_ParseModule returned r=(none) module=000001550422D9D0
+WasmRuntime::LoadModuleBytes: about to create WasmModule container (post-parse)
+WasmRuntime::LoadModuleBytes: about to create WasmModule container
+WasmRuntime::LoadModuleBytes: created WasmModule container
+WasmRuntime::LoadModuleBytes: module resource limits set: memory=67108864 bytes exec_ms=5000ms
+WasmRuntime::LoadModuleBytes: about to create runtime
+WasmRuntime::LoadModuleBytes: LinkHostFunctions start (thread 1328)
+LinkHostFunctions: begin module='ping_mod' modulePtr=000001550422D9D0
+LinkHostFunctions: linking host 'env'.'test_ping' (thread 1328)
+RegisterRaw: creating holder for ns='env' name='test_ping' module=000001550422D9D0 runtime=000001550E235090 thread=1328
+RegisterRaw: inserted holder=000001550E26A480 keyPtr=000001550DBBBD00
+RegisterRaw: prepared import userdata, about to call m3_LinkRawFunctionEx
+RegisterRaw: linked ok, holder=000001550E26A480 key=env:test_ping
+LinkHostFunctions: linked host 'env'.'test_ping' (thread 1328)
+LinkHostFunctions: done module='ping_mod'
+WasmRuntime::LoadModuleBytes: LinkHostFunctions end (thread 1328)
+WasmRuntime: loaded module 'ping_mod'
+WasmRuntime: CallExportedWithTimeout: waiting up to 5000ms for 'ping_mod'.'mod_init'
+WasmRuntime: about to find function 'mod_init' in module 'ping_mod' (runtime=000001550E235090)
+WasmRuntime: m3_FindFunction returned r=(none) f=000001550E0D1598
+WasmRuntime: about to call function f=000001550E0D1598 module='ping_mod' func='mod_init'
+WasmRuntime: module memory ptr=0000000000000000 size=0
+host_trampoline_raw: invoking holder=000001550E26A480 key=env:test_ping module=000001550422D9D0
+host_trampoline_raw: callback returned
+WasmRuntime: m3_CallArgv returned r=(none) (ptr=0000000000000000)
+WasmRuntime: CallExportedWithTimeout: completed 'ping_mod'.'mod_init' result=1 wait_ms=55
+WasmRuntime: CallExportedWithTimeout: waiting up to 5000ms for 'ping_mod'.'mod_init'
+WasmRuntime: about to find function 'mod_init' in module 'ping_mod' (runtime=000001550E235090)
+WasmRuntime: m3_FindFunction returned r=(none) f=000001550E0D1598
+WasmRuntime: about to call function f=000001550E0D1598 module='ping_mod' func='mod_init'
+WasmRuntime: module memory ptr=0000000000000000 size=0
+host_trampoline_raw: invoking holder=000001550E26A480 key=env:test_ping module=000001550422D9D0
+host_trampoline_raw: callback returned
+WasmRuntime: m3_CallArgv returned r=(none) (ptr=0000000000000000)
+WasmRuntime: CallExportedWithTimeout: completed 'ping_mod'.'mod_init' result=1 wait_ms=78
+Test: start host_log test
+Test: about to parse module, bytes=89
+Test: parsed module, bytes=89 module=000001550422ECF0
+Test: creating runtime
+Test: loading module into runtime
+Test: module loaded
+RegisterVoidString: creating holder=000001550DCEEA00 module=000001550422ECF0 name='.unnamed' runtime=00000155027A1010
+RegisterVoidString: linked ok, holder=000001550DCEEA00 key=env:host_log
+Test: registered host callback
+Test: calling run
+Test: call returned: r2=0
+Test: captured (before assert, len=5)='hello'
+Test: about to assert captured value: 'hello'
+Test: captured check passed
+Token::~Token: unregistering host 'env'.'host_log' sig='v(ii)' module=000001550422ECF0 thread=1328
+Token::~Token: about to acquire g_callbacksMutex for key='env:host_log'
+Token::~Token: releasing lock and clearing module_
+Test: about to free runtime
+Test: freed runtime
+Test: about to finalize cleanup module callbacks
+Test: done cleanup module callbacks
+Test: about to free env
+Test: freed env
+RegisterVoidString: creating holder=000001550DCEEA00 module=000001550422E630 name='.unnamed' runtime=00000155027A1010
+RegisterVoidString: linked ok, holder=000001550DCEEA00 key=env:host_log
+Token::~Token: unregistering host 'env'.'host_log' sig='v(ii)' module=000001550422E630 thread=1328
+Token::~Token: about to acquire g_callbacksMutex for key='env:host_log'
+Token::~Token: releasing lock and clearing module_
+Test: post-assert reached; token cleared; about to cleanup
+Test: about to free runtime2
+Test: freed runtime2
+Test: about to finalize cleanup module callbacks for module2
+Test: done cleanup module callbacks for module2
+Test: about to free env2
+Test: freed env2
+RegisterVoidString: creating holder=000001550DCEEA00 module=000001550422E750 name='.unnamed' runtime=00000155027A1010
+RegisterVoidString: linked ok, holder=000001550DCEEA00 key=env:host_log
+Token::~Token: unregistering host 'env'.'host_log' sig='v(ii)' module=000001550422E750 thread=1328
+Token::~Token: about to acquire g_callbacksMutex for key='env:host_log'
+Token::~Token: releasing lock and clearing module_
+WasmRuntime: default resource limits updated: memory=67108864 bytes exec_ms=50
+WasmRuntime: registered global host 'env'.'host_log' id=2
+WasmRuntime::LoadModuleBytes: ensuring runtime initialized
+WasmRuntime::LoadModuleBytes: attempting to acquire g_wasmMutex
+WasmRuntime::LoadModuleBytes: acquired g_wasmMutex
+WasmRuntime::LoadModuleBytes: about to call m3_ParseModule
+WasmRuntime::LoadModuleBytes: m3_ParseModule returned r=(none) module=000001550422D550
+WasmRuntime::LoadModuleBytes: about to create WasmModule container (post-parse)
+WasmRuntime::LoadModuleBytes: about to create WasmModule container
+WasmRuntime::LoadModuleBytes: created WasmModule container
+WasmRuntime::LoadModuleBytes: module resource limits set: memory=67108864 bytes exec_ms=50ms
+WasmRuntime::LoadModuleBytes: about to create runtime
+WasmRuntime::LoadModuleBytes: LinkHostFunctions start (thread 1328)
+LinkHostFunctions: begin module='sleep_test' modulePtr=000001550422D550
+LinkHostFunctions: linking host 'env'.'host_log' (thread 1328)
+RegisterRaw: creating holder for ns='env' name='host_log' module=000001550422D550 runtime=00000155027A1010 thread=1328
+RegisterRaw: inserted holder=000001550E26A160 keyPtr=000001550DBBBA00
+RegisterRaw: prepared import userdata, about to call m3_LinkRawFunctionEx
+RegisterRaw: linked ok, holder=000001550E26A160 key=env:host_log
+LinkHostFunctions: linked host 'env'.'host_log' (thread 1328)
+LinkHostFunctions: done module='sleep_test'
+WasmRuntime::LoadModuleBytes: LinkHostFunctions end (thread 1328)
+WasmRuntime: loaded module 'sleep_test'
+WasmRuntime: CallExportedWithTimeout: waiting up to 50ms for 'sleep_test'.'mod_init'
+WasmRuntime: about to find function 'mod_init' in module 'sleep_test' (runtime=00000155027A1010)
+WasmRuntime: m3_FindFunction returned r=function lookup failed f=0000000000000000
+WasmRuntime: m3_FindFunction failed for module 'sleep_test' func 'mod_init': function lookup failed (ptr=00007FF723E19F00)
+WasmRuntime: CallExportedWithTimeout: completed 'sleep_test'.'mod_init' result=0 wait_ms=5
+WasmRuntime: CallExportedWithTimeout: waiting up to 50ms for 'sleep_test'.'run'
+WasmRuntime: about to find function 'run' in module 'sleep_test' (runtime=00000155027A1010)
+WasmRuntime: m3_FindFunction returned r=(none) f=000001550E0D04F8
+WasmRuntime: about to call function f=000001550E0D04F8 module='sleep_test' func='run'
+WasmRuntime: module memory ptr=000001550E685408 size=65536
+host_trampoline_raw: invoking holder=000001550E26A160 key=env:host_log module=000001550422D550
+WasmRuntime: m3_CallArgv returned r=host callback execution time exceeded (ptr=00007FF723DA1658)
+WasmRuntime: m3_CallArgv failed for module 'sleep_test' func 'run': host callback execution time exceeded (ptr=00007FF723DA1658)
+WasmRuntime: m3_CallArgv error bytes: 68 6f 73 74 20 63 61 6c 6c 62 61 63 6b 20 65 78 65 63 75 74 69 6f 6e 20 74 69 6d 65 20 65 78 63 65 65 64 65 64
+WasmRuntime: m3_CallArgv raw memory at 00007FF723DA1658 bytes: 68 6f 73 74 20 63 61 6c 6c 62 61 63 6b 20 65 78 65 63 75 74 69 6f 6e 20 74 69 6d 65 20 65 78 63 65 65 64 65 64 0 0 0 68 6f 73 74 5f 74 72 61 6d 70 6f 6c 69 6e 65 5f 72 61 77 3a 20 41 46 54
+WasmRuntime: module mem[0..15]= 68 65 6c 6c 6f 0 0 0 0 0 0 0 0 0 0 0
+WasmRuntime: m3_GetErrorInfo: result=function lookup failed file=C:\Users\jpfau\Desktop\Project\GenesisGameEngine\vcpkg\buildtrees\wasm3\src\head\e0a96ff442-4e88dfc596.clean\source\m3_env.c line=753 message='mod_init'
+WasmRuntime: wrote callsite analysis "Tools\\external\\procdump\\dumps\\analysis\\callsite_20260102_230858_sleep_test_run.txt"
+WasmRuntime: module 'sleep_test' func 'run' timed out after 50ms (waited=55ms)
+WasmRuntime: scheduling cleanup for module 'sleep_test' after timeout
+WasmRuntime: default resource limits updated: memory=67108864 bytes exec_ms=5000
+WasmRuntime::Shutdown: destroying 1 modules
+WasmRuntime::Shutdown: module='ping_mod' ptr=000001550DCEE920 runtime=000001550E235090 modulePtr=000001550422D9D0
+WasmModule::~WasmModule: destroying module='ping_mod' modulePtr=000001550422D9D0 runtime=000001550E235090
+WasmModule::~WasmModule: clearing 1 tokens
+Token::~Token: unregistering host 'env'.'test_ping' sig='v()' module=000001550422D9D0 thread=1328
+Token::~Token: about to acquire g_callbacksMutex for key='env:test_ping'
+Token::~Token: releasing lock and clearing module_
+WasmModule::~WasmModule: tokens cleared
+WasmModule::~WasmModule: freeing runtime (will also free loaded module)=000001550E235090
+WasmModule::~WasmModule: runtime freed; module pointer cleared
+WasmRuntime::Shutdown: modules cleared
+WasmRuntime::Shutdown: destroying 1 deferred modules
+WasmModule::~WasmModule: destroying module='sleep_test' modulePtr=000001550422D550 runtime=00000155027A1010
+WasmModule::~WasmModule: clearing 1 tokens
+Token::~Token: unregistering host 'env'.'host_log' sig='v(ii)' module=000001550422D550 thread=1328
+Token::~Token: about to acquire g_callbacksMutex for key='env:host_log'
+Token::~Token: releasing lock and clearing module_
+WasmModule::~WasmModule: tokens cleared
+WasmModule::~WasmModule: freeing runtime (will also free loaded module)=00000155027A1010
+WasmModule::~WasmModule: runtime freed; module pointer cleared
+WasmRuntime::Shutdown: deferred modules cleared
+WasmRuntime::Shutdown: environment freed
+WasmRuntime: initialized
+WasmRuntime: registered global host 'env'.'test_ping' id=3
+WasmRuntime::LoadModuleBytes: ensuring runtime initialized
+WasmRuntime::LoadModuleBytes: attempting to acquire g_wasmMutex
+WasmRuntime::LoadModuleBytes: acquired g_wasmMutex
+WasmRuntime::LoadModuleBytes: about to call m3_ParseModule
+WasmRuntime::LoadModuleBytes: m3_ParseModule returned r=(none) module=000001550422D9D0
+WasmRuntime::LoadModuleBytes: about to create WasmModule container (post-parse)
+WasmRuntime::LoadModuleBytes: about to create WasmModule container
+WasmRuntime::LoadModuleBytes: created WasmModule container
+WasmRuntime::LoadModuleBytes: module resource limits set: memory=67108864 bytes exec_ms=5000ms
+WasmRuntime::LoadModuleBytes: about to create runtime
+WasmRuntime::LoadModuleBytes: LinkHostFunctions start (thread 1328)
+LinkHostFunctions: begin module='ping_mod' modulePtr=000001550422D9D0
+LinkHostFunctions: linking host 'env'.'test_ping' (thread 1328)
+RegisterRaw: creating holder for ns='env' name='test_ping' module=000001550422D9D0 runtime=000001550E235090 thread=1328
+RegisterRaw: inserted holder=000001550E26A2A0 keyPtr=000001550DBBBD00
+RegisterRaw: prepared import userdata, about to call m3_LinkRawFunctionEx
+RegisterRaw: linked ok, holder=000001550E26A2A0 key=env:test_ping
+LinkHostFunctions: linked host 'env'.'test_ping' (thread 1328)
+LinkHostFunctions: done module='ping_mod'
+WasmRuntime::LoadModuleBytes: LinkHostFunctions end (thread 1328)
+WasmRuntime: loaded module 'ping_mod'
+WasmRuntime: CallExportedWithTimeout: waiting up to 5000ms for 'ping_mod'.'mod_init'
+WasmRuntime: about to find function 'mod_init' in module 'ping_mod' (runtime=000001550E235090)
+WasmRuntime: m3_FindFunction returned r=(none) f=000001550E0D0628
+WasmRuntime: about to call function f=000001550E0D0628 module='ping_mod' func='mod_init'
+WasmRuntime: module memory ptr=0000000000000000 size=0
+host_trampoline_raw: invoking holder=000001550E26A2A0 key=env:test_ping module=000001550422D9D0
+host_trampoline_raw: callback returned
+WasmRuntime: m3_CallArgv returned r=(none) (ptr=0000000000000000)
+WasmRuntime: CallExportedWithTimeout: completed 'ping_mod'.'mod_init' result=1 wait_ms=81
+WasmRuntime: CallExportedWithTimeout: waiting up to 5000ms for 'ping_mod'.'mod_init'
+WasmRuntime: about to find function 'mod_init' in module 'ping_mod' (runtime=000001550E235090)
+WasmRuntime: m3_FindFunction returned r=(none) f=000001550E0D0628
+WasmRuntime: about to call function f=000001550E0D0628 module='ping_mod' func='mod_init'
+WasmRuntime: module memory ptr=0000000000000000 size=0
+host_trampoline_raw: invoking holder=000001550E26A2A0 key=env:test_ping module=000001550422D9D0
+host_trampoline_raw: callback returned
+WasmRuntime: m3_CallArgv returned r=(none) (ptr=0000000000000000)
+WasmRuntime: CallExportedWithTimeout: completed 'ping_mod'.'mod_init' result=1 wait_ms=79
+Note: ping_mod mod_init returned success (ok==true) - continuing with deferred unreg test
+WasmRuntime::Shutdown: destroying 1 modules
+WasmRuntime::Shutdown: module='ping_mod' ptr=000001550DCEF210 runtime=000001550E235090 modulePtr=000001550422D9D0
+WasmModule::~WasmModule: destroying module='ping_mod' modulePtr=000001550422D9D0 runtime=000001550E235090
+WasmModule::~WasmModule: clearing 1 tokens
+Token::~Token: unregistering host 'env'.'test_ping' sig='v()' module=000001550422D9D0 thread=1328
+Token::~Token: about to acquire g_callbacksMutex for key='env:test_ping'
+Token::~Token: releasing lock and clearing module_
+WasmModule::~WasmModule: tokens cleared
+WasmModule::~WasmModule: freeing runtime (will also free loaded module)=000001550E235090
+WasmModule::~WasmModule: runtime freed; module pointer cleared
+WasmRuntime::Shutdown: modules cleared
+WasmRuntime::Shutdown: destroying 0 deferred modules
+WasmRuntime::Shutdown: deferred modules cleared
+WasmRuntime::Shutdown: environment freed
+SubsystemRegistry: registered 'Audio/null'
+SubsystemRegistry: registered 'Shader/null'
+SubsystemRegistry: registered 'Audio/miniaudio'
+SubsystemRegistry: registered 'Shader/opengl'
+SubsystemRegistry: registered 'Physics/null'
+SubsystemRegistry: registered 'Input/null'
+SubsystemRegistry: registered 'Input/sdl'
+SubsystemRegistry: registered 'Network/null'
+SubsystemRegistry: registered 'Save/null'
+SubsystemRegistry: registered 'Save/file'
+SubsystemRegistry: registered 'Scripting/null'
+SubsystemRegistry: registered 'Scripting/lua'
+SubsystemManager: created instance Shader/null
+CreateShaderSubsystem: created shader subsystem 'null'
+NullAudio: Init
+SubsystemManager: created instance Audio/null
+CreateAudioSubsystem: created audio subsystem 'null'
+NullPhysics: Init
+SubsystemManager: created instance Physics/null
+CreatePhysicsSubsystem: created physics subsystem 'null'
+NullInput: Init
+SubsystemManager: created instance Input/null
+CreateInputSubsystem: created input subsystem 'null'
+NullNetwork: Init
+SubsystemManager: created instance Network/null
+CreateNetworkSubsystem: created network subsystem 'null'
+NullSave: Init
+SubsystemManager: created instance Save/null
+CreateSaveSubsystem: created save subsystem 'null'
+NullScripting: Init
+SubsystemManager: created instance Scripting/null
+CreateScriptingSubsystem: created scripting subsystem 'null'
+Genesis Engine initialized (config='')
+WasmRuntime::LoadModuleBytes: ensuring runtime initialized
+WasmRuntime: initialized
+WasmRuntime::LoadModuleBytes: attempting to acquire g_wasmMutex
+WasmRuntime::LoadModuleBytes: acquired g_wasmMutex
+WasmRuntime::LoadModuleBytes: about to call m3_ParseModule
+WasmRuntime::LoadModuleBytes: m3_ParseModule returned r=(none) module=000001550422D550
+WasmRuntime::LoadModuleBytes: about to create WasmModule container (post-parse)
+WasmRuntime::LoadModuleBytes: about to create WasmModule container
+WasmRuntime::LoadModuleBytes: created WasmModule container
+WasmRuntime::LoadModuleBytes: module resource limits set: memory=67108864 bytes exec_ms=5000ms
+WasmRuntime::LoadModuleBytes: about to create runtime
+WasmRuntime::LoadModuleBytes: LinkHostFunctions start (thread 1328)
+LinkHostFunctions: begin module='sample_mod' modulePtr=000001550422D550
+LinkHostFunctions: done module='sample_mod'
+WasmRuntime::LoadModuleBytes: LinkHostFunctions end (thread 1328)
+WasmRuntime: loaded module 'sample_mod'
+WasmRuntime: CallExportedWithTimeout: waiting up to 5000ms for 'WasmRuntime: about to find function 'sample_modmod_init'.'' in module 'mod_initsample_mod'' (runtime=
+000001550E235090)
+WasmRuntime: m3_FindFunction returned r=(none) f=000001550E57EBD0
+WasmRuntime: about to call function f=000001550E57EBD0 module='sample_mod' func='mod_init'
+WasmRuntime: module memory ptr=0000000000000000 size=0
+WasmRuntime: m3_CallArgv returned r=(none) (ptr=0000000000000000)
+WasmRuntime: CallExportedWithTimeout: completed 'sample_mod'.'mod_init' result=1 wait_ms=11
+WasmRuntime: CallExportedWithTimeout: waiting up to 5000ms for 'sample_mod'.'mod_init'
+WasmRuntime: about to find function 'mod_init' in module 'sample_mod' (runtime=000001550E235090)
+WasmRuntime: m3_FindFunction returned r=(none) f=000001550E57EBD0
+WasmRuntime: about to call function f=000001550E57EBD0 module='sample_mod' func='mod_init'
+WasmRuntime: module memory ptr=0000000000000000 size=0
+WasmRuntime: m3_CallArgv returned r=(none) (ptr=0000000000000000)
+WasmRuntime: CallExportedWithTimeout: completed 'sample_mod'.'mod_init' result=1 wait_ms=28
+WasmRuntime::LoadModuleBytes: ensuring runtime initialized
+WasmRuntime::LoadModuleBytes: attempting to acquire g_wasmMutex
+WasmRuntime::LoadModuleBytes: acquired g_wasmMutex
+WasmRuntime::LoadModuleBytes: about to call m3_ParseModule
+WasmRuntime::LoadModuleBytes: m3_ParseModule returned r=(none) module=000001550422DE50
+WasmRuntime::LoadModuleBytes: about to create WasmModule container (post-parse)
+WasmRuntime::LoadModuleBytes: about to create WasmModule container
+WasmRuntime::LoadModuleBytes: created WasmModule container
+WasmRuntime::LoadModuleBytes: module resource limits set: memory=67108864 bytes exec_ms=5000ms
+WasmRuntime::LoadModuleBytes: about to create runtime
+WasmRuntime::LoadModuleBytes: LinkHostFunctions start (thread 1328)
+LinkHostFunctions: begin module='sample_mod_file' modulePtr=000001550422DE50
+LinkHostFunctions: done module='sample_mod_file'
+WasmRuntime::LoadModuleBytes: LinkHostFunctions end (thread 1328)
+WasmRuntime: loaded module 'sample_mod_file'
+WasmRuntime: CallExportedWithTimeout: waiting up to 5000ms for 'sample_mod_file'.'mod_init'
+WasmRuntime: about to find function 'mod_init' in module 'sample_mod_file' (runtime=000001550DD5F870)
+WasmRuntime: m3_FindFunction returned r=(none) f=0000015502841720
+WasmRuntime: about to call function f=0000015502841720 module='sample_mod_file' func='mod_init'
+WasmRuntime: module memory ptr=0000000000000000 size=0
+WasmRuntime: m3_CallArgv returned r=(none) (ptr=0000000000000000)
+WasmRuntime: CallExportedWithTimeout: completed 'sample_mod_file'.'mod_init' result=1 wait_ms=11
+SubsystemRegistry: registered 'Audio/null'
+SubsystemRegistry: registered 'Shader/null'
+SubsystemRegistry: registered 'Audio/miniaudio'
+SubsystemRegistry: registered 'Shader/opengl'
+SubsystemRegistry: registered 'Physics/null'
+SubsystemRegistry: registered 'Input/null'
+SubsystemRegistry: registered 'Input/sdl'
+SubsystemRegistry: registered 'Network/null'
+SubsystemRegistry: registered 'Save/null'
+SubsystemRegistry: registered 'Save/file'
+SubsystemRegistry: registered 'Scripting/null'
+SubsystemRegistry: registered 'Scripting/lua'
+SubsystemManager: created instance Shader/null
+CreateShaderSubsystem: created shader subsystem 'null'
+NullAudio: Init
+SubsystemManager: created instance Audio/null
+CreateAudioSubsystem: created audio subsystem 'null'
+NullPhysics: Init
+SubsystemManager: created instance Physics/null
+CreatePhysicsSubsystem: created physics subsystem 'null'
+NullInput: Init
+SubsystemManager: created instance Input/null
+CreateInputSubsystem: created input subsystem 'null'
+NullNetwork: Init
+SubsystemManager: created instance Network/null
+CreateNetworkSubsystem: created network subsystem 'null'
+NullSave: Init
+SubsystemManager: created instance Save/null
+CreateSaveSubsystem: created save subsystem 'null'
+NullScripting: Init
+SubsystemManager: created instance Scripting/null
+CreateScriptingSubsystem: created scripting subsystem 'null'
+Genesis Engine initialized (config='')
+WasmRuntime::LoadModuleBytes: ensuring runtime initialized
+WasmRuntime::LoadModuleBytes: attempting to acquire g_wasmMutex
+WasmRuntime::LoadModuleBytes: acquired g_wasmMutex
+WasmRuntime::LoadModuleBytes: about to call m3_ParseModule
+WasmRuntime::LoadModuleBytes: m3_ParseModule returned r=(none) module=000001550422D9D0
+WasmRuntime::LoadModuleBytes: about to create WasmModule container (post-parse)
+WasmRuntime::LoadModuleBytes: about to create WasmModule container
+WasmRuntime::LoadModuleBytes: created WasmModule container
+WasmRuntime::LoadModuleBytes: module resource limits set: memory=67108864 bytes exec_ms=5000ms
+WasmRuntime::LoadModuleBytes: about to create runtime
+WasmRuntime::LoadModuleBytes: LinkHostFunctions start (thread 1328)
+LinkHostFunctions: begin module='mod.wasm' modulePtr=000001550422D9D0
+LinkHostFunctions: done module='mod.wasm'
+WasmRuntime::LoadModuleBytes: LinkHostFunctions end (thread 1328)
+WasmRuntime: loaded module 'mod.wasm'
+WasmRuntime: CallExportedWithTimeout: waiting up to 5000ms for 'mod.wasm'.'mod_init'
+WasmRuntime: about to find function 'mod_init' in module 'mod.wasm' (runtime=00000155027A1010)
+WasmRuntime: m3_FindFunction returned r=(none) f=000001550DE8E290
+WasmRuntime: about to call function f=000001550DE8E290 module='mod.wasm' func='mod_init'
+WasmRuntime: module memory ptr=0000000000000000 size=0
+WasmRuntime: m3_CallArgv returned r=(none) (ptr=0000000000000000)
+WasmRuntime: CallExportedWithTimeout: completed 'mod.wasm'.'mod_init' result=1 wait_ms=19
+WasmRuntime: CallExportedWithTimeout: waiting up to 5000ms for 'mod.wasm'.'mod_init'
+WasmRuntime: about to find function 'mod_init' in module 'mod.wasm' (runtime=00000155027A1010)
+WasmRuntime: m3_FindFunction returned r=(none) f=000001550DE8E290
+WasmRuntime: about to call function f=000001550DE8E290 module='mod.wasm' func='mod_init'
+WasmRuntime: module memory ptr=0000000000000000 size=0
+WasmRuntime: m3_CallArgv returned r=(none) (ptr=0000000000000000)
+WasmRuntime: CallExportedWithTimeout: completed 'mod.wasm'.'mod_init' result=1 wait_ms=24
+WasmRuntime: registered global host 'env'.'test_sleep' id=4
+WasmRuntime::LoadModuleBytes: ensuring runtime initialized
+WasmRuntime::LoadModuleBytes: attempting to acquire g_wasmMutex
+WasmRuntime::LoadModuleBytes: acquired g_wasmMutex
+WasmRuntime::LoadModuleBytes: about to call m3_ParseModule
+WasmRuntime::LoadModuleBytes: m3_ParseModule returned r=(none) module=000001550422D670
+WasmRuntime::LoadModuleBytes: about to create WasmModule container (post-parse)
+WasmRuntime::LoadModuleBytes: about to create WasmModule container
+WasmRuntime::LoadModuleBytes: created WasmModule container
+WasmRuntime::LoadModuleBytes: about to create runtime
+WasmRuntime::LoadModuleBytes: module resource limits set: memory=67108864 bytes exec_ms=5000ms
+WasmRuntime::LoadModuleBytes: LinkHostFunctions start (thread 1328)
+LinkHostFunctions: begin module='sleep_mod' modulePtr=000001550422D670
+LinkHostFunctions: linking host 'env'.'test_sleep' (thread 1328)
+RegisterRaw: creating holder for ns='env' name='test_sleep' module=000001550422D670 runtime=000001550E0BCEF0 thread=1328
+RegisterRaw: inserted holder=000001550E269C60 keyPtr=000001550DBBBF00
+RegisterRaw: prepared import userdata, about to call m3_LinkRawFunctionEx
+RegisterRaw: linked ok, holder=000001550E269C60 key=env:test_sleep
+LinkHostFunctions: linked host 'env'.'test_sleep' (thread 1328)
+LinkHostFunctions: done module='sleep_mod'
+WasmRuntime::LoadModuleBytes: LinkHostFunctions end (thread 1328)
+WasmRuntime: loaded module 'sleep_mod'
+WasmRuntime: about to find function 'mod_init' in module 'sleep_mod' (runtime=000001550E0BCEF0)WasmRuntime: CallExportedWithTimeout: waiting up to 
+5000ms for 'sleep_mod'.'mod_init'
+WasmRuntime: m3_FindFunction returned r=function lookup failed f=0000000000000000
+WasmRuntime: m3_FindFunction failed for module 'sleep_mod' func 'mod_init': function lookup failed (ptr=00007FF723E19F00)
+WasmRuntime: CallExportedWithTimeout: completed 'sleep_mod'.'mod_init' result=0 wait_ms=2

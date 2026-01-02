@@ -14,6 +14,7 @@
 #include <thread>
 #include <vector>
 #include <cstdint>
+#include <chrono>
 #include <windows.h>
 #ifdef _WIN32
 #include <dbghelp.h>
@@ -70,6 +71,9 @@ struct CallbackBase {
     std::shared_ptr<ImportUserdata> udptr;
     // Optional pointer to the WasmModule's timed_out flag to allow lock-free checks in trampolines
     std::atomic<bool>* timed_out_ptr = nullptr;
+    // Per-registration execution timeout (ms) copied from HostBindings at link time. Used by trampolines
+    // to enforce host-callback execution limits without taking global locks.
+    uint32_t execLimitMs = 0;
 };
 
 struct CallbackI32I32 : CallbackBase {
@@ -84,18 +88,18 @@ struct CallbackRaw : CallbackBase {
     M3RawCall cb;
 };
 
-static std::mutex g_callbacksMutex;
-static std::unordered_map<std::string, std::shared_ptr<CallbackBase>> g_callbacks;
+static std::mutex& g_callbacksMutex = *new std::mutex;
+static std::unordered_map<std::string, std::shared_ptr<CallbackBase>>& g_callbacks = *new std::unordered_map<std::string, std::shared_ptr<CallbackBase>>;
 // Stable key userdata pointers so we can pass a long-lived pointer into wasm3 that
 // remains valid even if the callback holder is erased from g_callbacks.
-static std::unordered_map<std::string, std::shared_ptr<std::string>> g_callback_keys;
+static std::unordered_map<std::string, std::shared_ptr<std::string>>& g_callback_keys = *new std::unordered_map<std::string, std::shared_ptr<std::string>>;
 
 // ImportUserdata: small POD we pass as userdata into m3_LinkRawFunctionEx. The trampoline
 // will interpret this and either use the pointer as a key string pointer (kind=1) or a
 // direct holder pointer (kind=2). We keep the ImportUserdata instances alive via
 // g_import_userdata so the pointers remain valid for the lifetime of the registration.
 struct ImportUserdata { int kind; void* ptr; };
-static std::unordered_map<std::string, std::shared_ptr<ImportUserdata>> g_import_userdata;
+static std::unordered_map<std::string, std::shared_ptr<ImportUserdata>>& g_import_userdata = *new std::unordered_map<std::string, std::shared_ptr<ImportUserdata>>;
 
 // Small helper to build a short, safe preview of an untrusted string for logs.
 // This avoids writing arbitrarily large or binary data into log files.
@@ -242,10 +246,39 @@ static void SafeUnregisterCallback_NoThrow(const std::string& key, bool module_m
     } else {
         std::ostringstream os5; os5 << "SafeUnregisterCallback_NoThrow: not committed (State=" << mbi.State << ") - skipping preview";
         LogToFile(os5.str());
+        // If memory is not committed, capture a snapshot for later analysis
+        WriteMiniDumpSnapshot(key);
     }
 
-    // Write a snapshot dump so we can analyze registers/stack and module memory later
-    WriteMiniDumpSnapshot(key);
+    // If the holder memory region appears committed and readable, it should be safe
+    // to remove the entry now. Otherwise leave the entry in-place for manual analysis.
+#ifdef _WIN32
+    try {
+        if (mbi.State == MEM_COMMIT && ((mbi.Protect & PAGE_GUARD) == 0) && mbi.Protect != PAGE_NOACCESS) {
+            std::ostringstream os6; os6 << "SafeUnregisterCallback_NoThrow: memory region looks committed and readable; erasing key='" << key << "'";
+            LogToFile(os6.str());
+            try {
+                auto it2 = g_callbacks.find(key);
+                if (it2 != g_callbacks.end()) {
+                    g_import_userdata.erase(key);
+                    g_callbacks.erase(it2);
+                    std::ostringstream os7; os7 << "SafeUnregisterCallback_NoThrow: erased key='" << key << "'";
+                    LogToFile(os7.str());
+                } else {
+                    std::ostringstream os8; os8 << "SafeUnregisterCallback_NoThrow: erase skipped; key not present='" << key << "'";
+                    LogToFile(os8.str());
+                }
+            } catch (...) {
+                LogToFile("SafeUnregisterCallback_NoThrow: exception during erase; leaving entry for manual analysis");
+            }
+        } else {
+            std::ostringstream os9; os9 << "SafeUnregisterCallback_NoThrow: memory region not safe to erase (State=" << mbi.State << " Protect=" << mbi.Protect << ")";
+            LogToFile(os9.str());
+        }
+    } catch (...) {
+        LogToFile("SafeUnregisterCallback_NoThrow: exception while deciding whether to erase entry");
+    }
+#endif
 
     // Avoid modifying or erasing the map entry here: modifying may cause the shared_ptr
     // destructor to run on a potentially-corrupted pointer and cause an immediate crash.
@@ -367,8 +400,8 @@ void HostBindings::DebugWriteMiniDumpWithContext(const std::string& context, con
 #endif
 
 // Deferred unregistration queue to avoid touching g_callbacks in potentially-unsafe teardown moments
-static std::mutex g_deferredUnregMutex;
-static std::vector<std::pair<std::string, bool>> g_deferred_unregs;
+static std::mutex& g_deferredUnregMutex = *new std::mutex;
+static std::vector<std::pair<std::string, bool>>& g_deferred_unregs = *new std::vector<std::pair<std::string, bool>>;
 
 static void DeferUnregisterCallback(const std::string& key, bool module_managed) {
     try {
@@ -390,7 +423,58 @@ static void ProcessDeferredUnregistrations_Internal() {
     for (auto &p : todo) {
         std::ostringstream oss; oss << "ProcessDeferredUnregistrations: processing key=" << p.first << " module_managed=" << (p.second ? "true" : "false");
         LogToFile(oss.str());
-        SafeUnregisterCallback_NoThrow(p.first, p.second);
+        // First, probe and attempt safe unregister. If that does not remove the entry, retry a few times
+        // with short sleeps to allow memory regions to settle, then attempt an aggressive erase under lock.
+        bool erased = false;
+        try {
+            SafeUnregisterCallback_NoThrow(p.first, p.second);
+            // If SafeUnregister removed the key it will have logged that; check map
+            {
+                std::lock_guard<std::mutex> lk(g_callbacksMutex);
+                if (g_callbacks.find(p.first) == g_callbacks.end()) erased = true;
+            }
+            if (!erased) {
+                // Retry loop: allow short windows for memory to become readable.
+                const int maxAttempts = 10;
+                for (int attempt = 0; attempt < maxAttempts && !erased; ++attempt) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(5));
+                    SafeUnregisterCallback_NoThrow(p.first, p.second);
+                    std::lock_guard<std::mutex> lk(g_callbacksMutex);
+                    if (g_callbacks.find(p.first) == g_callbacks.end()) {
+                        erased = true;
+                        break;
+                    }
+                }
+            }
+            if (!erased) {
+                // Aggressive final attempt: try to erase entry under lock (best-effort)
+                std::ostringstream os2; os2 << "ProcessDeferredUnregistrations: aggressive erase attempt for key=" << p.first;
+                LogToFile(os2.str());
+                try {
+                    std::lock_guard<std::mutex> lk(g_callbacksMutex);
+                    auto it = g_callbacks.find(p.first);
+                    if (it != g_callbacks.end()) {
+                        g_import_userdata.erase(p.first);
+                        g_callbacks.erase(it);
+                        erased = true;
+                        std::ostringstream os3; os3 << "ProcessDeferredUnregistrations: aggressive erase succeeded for key=" << p.first;
+                        LogToFile(os3.str());
+                    } else {
+                        std::ostringstream os4; os4 << "ProcessDeferredUnregistrations: aggressive erase skipped; key not found=" << p.first;
+                        LogToFile(os4.str());
+                        erased = true;
+                    }
+                } catch (...) {
+                    LogToFile("ProcessDeferredUnregistrations: exception during aggressive erase; leaving entry for analysis");
+                }
+            }
+        } catch (...) {
+            LogToFile("ProcessDeferredUnregistrations: exception while handling deferred unregister for key");
+        }
+        if (!erased) {
+            std::ostringstream osfail; osfail << "ProcessDeferredUnregistrations: failed to remove key=" << p.first << " after retries";
+            LogToFile(osfail.str());
+        }
     }
 }
 
@@ -416,12 +500,42 @@ m3ApiRawFunction(host_trampoline_i32_i32) {
         if (!hptr || !hptr->active) m3ApiTrap("host function unregistered");
         // If the module has been marked timed-out/quarantined, reject the call immediately
         if (hptr->timed_out_ptr && hptr->timed_out_ptr->load()) m3ApiTrap("module timed out");
+
+        // Check per-module memory limit before executing the host callback
+        try {
+            IM3Runtime modRuntime = m3_GetModuleRuntime(hptr->module);
+            uint32_t memSz = 0;
+            uint8_t* memPtr = m3_GetMemory(modRuntime, &memSz, 0);
+            std::size_t memLimit = WasmRuntime::GetModuleMemoryLimitBytes(hptr->module);
+            if (memPtr && memSz > memLimit) {
+                if (hptr->timed_out_ptr) hptr->timed_out_ptr->store(true);
+                m3ApiTrap("module memory limit exceeded");
+            }
+        } catch(...) {
+            // ignore any memory-inspection errors and proceed to callback (will trap if unsafe)
+        }
+
         int32_t out = 0;
+        auto start = std::chrono::steady_clock::now();
         try {
             out = hptr->cb(in0);
         } catch (...) {
             m3ApiTrap("host callback threw exception");
         }
+        auto elapsed_ms = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count());
+        try {
+            // Use per-registration exec limit (copied at link time) to avoid taking global locks inside trampolines
+            uint32_t execLimit = hptr->execLimitMs;
+            try {
+                std::ostringstream oss; oss << "trampoline_i32: exec_limit=" << execLimit << " elapsed_ms=" << elapsed_ms;
+                LogToFile(oss.str());
+            } catch(...) { }
+            if (execLimit > 0 && elapsed_ms > execLimit) {
+                if (hptr->timed_out_ptr) hptr->timed_out_ptr->store(true);
+                try { LogToFile("trampoline_i32: host callback execution time exceeded; trapping"); } catch(...) {}
+                m3ApiTrap("host callback execution time exceeded");
+            }
+        } catch(...) { }
 #ifdef _DEBUG
         if (!_CrtCheckMemory()) {
             LogToFile("trampoline_i32: _CrtCheckMemory FAILED (heap corruption detected)");
@@ -444,12 +558,38 @@ m3ApiRawFunction(host_trampoline_i32_i32) {
     auto h = std::static_pointer_cast<CallbackI32I32>(base);
     // If module was quarantined, reject quickly
     if (h->timed_out_ptr && h->timed_out_ptr->load()) m3ApiTrap("module timed out");
+
+    // Check per-module memory limit before executing the host callback
+    try {
+        IM3Runtime modRuntime = m3_GetModuleRuntime(h->module);
+        uint32_t memSz = 0;
+        uint8_t* memPtr = m3_GetMemory(modRuntime, &memSz, 0);
+        std::size_t memLimit = WasmRuntime::GetModuleMemoryLimitBytes(h->module);
+        if (memPtr && memSz > memLimit) {
+            if (h->timed_out_ptr) h->timed_out_ptr->store(true);
+            m3ApiTrap("module memory limit exceeded");
+        }
+    } catch(...) {
+        // ignore memory inspection errors
+    }
+
     int32_t out = 0;
+    auto start = std::chrono::steady_clock::now();
     try {
         out = h->cb(in0);
     } catch (...) {
         m3ApiTrap("host callback threw exception");
     }
+    auto elapsed_ms = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count());
+    try {
+        uint32_t execLimit = h->execLimitMs;
+        try { std::ostringstream oss; oss << "trampoline_i32: exec_limit=" << execLimit << " elapsed_ms=" << elapsed_ms; LogToFile(oss.str()); } catch(...) {}
+        if (execLimit > 0 && elapsed_ms > execLimit) {
+            if (h->timed_out_ptr) h->timed_out_ptr->store(true);
+            try { LogToFile("trampoline_i32: host callback execution time exceeded; trapping"); } catch(...) {}
+            m3ApiTrap("host callback execution time exceeded");
+        }
+    } catch(...) { }
     m3ApiReturn((uint32_t)out);
 }
 
@@ -489,6 +629,14 @@ m3ApiRawFunction(host_trampoline_v_ptr_len) {
         }
 #endif
         if (!mem) m3ApiTrap("host memory not available");
+        // Check module memory limit prior to any OOB checks
+        try {
+            std::size_t memLimit = WasmRuntime::GetModuleMemoryLimitBytes(hptr->module);
+            if (memSz > memLimit) {
+                if (hptr->timed_out_ptr) hptr->timed_out_ptr->store(true);
+                m3ApiTrap("module memory limit exceeded");
+            }
+        } catch(...) { }
         if (ptr < 0) m3ApiTrap("invalid pointer");
         if (len < 0) m3ApiTrap("invalid length");
         uint32_t uptr = static_cast<uint32_t>(ptr);
@@ -502,11 +650,22 @@ m3ApiRawFunction(host_trampoline_v_ptr_len) {
             std::ostringstream oss; oss << "trampoline_v: about to call callback with s_preview='" << SanitizePreview(s) << "'";
             LogToFile(oss.str());
         }
+        auto start = std::chrono::steady_clock::now();
         try {
             hptr->cb(s);
         } catch (...) {
             m3ApiTrap("host callback threw exception");
         }
+        auto elapsed_ms = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count());
+        try {
+            uint32_t execLimit = hptr->execLimitMs;
+            try { std::ostringstream oss; oss << "trampoline_v: exec_limit=" << execLimit << " elapsed_ms=" << elapsed_ms; LogToFile(oss.str()); } catch(...) {}
+            if (execLimit > 0 && elapsed_ms > execLimit) {
+                if (hptr->timed_out_ptr) hptr->timed_out_ptr->store(true);
+                try { LogToFile("trampoline_v: host callback execution time exceeded; trapping"); } catch(...) {}
+                m3ApiTrap("host callback execution time exceeded");
+            }
+        } catch(...) { }
         {
             std::ostringstream oss; oss << "trampoline_v: callback returned";
             LogToFile(oss.str());
@@ -551,6 +710,14 @@ m3ApiRawFunction(host_trampoline_v_ptr_len) {
         }
 #endif
         if (!mem) m3ApiTrap("host memory not available");
+        // Check module memory limit prior to any OOB checks
+        try {
+            std::size_t memLimit = WasmRuntime::GetModuleMemoryLimitBytes(h->module);
+            if (memSz > memLimit) {
+                if (h->timed_out_ptr) h->timed_out_ptr->store(true);
+                m3ApiTrap("module memory limit exceeded");
+            }
+        } catch(...) { }
         if (ptr < 0) m3ApiTrap("invalid pointer");
         if (len < 0) m3ApiTrap("invalid length");
         uint32_t uptr = static_cast<uint32_t>(ptr);
@@ -564,11 +731,22 @@ m3ApiRawFunction(host_trampoline_v_ptr_len) {
             std::ostringstream oss; oss << "trampoline_v: about to call callback with s_preview='" << SanitizePreview(s) << "'";
             LogToFile(oss.str());
         }
+        auto start = std::chrono::steady_clock::now();
         try {
             h->cb(s);
         } catch (...) {
             m3ApiTrap("host callback threw exception");
         }
+        auto elapsed_ms = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count());
+        try {
+            uint32_t execLimit = h->execLimitMs;
+            try { std::ostringstream oss; oss << "trampoline_v: exec_limit=" << execLimit << " elapsed_ms=" << elapsed_ms; LogToFile(oss.str()); } catch(...) {}
+            if (execLimit > 0 && elapsed_ms > execLimit) {
+                if (h->timed_out_ptr) h->timed_out_ptr->store(true);
+                try { LogToFile("trampoline_v: host callback execution time exceeded; trapping"); } catch(...) {}
+                m3ApiTrap("host callback execution time exceeded");
+            }
+        } catch(...) { }
         {
             std::ostringstream oss; oss << "trampoline_v: callback returned";
             LogToFile(oss.str());
@@ -599,8 +777,34 @@ m3ApiRawFunction(host_trampoline_raw) {
             std::ostringstream oss; oss << "host_trampoline_raw: invoking raw cb holder=" << hptr << " module=" << hptr->module << " runtime=" << modRuntime;
             LogToFile(oss.str());
         }
+        // Enforce per-module memory limit before invoking raw callback
+        try {
+            uint32_t memSz = 0;
+            uint8_t* memPtr = m3_GetMemory(modRuntime, &memSz, 0);
+            std::size_t memLimit = WasmRuntime::GetModuleMemoryLimitBytes(hptr->module);
+            if (memPtr && memSz > memLimit) {
+                if (hptr->timed_out_ptr) hptr->timed_out_ptr->store(true);
+                m3ApiTrap("module memory limit exceeded");
+            }
+        } catch(...) { }
+        auto start = std::chrono::steady_clock::now();
         try {
             auto r = hptr->cb(modRuntime, _ctx, _sp, _mem);
+            auto elapsed_ms = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count());
+            try {
+                uint32_t execLimit = hptr->execLimitMs;
+                try { std::ostringstream oss; oss << "host_trampoline_raw: exec_limit=" << execLimit << " elapsed_ms=" << elapsed_ms; LogToFile(oss.str()); } catch(...) {}
+                if (execLimit > 0 && elapsed_ms > execLimit) {
+                    if (hptr->timed_out_ptr) hptr->timed_out_ptr->store(true);
+                    try { LogToFile("host_trampoline_raw: host callback execution time exceeded; trapping"); } catch(...) {}
+                    m3ApiTrap("host callback execution time exceeded");
+                }
+            } catch(...) { }
+            // Debug: record observed host callback elapsed time
+            try {
+                std::ostringstream elapsedoss; elapsedoss << "host_trampoline_raw: elapsed_ms=" << elapsed_ms;
+                LogToFile(elapsedoss.str());
+            } catch(...) { }
             std::ostringstream oss; oss << "host_trampoline_raw: callback returned ptr=" << (void*)r;
             LogToFile(oss.str());
             return r;
@@ -608,7 +812,6 @@ m3ApiRawFunction(host_trampoline_raw) {
             LogToFile("host_trampoline_raw: callback threw exception");
             m3ApiTrap("host callback threw exception");
         }
-    } else if (udt->kind == 1) {
     } else if (udt->kind == 1) {
         auto keyPtr = reinterpret_cast<const std::string*>(udt->ptr);
         if (!keyPtr) m3ApiTrap("host userdata missing");
@@ -622,9 +825,35 @@ m3ApiRawFunction(host_trampoline_raw) {
         auto h = std::static_pointer_cast<CallbackRaw>(base);
         if (h->timed_out_ptr && h->timed_out_ptr->load()) m3ApiTrap("module timed out");
         IM3Runtime modRuntime = m3_GetModuleRuntime(h->module);
+        // Enforce per-module memory limit before invoking raw callback
+        try {
+            uint32_t memSz = 0;
+            uint8_t* memPtr = m3_GetMemory(modRuntime, &memSz, 0);
+            std::size_t memLimit = WasmRuntime::GetModuleMemoryLimitBytes(h->module);
+            if (memPtr && memSz > memLimit) {
+                if (h->timed_out_ptr) h->timed_out_ptr->store(true);
+                m3ApiTrap("module memory limit exceeded");
+            }
+        } catch(...) { }
         try {
             std::cerr << "host_trampoline_raw: invoking holder=" << h.get() << " key=" << *keyPtr << " module=" << h->module << std::endl;
+            auto start = std::chrono::steady_clock::now();
             auto res = h->cb(modRuntime, _ctx, _sp, _mem);
+            auto elapsed_ms = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count());
+            try {
+                uint32_t execLimit = h->execLimitMs;
+                try { std::ostringstream oss; oss << "host_trampoline_raw: exec_limit=" << execLimit << " elapsed_ms=" << elapsed_ms; LogToFile(oss.str()); } catch(...) {}
+                if (execLimit > 0 && elapsed_ms > execLimit) {
+                    if (h->timed_out_ptr) h->timed_out_ptr->store(true);
+                    try { LogToFile("host_trampoline_raw: host callback execution time exceeded; trapping"); } catch(...) {}
+                    m3ApiTrap("host callback execution time exceeded");
+                }
+            } catch(...) { }
+            // Debug: record observed host callback elapsed time
+            try {
+                std::ostringstream elapsedoss; elapsedoss << "host_trampoline_raw: elapsed_ms=" << elapsed_ms;
+                LogToFile(elapsedoss.str());
+            } catch(...) { }
             std::cerr << "host_trampoline_raw: callback returned" << std::endl;
             return res;
         } catch (...) {
@@ -647,6 +876,8 @@ HostBindings::Token HostBindings::RegisterRaw(const char* ns, const char* name, 
         holder->cb = cb;
         holder->module = module_;
         holder->maxStringLength = maxStringLength_;
+        // Copy configured per-module execution timeout into the holder so trampolines can enforce it
+        holder->execLimitMs = executionTimeoutMs_;
 
         std::string key = KeyFor(ns, name);
         std::shared_ptr<std::string> keyPtr;
@@ -824,6 +1055,8 @@ HostBindings::Token HostBindings::RegisterI32I32(const char* ns, const char* nam
     holder->cb = std::move(cb);
     holder->module = module_;
     holder->maxStringLength = maxStringLength_;
+    // Copy configured per-module execution timeout into the holder for lock-free checks in trampolines
+    holder->execLimitMs = executionTimeoutMs_;
 
     std::string key = KeyFor(ns, name);
     std::shared_ptr<std::string> keyPtr;
@@ -903,6 +1136,8 @@ HostBindings::Token HostBindings::RegisterVoidString(const char* ns, const char*
     holder->cb = std::move(cb);
     holder->module = module_;
     holder->maxStringLength = maxStringLength_;
+    // Copy configured per-module execution timeout into the holder so trampolines can enforce limits without locking
+    holder->execLimitMs = executionTimeoutMs_;
 
     std::string key = KeyFor(ns, name);
     std::shared_ptr<std::string> keyPtr;
@@ -1129,12 +1364,86 @@ HostBindings::Token::~Token() noexcept {
         }
     };
 
-    // Defer unregistration to avoid touching g_callbacks during potentially unsafe teardown windows.
-    {
+    // Prefer immediate unregistration when it is safe (module_managed_==false).
+    if (!module_managed_) {
+        std::ostringstream osd; osd << "Token::~Token: removing callback immediately for key='" << key << "'";
+        LogToFile(osd.str());
+        try {
+            std::lock_guard<std::mutex> lk(g_callbacksMutex);
+            auto it = g_callbacks.find(key);
+            if (it != g_callbacks.end()) {
+                // Probe the holder pointer before dereferencing to avoid AV during teardown
+                void* rawptr = it->second ? static_cast<void*>(it->second.get()) : nullptr;
+                bool safeToAccess = false;
+                if (rawptr) {
+                    MEMORY_BASIC_INFORMATION mbi;
+                    SIZE_T q = VirtualQuery(rawptr, &mbi, sizeof(mbi));
+                    if (q != 0 && mbi.State == MEM_COMMIT && ((mbi.Protect & PAGE_GUARD) == 0) && mbi.Protect != PAGE_NOACCESS) {
+                        safeToAccess = true;
+                    } else {
+                        std::ostringstream os_probe; os_probe << "Token::~Token: holder memory not safe to access for key='" << key << "' Base=" << (rawptr ? mbi.BaseAddress : nullptr) << " State=" << (rawptr ? mbi.State : 0) << " Protect=" << (rawptr ? mbi.Protect : 0);
+                        LogToFile(os_probe.str());
+                    }
+                } else {
+                    std::ostringstream os_null; os_null << "Token::~Token: holder ptr is null for key='" << key << "' - treating as not found";
+                    LogToFile(os_null.str());
+                }
+
+                if (!rawptr) {
+                    std::ostringstream os4; os4 << "Token::~Token: immediate unregister: key not found '" << key << "'";
+                    LogToFile(os4.str());
+                } else if (!safeToAccess) {
+                    std::ostringstream os_defer; os_defer << "Token::~Token: immediate unregister deferred since holder memory not safe for key='" << key << "'";
+                    LogToFile(os_defer.str());
+                    DeferUnregisterCallback(key, module_managed_);
+                } else {
+                    // Safe to dereference and check ownership
+                    try {
+                        if (it->second && it->second->module == module_) {
+                            try { it->second->active = false; } catch(...) { }
+                            g_import_userdata.erase(key);
+                            g_callbacks.erase(it);
+                            std::ostringstream os2; os2 << "Token::~Token: immediate unregister succeeded for key='" << key << "'";
+                            LogToFile(os2.str());
+                        } else {
+                            std::ostringstream os3; os3 << "Token::~Token: immediate unregister skipped (module mismatch) for key='" << key << "'";
+                            LogToFile(os3.str());
+                        }
+                    } catch (...) {
+                        LogToFile("Token::~Token: exception during immediate unregister; falling back to deferred unregister");
+                        DeferUnregisterCallback(key, module_managed_);
+                    }
+                }
+            } else {
+                std::ostringstream os4; os4 << "Token::~Token: immediate unregister: key not found '" << key << "'";
+                LogToFile(os4.str());
+            }
+        } catch (...) {
+            LogToFile("Token::~Token: exception during immediate unregister; falling back to deferred unregister");
+            DeferUnregisterCallback(key, module_managed_);
+        }
+    } else {
+        // Defer unregistration to avoid touching g_callbacks during potentially unsafe teardown windows.
+        // However, mark the holder as inactive (if present) so future calls will trap quickly rather than invoking
+        // callbacks that may be in teardown.
+        try {
+            std::lock_guard<std::mutex> lk(g_callbacksMutex);
+            auto it = g_callbacks.find(key);
+            if (it != g_callbacks.end() && it->second) {
+                try { it->second->active = false; } catch(...) { }
+                std::ostringstream osm; osm << "Token::~Token: deferred unregister marked inactive for key='" << key << "'";
+                LogToFile(osm.str());
+            } else {
+                std::ostringstream osn; osn << "Token::~Token: deferred unregister could not mark inactive (key missing)='" << key << "'";
+                LogToFile(osn.str());
+            }
+        } catch (...) {
+            LogToFile("Token::~Token: exception while marking deferred holder inactive");
+        }
         std::ostringstream osd; osd << "Token::~Token: deferring unregister for key='" << key << "' module_managed=" << (module_managed_ ? "true" : "false");
         LogToFile(osd.str());
+        DeferUnregisterCallback(key, module_managed_);
     }
-    DeferUnregisterCallback(key, module_managed_);
 
     std::cerr << "Token::~Token: releasing lock and clearing module_" << std::endl;
     module_ = nullptr;
@@ -1167,6 +1476,13 @@ size_t HostBindings::DebugGetCallbacksCount() {
 size_t HostBindings::DebugGetDeferredCount() {
     std::lock_guard<std::mutex> lk(g_deferredUnregMutex);
     return g_deferred_unregs.size();
+}
+
+bool HostBindings::DebugIsCallbackActive(const std::string& key) {
+    std::lock_guard<std::mutex> lk(g_callbacksMutex);
+    auto it = g_callbacks.find(key);
+    if (it == g_callbacks.end() || !it->second) return false;
+    try { return it->second->active; } catch(...) { return false; }
 }
 #endif
 

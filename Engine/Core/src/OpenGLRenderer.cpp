@@ -1,9 +1,11 @@
 #include "engine/OpenGLRenderer.h"
 #include "engine/Texture.h"
+#include "engine/Material.h"
 #include <SDL.h>
 #include <iostream>
 #include <cmath>
-
+#include <fstream>
+#include <sstream>
 
 #ifdef _WIN32
 #define APIENTRY __stdcall
@@ -16,11 +18,50 @@ using PFNGLENABLEPROC = void (APIENTRY*)(unsigned int);
 using PFNGLCLEARPROC = void (APIENTRY*)(unsigned int);
 using PFNGLBLENDFUNCPROC = void (APIENTRY*)(unsigned int, unsigned int);
 
+// Mesh/Shader related
+using PFNGLGENVERTEXARRAYSPROC = void (APIENTRY*)(int, unsigned int*);
+using PFNGLBINDVERTEXARRAYPROC = void (APIENTRY*)(unsigned int);
+using PFNGLGENBUFFERSPROC = void (APIENTRY*)(int, unsigned int*);
+using PFNGLBINDBUFFERPROC = void (APIENTRY*)(unsigned int, unsigned int);
+using PFNGLBUFFERDATAPROC = void (APIENTRY*)(unsigned int, ptrdiff_t, const void*, unsigned int);
+using PFNGLENABLEVERTEXATTRIBARRAYPROC = void (APIENTRY*)(unsigned int);
+using PFNGLVERTEXATTRIBPOINTERPROC = void (APIENTRY*)(unsigned int, int, unsigned int, unsigned char, int, const void*);
+using PFNGLDELETEVERTEXARRAYSPROC = void (APIENTRY*)(int, const unsigned int*);
+using PFNGLDELETEBUFFERSPROC = void (APIENTRY*)(int, const unsigned int*);
+using PFNGLDRAWELEMENTSPROC = void (APIENTRY*)(unsigned int, int, unsigned int, const void*);
+using PFNGLUNIFORM1FPROC = void (APIENTRY*)(int, float);
+using PFNGLUNIFORM3FPROC = void (APIENTRY*)(int, float, float, float);
+using PFNGLUNIFORM4FPROC = void (APIENTRY*)(int, float, float, float, float);
+using PFNGLUNIFORMMATRIX4FVPROC = void (APIENTRY*)(int, int, unsigned char, const float*);
+using PFNGLGETUNIFORMLOCATIONPROC = int (APIENTRY*)(unsigned int, const char*);
+using PFNGLUNIFORM1IPROC = void (APIENTRY*)(int, int);
+using PFNGLACTIVETEXTUREPROC = void (APIENTRY*)(unsigned int);
+using PFNGLBINDTEXTUREPROC = void (APIENTRY*)(unsigned int, unsigned int);
+
 static PFNGLVIEWPORTPROC pglViewport = nullptr;
 static PFNGLCLEARCOLORPROC pglClearColor = nullptr;
 static PFNGLENABLEPROC pglEnable = nullptr;
 static PFNGLCLEARPROC pglClear = nullptr;
 static PFNGLBLENDFUNCPROC pglBlendFunc = nullptr;
+
+static PFNGLGENVERTEXARRAYSPROC pglGenVertexArrays = nullptr;
+static PFNGLBINDVERTEXARRAYPROC pglBindVertexArray = nullptr;
+static PFNGLGENBUFFERSPROC pglGenBuffers = nullptr;
+static PFNGLBINDBUFFERPROC pglBindBuffer = nullptr;
+static PFNGLBUFFERDATAPROC pglBufferData = nullptr;
+static PFNGLENABLEVERTEXATTRIBARRAYPROC pglEnableVertexAttribArray = nullptr;
+static PFNGLVERTEXATTRIBPOINTERPROC pglVertexAttribPointer = nullptr;
+static PFNGLDELETEVERTEXARRAYSPROC pglDeleteVertexArrays = nullptr;
+static PFNGLDELETEBUFFERSPROC pglDeleteBuffers = nullptr;
+static PFNGLDRAWELEMENTSPROC pglDrawElements = nullptr;
+static PFNGLUNIFORM1FPROC pglUniform1f = nullptr;
+static PFNGLUNIFORM3FPROC pglUniform3f = nullptr;
+static PFNGLUNIFORM4FPROC pglUniform4f = nullptr;
+static PFNGLUNIFORMMATRIX4FVPROC pglUniformMatrix4fv = nullptr;
+static PFNGLGETUNIFORMLOCATIONPROC pglGetUniformLocation = nullptr;
+static PFNGLUNIFORM1IPROC pglUniform1i = nullptr;
+static PFNGLACTIVETEXTUREPROC pglActiveTexture = nullptr;
+static PFNGLBINDTEXTUREPROC pglBindTexture = nullptr;
 
 static bool ResolveGL(void** fnPtr, const char* name) {
     if (*fnPtr) return true;
@@ -30,6 +71,14 @@ static bool ResolveGL(void** fnPtr, const char* name) {
     return true;
 }
 
+static std::string ReadFile(const std::string& path) {
+    std::ifstream t(path);
+    if (!t.is_open()) return "";
+    std::stringstream buffer;
+    buffer << t.rdbuf();
+    return buffer.str();
+}
+
 // Needed GL constants
 #define GL_DEPTH_TEST        0x0B71
 #define GL_COLOR_BUFFER_BIT  0x00004000
@@ -37,6 +86,26 @@ static bool ResolveGL(void** fnPtr, const char* name) {
 #define GL_BLEND             0x0BE2
 #define GL_SRC_ALPHA         0x0302
 #define GL_ONE_MINUS_SRC_ALPHA 0x0303
+#define GL_ARRAY_BUFFER      0x8892
+#define GL_ELEMENT_ARRAY_BUFFER 0x8893
+#define GL_STATIC_DRAW       0x88E4
+#define GL_FLOAT             0x1406
+#define GL_UNSIGNED_INT      0x1405
+#define GL_UNSIGNED_SHORT    0x1403
+#define GL_TRIANGLES         0x0004
+#define GL_FALSE             0
+#define GL_DYNAMIC_DRAW      0x88E8
+#define GL_ARRAY_BUFFER_BINDING 0x8894
+#define GL_ELEMENT_ARRAY_BUFFER_BINDING 0x8895
+#define GL_VERTEX_ATTRIB_ARRAY_ENABLED 0x8622
+#define GL_VERTEX_ATTRIB_ARRAY_BUFFER_BINDING 0x889F
+#define GL_TEXTURE0          0x84C0
+#define GL_TEXTURE_2D        0x0DE1
+#define GL_RGBA              0x1908
+#define GL_UNSIGNED_BYTE     0x1401
+#define GL_NEAREST           0x2600
+#define GL_TEXTURE_MIN_FILTER 0x2801
+#define GL_TEXTURE_MAG_FILTER 0x2800
 
 namespace Genesis::Engine {
 
@@ -62,6 +131,27 @@ bool OpenGLRenderer::Init(SDL_Window* window, SDL_GLContext glContext) {
     ResolveGL((void**)&pglClearColor, "glClearColor");
     ResolveGL((void**)&pglEnable, "glEnable");
     ResolveGL((void**)&pglClear, "glClear");
+    ResolveGL((void**)&pglBlendFunc, "glBlendFunc");
+
+    // Resolve Mesh/Shader functions
+    ResolveGL((void**)&pglGenVertexArrays, "glGenVertexArrays");
+    ResolveGL((void**)&pglBindVertexArray, "glBindVertexArray");
+    ResolveGL((void**)&pglGenBuffers, "glGenBuffers");
+    ResolveGL((void**)&pglBindBuffer, "glBindBuffer");
+    ResolveGL((void**)&pglBufferData, "glBufferData");
+    ResolveGL((void**)&pglEnableVertexAttribArray, "glEnableVertexAttribArray");
+    ResolveGL((void**)&pglVertexAttribPointer, "glVertexAttribPointer");
+    ResolveGL((void**)&pglDeleteVertexArrays, "glDeleteVertexArrays");
+    ResolveGL((void**)&pglDeleteBuffers, "glDeleteBuffers");
+    ResolveGL((void**)&pglDrawElements, "glDrawElements");
+    ResolveGL((void**)&pglUniform1f, "glUniform1f");
+    ResolveGL((void**)&pglUniform3f, "glUniform3f");
+    ResolveGL((void**)&pglUniform4f, "glUniform4f");
+    ResolveGL((void**)&pglUniformMatrix4fv, "glUniformMatrix4fv");
+    ResolveGL((void**)&pglGetUniformLocation, "glGetUniformLocation");
+    ResolveGL((void**)&pglUniform1i, "glUniform1i");
+    ResolveGL((void**)&pglActiveTexture, "glActiveTexture");
+    ResolveGL((void**)&pglBindTexture, "glBindTexture");
 
     std::cout << "OpenGLRenderer::Init -> GL func ptrs: pglViewport=" << (void*)pglViewport << " pglClearColor=" << (void*)pglClearColor << " pglEnable=" << (void*)pglEnable << " pglClear=" << (void*)pglClear << std::endl;
 
@@ -88,7 +178,7 @@ bool OpenGLRenderer::Init(SDL_Window* window, SDL_GLContext glContext) {
         }
     }
     if (pglEnable) { pglEnable(GL_DEPTH_TEST); std::cout << "OpenGLRenderer::Init -> enabled depth test" << std::endl; }
-    ResolveGL((void**)&pglBlendFunc, "glBlendFunc");
+    
     std::cout << "OpenGLRenderer::Init -> pglBlendFunc=" << (void*)pglBlendFunc << std::endl;
     if (pglBlendFunc) {
         pglEnable(GL_BLEND);
@@ -145,43 +235,16 @@ bool OpenGLRenderer::Init(SDL_Window* window, SDL_GLContext glContext) {
            -0.8f, -0.8f, 0.0f,
             0.8f, -0.8f, 0.0f
         };
-        using PFNGLGENVERTEXARRAYSPROC = void (APIENTRY*)(int, unsigned int*);
-        using PFNGLBINDVERTEXARRAYPROC = void (APIENTRY*)(unsigned int);
-        using PFNGLGENBUFFERSPROC = void (APIENTRY*)(int, unsigned int*);
-        using PFNGLBINDBUFFERPROC = void (APIENTRY*)(unsigned int, unsigned int);
-        using PFNGLBUFFERDATAPROC = void (APIENTRY*)(unsigned int, ptrdiff_t, const void*, unsigned int);
-        using PFNGLENABLEVERTEXATTRIBARRAYPROC = void (APIENTRY*)(unsigned int);
-        using PFNGLVERTEXATTRIBPOINTERPROC = void (APIENTRY*)(unsigned int, int, unsigned int, unsigned char, int, const void*);
-        using PFNGLDRAWARRAYSPROC = void (APIENTRY*)(unsigned int, int, int);
-
-        auto addrGenVAO = (void*)SDL_GL_GetProcAddress("glGenVertexArrays");
-        auto addrBindVAO = (void*)SDL_GL_GetProcAddress("glBindVertexArray");
-        auto addrGenBuf = (void*)SDL_GL_GetProcAddress("glGenBuffers");
-        auto addrBindBuf = (void*)SDL_GL_GetProcAddress("glBindBuffer");
-        auto addrBufData = (void*)SDL_GL_GetProcAddress("glBufferData");
-        auto addrEnableAttr = (void*)SDL_GL_GetProcAddress("glEnableVertexAttribArray");
-        auto addrAttribPtr = (void*)SDL_GL_GetProcAddress("glVertexAttribPointer");
-
-        if (addrGenVAO && addrBindVAO && addrGenBuf && addrBindBuf && addrBufData && addrEnableAttr && addrAttribPtr) {
-            auto pglGenVertexArrays = (PFNGLGENVERTEXARRAYSPROC)addrGenVAO;
-            auto pglBindVertexArray = (PFNGLBINDVERTEXARRAYPROC)addrBindVAO;
-            auto pglGenBuffers = (PFNGLGENBUFFERSPROC)addrGenBuf;
-            auto pglBindBuffer = (PFNGLBINDBUFFERPROC)addrBindBuf;
-            auto pglBufferData = (PFNGLBUFFERDATAPROC)addrBufData;
-            auto pglEnableVertexAttribArray = (PFNGLENABLEVERTEXATTRIBARRAYPROC)addrEnableAttr;
-            auto pglVertexAttribPointer = (PFNGLVERTEXATTRIBPOINTERPROC)addrAttribPtr;
-
+        
+        if (pglGenVertexArrays && pglBindVertexArray && pglGenBuffers && pglBindBuffer && pglBufferData && pglEnableVertexAttribArray && pglVertexAttribPointer) {
             pglGenVertexArrays(1, &m_debugVAO);
             pglBindVertexArray(m_debugVAO);
 
             pglGenBuffers(1, &m_debugVBO);
-            const unsigned int GL_ARRAY_BUFFER = 0x8892;
-            const unsigned int GL_STATIC_DRAW = 0x88E4;
             pglBindBuffer(GL_ARRAY_BUFFER, m_debugVBO);
             pglBufferData(GL_ARRAY_BUFFER, sizeof(triVerts), triVerts, GL_STATIC_DRAW);
 
             pglEnableVertexAttribArray(0);
-            const unsigned int GL_FLOAT = 0x1406;
             pglVertexAttribPointer(0, 3, GL_FLOAT, 0, 0, (const void*)0);
 
             pglBindVertexArray(0);
@@ -223,50 +286,22 @@ bool OpenGLRenderer::Init(SDL_Window* window, SDL_GLContext glContext) {
         std::cerr << "OpenGLRenderer: sprite shader failed to compile" << std::endl;
     } else {
         // Create quad VAO/VBO/EBO for streaming sprite draws
-        using PFNGLGENVERTEXARRAYSPROC = void (APIENTRY*)(int, unsigned int*);
-        using PFNGLBINDVERTEXARRAYPROC = void (APIENTRY*)(unsigned int);
-        using PFNGLGENBUFFERSPROC = void (APIENTRY*)(int, unsigned int*);
-        using PFNGLBINDBUFFERPROC = void (APIENTRY*)(unsigned int, unsigned int);
-        using PFNGLBUFFERDATAPROC = void (APIENTRY*)(unsigned int, ptrdiff_t, const void*, unsigned int);
-        using PFNGLENABLEVERTEXATTRIBARRAYPROC = void (APIENTRY*)(unsigned int);
-        using PFNGLVERTEXATTRIBPOINTERPROC = void (APIENTRY*)(unsigned int, int, unsigned int, unsigned char, int, const void*);
-
-        auto addrGenVAO = (void*)SDL_GL_GetProcAddress("glGenVertexArrays");
-        auto addrBindVAO = (void*)SDL_GL_GetProcAddress("glBindVertexArray");
-        auto addrGenBuf = (void*)SDL_GL_GetProcAddress("glGenBuffers");
-        auto addrBindBuf = (void*)SDL_GL_GetProcAddress("glBindBuffer");
-        auto addrBufData = (void*)SDL_GL_GetProcAddress("glBufferData");
-        auto addrEnableAttr = (void*)SDL_GL_GetProcAddress("glEnableVertexAttribArray");
-        auto addrAttribPtr = (void*)SDL_GL_GetProcAddress("glVertexAttribPointer");
-
-        if (addrGenVAO && addrBindVAO && addrGenBuf && addrBindBuf && addrBufData && addrEnableAttr && addrAttribPtr) {
-            auto pglGenVertexArrays = (PFNGLGENVERTEXARRAYSPROC)addrGenVAO;
-            auto pglBindVertexArray = (PFNGLBINDVERTEXARRAYPROC)addrBindVAO;
-            auto pglGenBuffers = (PFNGLGENBUFFERSPROC)addrGenBuf;
-            auto pglBindBuffer = (PFNGLBINDBUFFERPROC)addrBindBuf;
-            auto pglBufferData = (PFNGLBUFFERDATAPROC)addrBufData;
-            auto pglEnableVertexAttribArray = (PFNGLENABLEVERTEXATTRIBARRAYPROC)addrEnableAttr;
-            auto pglVertexAttribPointer = (PFNGLVERTEXATTRIBPOINTERPROC)addrAttribPtr;
-
+        if (pglGenVertexArrays && pglBindVertexArray && pglGenBuffers && pglBindBuffer && pglBufferData && pglEnableVertexAttribArray && pglVertexAttribPointer) {
             pglGenVertexArrays(1, &m_spriteVAO);
             pglBindVertexArray(m_spriteVAO);
 
             pglGenBuffers(1, &m_spriteVBO);
-            const unsigned int GL_ARRAY_BUFFER = 0x8892;
-            const unsigned int GL_DYNAMIC_DRAW = 0x88E8;
+
             pglBindBuffer(GL_ARRAY_BUFFER, m_spriteVBO);
             // Allocate space for 4 vertices (pos.xy, uv.xy)
             pglBufferData(GL_ARRAY_BUFFER, sizeof(float) * 4 * 4, nullptr, GL_DYNAMIC_DRAW);
 
             pglGenBuffers(1, &m_spriteEBO);
-            const unsigned int GL_ELEMENT_ARRAY_BUFFER = 0x8893;
-            const unsigned int GL_STATIC_DRAW = 0x88E4;
             pglBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_spriteEBO);
             const unsigned int indices[] = {0,1,2, 2,3,0};
             pglBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
 
             pglEnableVertexAttribArray(0);
-            const unsigned int GL_FLOAT = 0x1406;
             pglVertexAttribPointer(0, 2, GL_FLOAT, 0, sizeof(float) * 4, (const void*)0);
             pglEnableVertexAttribArray(1);
             pglVertexAttribPointer(1, 2, GL_FLOAT, 0, sizeof(float) * 4, (const void*)(sizeof(float) * 2));
@@ -277,43 +312,49 @@ bool OpenGLRenderer::Init(SDL_Window* window, SDL_GLContext glContext) {
             std::cerr << "OpenGLRenderer: sprite quad - GL functions not available" << std::endl;
         }
 
-        // Create a simple prototype PBR shader (very simple lighting model for smoke testing)
-        const std::string pbrVert = R"(
-            #version 330 core
-            layout(location = 0) in vec3 aPos;
-            layout(location = 1) in vec3 aNormal;
-            out vec3 vNormal;
-            void main() {
-                vNormal = aNormal;
-                gl_Position = vec4(aPos, 1.0);
-            }
-        )";
+        // Try to load PBR shader from file, fallback to embedded
+        std::string pbrVertSrc = ReadFile("Assets/shaders/pbr.vert");
+        std::string pbrFragSrc = ReadFile("Assets/shaders/pbr.frag");
+        
+        if (pbrVertSrc.empty() || pbrFragSrc.empty()) {
+            std::cout << "OpenGLRenderer: PBR shader files not found, using embedded fallback" << std::endl;
+            pbrVertSrc = R"(
+                #version 330 core
+                layout(location = 0) in vec3 aPos;
+                layout(location = 1) in vec3 aNormal;
+                out vec3 vNormal;
+                void main() {
+                    vNormal = aNormal;
+                    gl_Position = vec4(aPos, 1.0);
+                }
+            )";
 
-        const std::string pbrFrag = R"(
-            #version 330 core
-            in vec3 vNormal;
-            out vec4 FragColor;
-            uniform vec4 uBaseColor = vec4(1.0,1.0,1.0,1.0);
-            uniform float uMetallic = 0.0;
-            uniform float uRoughness = 1.0;
-            void main() {
-                vec3 n = normalize(vNormal);
-                vec3 lightDir = normalize(vec3(0.5, 0.5, 0.8));
-                float NdotL = max(dot(n, lightDir), 0.0);
-                vec3 diffuse = uBaseColor.rgb * NdotL;
-                vec3 viewDir = normalize(vec3(0.0,0.0,1.0));
-                vec3 halfDir = normalize(lightDir + viewDir);
-                float spec = pow(max(dot(n, halfDir), 0.0), mix(16.0, 128.0, 1.0 - uRoughness));
-                vec3 specular = vec3(uMetallic) * spec;
-                FragColor = vec4(diffuse + specular, uBaseColor.a);
-            }
-        )";
+            pbrFragSrc = R"(
+                #version 330 core
+                in vec3 vNormal;
+                out vec4 FragColor;
+                uniform vec4 uBaseColor = vec4(1.0,1.0,1.0,1.0);
+                uniform float uMetallic = 0.0;
+                uniform float uRoughness = 1.0;
+                void main() {
+                    vec3 n = normalize(vNormal);
+                    vec3 lightDir = normalize(vec3(0.5, 0.5, 0.8));
+                    float NdotL = max(dot(n, lightDir), 0.0);
+                    vec3 diffuse = uBaseColor.rgb * NdotL;
+                    vec3 viewDir = normalize(vec3(0.0,0.0,1.0));
+                    vec3 halfDir = normalize(lightDir + viewDir);
+                    float spec = pow(max(dot(n, halfDir), 0.0), mix(16.0, 128.0, 1.0 - uRoughness));
+                    vec3 specular = vec3(uMetallic) * spec;
+                    FragColor = vec4(diffuse + specular, uBaseColor.a);
+                }
+            )";
+        }
 
-        m_pbrShader = Shader::FromSource(pbrVert, pbrFrag);
+        m_pbrShader = Shader::FromSource(pbrVertSrc, pbrFragSrc);
         if (!m_pbrShader) {
-            std::cerr << "OpenGLRenderer: failed to compile PBR prototype shader" << std::endl;
+            std::cerr << "OpenGLRenderer: failed to compile PBR shader" << std::endl;
         } else {
-            std::cout << "OpenGLRenderer: compiled prototype PBR shader id=" << m_pbrShader->GetID() << std::endl;
+            std::cout << "OpenGLRenderer: compiled PBR shader id=" << m_pbrShader->GetID() << std::endl;
         }
     }
 
@@ -382,14 +423,14 @@ void OpenGLRenderer::BeginFrame() {
                 if (addrGetIntegerv) {
                     using PFNGLGETINTEGERVPROC = void (APIENTRY*)(unsigned int, int*);
                     PFNGLGETINTEGERVPROC pglGetIntegerv = (PFNGLGETINTEGERVPROC)addrGetIntegerv;
-                    int boundArray = 0; const unsigned int GL_ARRAY_BUFFER_BINDING = 0x8894; pglGetIntegerv(GL_ARRAY_BUFFER_BINDING, &boundArray);
+                    int boundArray = 0; pglGetIntegerv(GL_ARRAY_BUFFER_BINDING, &boundArray);
                     std::cout << "DebugTriangle -> GL_ARRAY_BUFFER_BINDING=" << boundArray << std::endl;
                 }
                 auto addrGetVertexAttrib = (void*)SDL_GL_GetProcAddress("glGetVertexAttribiv");
                 if (addrGetVertexAttrib) {
                     using PFNGLGETVERTEXATTRIBIVPROC = void (APIENTRY*)(unsigned int, unsigned int, int*);
                     PFNGLGETVERTEXATTRIBIVPROC pglGetVertexAttribiv = (PFNGLGETVERTEXATTRIBIVPROC)addrGetVertexAttrib;
-                    int enabled0 = 0, bufbind0 = -1; const unsigned int GL_VERTEX_ATTRIB_ARRAY_ENABLED = 0x8622; const unsigned int GL_VERTEX_ATTRIB_ARRAY_BUFFER_BINDING = 0x889F;
+                    int enabled0 = 0, bufbind0 = -1;
                     pglGetVertexAttribiv(0, GL_VERTEX_ATTRIB_ARRAY_ENABLED, &enabled0);
                     pglGetVertexAttribiv(0, GL_VERTEX_ATTRIB_ARRAY_BUFFER_BINDING, &bufbind0);
                     std::cout << "DebugTriangle -> attrib0 enabled=" << enabled0 << " buffer_binding=" << bufbind0 << std::endl;
@@ -431,7 +472,7 @@ void OpenGLRenderer::BeginFrame() {
                     pglGenVertexArrays2(1,&tmpVAO);
                     pglBindVertexArray2(tmpVAO);
                     pglGenBuffers2(1,&tmpVBO);
-                    const unsigned int GL_ARRAY_BUFFER = 0x8892; const unsigned int GL_ELEMENT_ARRAY_BUFFER = 0x8893; const unsigned int GL_STATIC_DRAW = 0x88E4; const unsigned int GL_FLOAT = 0x1406; const unsigned int GL_UNSIGNED_INT = 0x1405;
+
                     pglBindBuffer2(GL_ARRAY_BUFFER, tmpVBO);
                     pglBufferData2(GL_ARRAY_BUFFER, sizeof(triVerts2), triVerts2, GL_STATIC_DRAW);
                     pglGenBuffers2(1,&tmpEBO);
@@ -445,7 +486,7 @@ void OpenGLRenderer::BeginFrame() {
                     if (addrGetIntegerv) {
                         using PFNGLGETINTEGERVPROC = void (APIENTRY*)(unsigned int, int*);
                         PFNGLGETINTEGERVPROC pglGetIntegerv = (PFNGLGETINTEGERVPROC)addrGetIntegerv;
-                        int boundArray=0,boundElem=0; const unsigned int GL_ARRAY_BUFFER_BINDING=0x8894; const unsigned int GL_ELEMENT_ARRAY_BUFFER_BINDING=0x8895; pglGetIntegerv(GL_ARRAY_BUFFER_BINDING,&boundArray); pglGetIntegerv(GL_ELEMENT_ARRAY_BUFFER_BINDING,&boundElem); std::cout<<"Diag EBO test -> GL_ARRAY_BUFFER_BINDING="<<boundArray<<" GL_ELEMENT_ARRAY_BUFFER_BINDING="<<boundElem<<std::endl;
+                        int boundArray=0,boundElem=0; pglGetIntegerv(GL_ARRAY_BUFFER_BINDING,&boundArray); pglGetIntegerv(GL_ELEMENT_ARRAY_BUFFER_BINDING,&boundElem); std::cout<<"Diag EBO test -> GL_ARRAY_BUFFER_BINDING="<<boundArray<<" GL_ELEMENT_ARRAY_BUFFER_BINDING="<<boundElem<<std::endl;
                     }
 
                     pglDrawElements2(0x0004, 3, GL_UNSIGNED_INT, nullptr);
@@ -562,12 +603,11 @@ void OpenGLRenderer::BeginFrame() {
         int locTex = pglGetUniformLocation(m_spriteShader->GetID(), "uTex");
         if (locTex >= 0) pglUniform1i(locTex, 0);
 
-        const unsigned int GL_TEXTURE0 = 0x84C0;
-        const unsigned int GL_TEXTURE_2D = 0x0DE1;
+
         pglActiveTexture(GL_TEXTURE0);
         pglBindTexture(GL_TEXTURE_2D, texId);
 
-        const unsigned int GL_ARRAY_BUFFER = 0x8892;
+
         pglBindVertexArray(m_spriteVAO);
         pglBindBuffer(GL_ARRAY_BUFFER, m_spriteVBO);
         pglBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(verts), verts);
@@ -662,12 +702,7 @@ IGraphicsAPI::TextureHandle OpenGLRenderer::CreateTexture(uint32_t width, uint32
     auto pglTexParameteri = (PFNGLTEXPARAMETERIPROC)addrTexParam;
     auto pglTexImage2D = (PFNGLTEXIMAGE2DPROC)addrTexImage;
 
-    const unsigned int GL_TEXTURE_2D = 0x0DE1;
-    const unsigned int GL_RGBA = 0x1908;
-    const unsigned int GL_UNSIGNED_BYTE = 0x1401;
-    const unsigned int GL_NEAREST = 0x2600;
-    const unsigned int GL_TEXTURE_MIN_FILTER = 0x2801;
-    const unsigned int GL_TEXTURE_MAG_FILTER = 0x2800;
+
 
     unsigned int id = 0;
     pglGenTextures(1, &id);
@@ -682,6 +717,199 @@ IGraphicsAPI::TextureHandle OpenGLRenderer::CreateTexture(uint32_t width, uint32
     h.id = id;
     std::cout << "OpenGLRenderer::CreateTexture -> created GL texture " << id << " (" << width << "x" << height << ")" << std::endl;
     return h;
+}
+
+MeshHandle OpenGLRenderer::CreateMesh(const MeshDesc& desc) {
+    MeshHandle h;
+    if (!m_window || !m_context) return h;
+    if (SDL_GL_MakeCurrent(m_window, m_context) != 0) return h;
+
+    if (!pglGenVertexArrays || !pglBindVertexArray || !pglGenBuffers || !pglBindBuffer || !pglBufferData || !pglEnableVertexAttribArray || !pglVertexAttribPointer) {
+        std::cerr << "OpenGLRenderer::CreateMesh -> GL functions missing" << std::endl;
+        return h;
+    }
+
+    GLMesh mesh;
+    pglGenVertexArrays(1, &mesh.vao);
+    pglBindVertexArray(mesh.vao);
+
+    pglGenBuffers(1, &mesh.vbo);
+    pglBindBuffer(GL_ARRAY_BUFFER, mesh.vbo);
+    
+    // Interleaving implementation
+    std::vector<float> interleaved;
+    bool hasNormals = !desc.normals.empty() && (desc.normals.size() == desc.vertices.size());
+    bool hasUVs = !desc.uvs.empty() && (desc.uvs.size() / 2 == desc.vertices.size() / 3);
+    size_t vertexCount = desc.vertices.size() / 3;
+    interleaved.reserve(vertexCount * (3 + (hasNormals ? 3 : 0) + (hasUVs ? 2 : 0)));
+    
+    for (size_t i = 0; i < vertexCount; ++i) {
+        interleaved.push_back(desc.vertices[i*3+0]);
+        interleaved.push_back(desc.vertices[i*3+1]);
+        interleaved.push_back(desc.vertices[i*3+2]);
+        if (hasNormals) {
+            interleaved.push_back(desc.normals[i*3+0]);
+            interleaved.push_back(desc.normals[i*3+1]);
+            interleaved.push_back(desc.normals[i*3+2]);
+        }
+        if (hasUVs) {
+            interleaved.push_back(desc.uvs[i*2+0]);
+            interleaved.push_back(desc.uvs[i*2+1]);
+        }
+    }
+    
+    pglBufferData(GL_ARRAY_BUFFER, (ptrdiff_t)(interleaved.size() * sizeof(float)), interleaved.data(), GL_STATIC_DRAW);
+
+    pglGenBuffers(1, &mesh.ebo);
+    pglBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh.ebo);
+    
+    // Index type selection
+    uint32_t maxIndex = 0;
+    for (uint32_t i : desc.indices) if (i > maxIndex) maxIndex = i;
+    
+    if (maxIndex <= 0xFFFFu) {
+        std::vector<uint16_t> indices16;
+        indices16.reserve(desc.indices.size());
+        for (uint32_t i : desc.indices) indices16.push_back((uint16_t)i);
+        pglBufferData(GL_ELEMENT_ARRAY_BUFFER, (ptrdiff_t)(indices16.size() * sizeof(uint16_t)), indices16.data(), GL_STATIC_DRAW);
+        mesh.indexType = GL_UNSIGNED_SHORT;
+    } else {
+        pglBufferData(GL_ELEMENT_ARRAY_BUFFER, (ptrdiff_t)(desc.indices.size() * sizeof(uint32_t)), desc.indices.data(), GL_STATIC_DRAW);
+        mesh.indexType = GL_UNSIGNED_INT;
+    }
+    mesh.indexCount = desc.indices.size();
+
+    size_t stride = (3 + (hasNormals ? 3 : 0) + (hasUVs ? 2 : 0)) * sizeof(float);
+    pglEnableVertexAttribArray(0);
+    pglVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, (int)stride, (const void*)0);
+    
+    size_t offset = 3 * sizeof(float);
+    if (hasNormals) {
+        pglEnableVertexAttribArray(1);
+        pglVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, (int)stride, (const void*)offset);
+        offset += 3 * sizeof(float);
+    }
+
+    if (hasUVs) {
+        pglEnableVertexAttribArray(2);
+        pglVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, (int)stride, (const void*)offset);
+    }
+
+    pglBindVertexArray(0);
+
+    h.id = m_nextMeshId++;
+    m_meshes[h.id] = mesh;
+    return h;
+}
+
+void OpenGLRenderer::DestroyMesh(const MeshHandle& h) {
+    if (!h.IsValid()) return;
+    auto it = m_meshes.find(h.id);
+    if (it == m_meshes.end()) return;
+
+    if (m_window && m_context && SDL_GL_MakeCurrent(m_window, m_context) == 0) {
+        GLMesh& m = it->second;
+        if (pglDeleteBuffers) {
+            if (m.vbo) pglDeleteBuffers(1, &m.vbo);
+            if (m.ebo) pglDeleteBuffers(1, &m.ebo);
+        }
+        if (pglDeleteVertexArrays && m.vao) pglDeleteVertexArrays(1, &m.vao);
+    }
+    m_meshes.erase(it);
+}
+
+void OpenGLRenderer::DrawMesh(const MeshHandle& h) {
+    DrawMesh(h, nullptr, nullptr);
+}
+
+void OpenGLRenderer::DrawMesh(const MeshHandle& h, Material* material, const float* transform) {
+    if (!h.IsValid()) return;
+    auto it = m_meshes.find(h.id);
+    if (it == m_meshes.end()) return;
+    
+    if (SDL_GL_MakeCurrent(m_window, m_context) != 0) return;
+
+    const GLMesh& m = it->second;
+
+    // Use PBR shader if material is present, otherwise default
+    Shader* shader = (material && m_pbrShader) ? m_pbrShader.get() : m_defaultShader.get();
+    if (shader) {
+        shader->Use();
+        unsigned int prog = shader->GetID();
+        
+        if (material) {
+            int locBase = pglGetUniformLocation(prog, "uBaseColor");
+            if (locBase >= 0) pglUniform4f(locBase, material->baseColor[0], material->baseColor[1], material->baseColor[2], material->baseColor[3]);
+            
+            int locMet = pglGetUniformLocation(prog, "uMetallic");
+            if (locMet >= 0) pglUniform1f(locMet, material->metallic);
+            
+            int locRough = pglGetUniformLocation(prog, "uRoughness");
+            if (locRough >= 0) pglUniform1f(locRough, material->roughness);
+
+            // Textures
+            if (material->baseColorTextureObj) {
+                material->baseColorTextureObj->UploadToRenderer(this);
+                unsigned int texId = material->baseColorTextureObj->GetID();
+                if (texId) {
+                    if (pglActiveTexture) pglActiveTexture(GL_TEXTURE0);
+                    if (pglBindTexture) pglBindTexture(GL_TEXTURE_2D, texId);
+                    int locTex = pglGetUniformLocation(prog, "uBaseColorTexture");
+                    if (locTex >= 0 && pglUniform1i) pglUniform1i(locTex, 0);
+                    
+                    int locHasTex = pglGetUniformLocation(prog, "uHasBaseColorTexture");
+                    if (locHasTex >= 0 && pglUniform1i) pglUniform1i(locHasTex, 1);
+                }
+            } else {
+                int locHasTex = pglGetUniformLocation(prog, "uHasBaseColorTexture");
+                if (locHasTex >= 0 && pglUniform1i) pglUniform1i(locHasTex, 0);
+            }
+        }
+        
+        if (transform) {
+             int locModel = pglGetUniformLocation(prog, "uModel");
+             if (locModel >= 0) pglUniformMatrix4fv(locModel, 1, GL_FALSE, transform);
+        }
+        
+        int locVP = pglGetUniformLocation(prog, "uViewProjection");
+        if (locVP >= 0) {
+            float identity[16] = {
+                1,0,0,0,
+                0,1,0,0,
+                0,0,1,0,
+                0,0,0,1
+            };
+            pglUniformMatrix4fv(locVP, 1, GL_FALSE, identity);
+        }
+
+        // Light uniforms
+        int locLightDir = pglGetUniformLocation(prog, "uLightDir");
+        if (locLightDir >= 0) pglUniform3f(locLightDir, m_lightDir[0], m_lightDir[1], m_lightDir[2]);
+
+        int locLightColor = pglGetUniformLocation(prog, "uLightColor");
+        if (locLightColor >= 0) pglUniform3f(locLightColor, m_lightColor[0], m_lightColor[1], m_lightColor[2]);
+
+        int locLightInt = pglGetUniformLocation(prog, "uLightIntensity");
+        if (locLightInt >= 0) pglUniform1f(locLightInt, m_lightIntensity);
+    }
+
+    pglBindVertexArray(m.vao);
+    pglDrawElements(GL_TRIANGLES, (int)m.indexCount, m.indexType, nullptr);
+    pglBindVertexArray(0);
+}
+
+void OpenGLRenderer::SetGlobalLight(const float direction[3], const float color[3], float intensity) {
+    if (direction) {
+        m_lightDir[0] = direction[0];
+        m_lightDir[1] = direction[1];
+        m_lightDir[2] = direction[2];
+    }
+    if (color) {
+        m_lightColor[0] = color[0];
+        m_lightColor[1] = color[1];
+        m_lightColor[2] = color[2];
+    }
+    m_lightIntensity = intensity;
 }
 
 void OpenGLRenderer::DestroyTexture(const IGraphicsAPI::TextureHandle& h) {

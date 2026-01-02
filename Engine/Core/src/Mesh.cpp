@@ -13,9 +13,10 @@ namespace Genesis::Engine {
 
 // Destructor placed after function pointer declarations for visibility
 
-void Mesh::SetData(const std::vector<float>& vertices, const std::vector<float>& normals, const std::vector<uint32_t>& indices) {
+void Mesh::SetData(const std::vector<float>& vertices, const std::vector<float>& normals, const std::vector<float>& uvs, const std::vector<uint32_t>& indices) {
     vertices_ = vertices;
     normals_ = normals;
+    uvs_ = uvs;
     indices_ = indices;
 
     // Register so we can recreate/destroy resources when renderer switches
@@ -90,6 +91,7 @@ Mesh::~Mesh() {
 Mesh::Mesh(Mesh&& other) noexcept {
     vertices_ = std::move(other.vertices_);
     normals_ = std::move(other.normals_);
+    uvs_ = std::move(other.uvs_);
     indices_ = std::move(other.indices_);
 
     vao_ = other.vao_;
@@ -118,6 +120,7 @@ Mesh& Mesh::operator=(Mesh&& other) noexcept {
 
     vertices_ = std::move(other.vertices_);
     normals_ = std::move(other.normals_);
+    uvs_ = std::move(other.uvs_);
     indices_ = std::move(other.indices_);
 
     vao_ = other.vao_;
@@ -142,7 +145,7 @@ void Mesh::UploadToGPU() {
     // If a non-GL renderer is active and supports CreateMesh, try to upload there first
     IGraphicsAPI* cur = RendererManager::GetRenderer();
     if (cur) {
-        MeshDesc desc{ vertices_, normals_, indices_ };
+        MeshDesc desc{ vertices_, normals_, uvs_, indices_ };
         MeshHandle h = cur->CreateMesh(desc);
         if (h.IsValid()) {
             handle_ = h;
@@ -275,6 +278,16 @@ void Mesh::UploadToGPU() {
         pglVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, (const void*)0);
     }
 
+    // If UVs exist, create a UV VBO
+    if (!uvs_.empty()) {
+        unsigned int uvsVBO = 0;
+        pglGenBuffers(1, &uvsVBO);
+        pglBindBuffer(GL_ARRAY_BUFFER, uvsVBO);
+        pglBufferData(GL_ARRAY_BUFFER, (ptrdiff_t)(uvs_.size() * sizeof(float)), uvs_.data(), GL_STATIC_DRAW);
+        pglEnableVertexAttribArray(2);
+        pglVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 0, (const void*)0);
+    }
+
     // NOTE: keep VAO bound for diagnosis (some drivers have surprising VAO semantics)
     // pglBindVertexArray(0);
     uploaded_ = true;
@@ -316,7 +329,7 @@ void Mesh::UploadToRenderer(IGraphicsAPI* renderer) {
 
     if (!renderer) return; // nothing to do
 
-    MeshDesc desc{ vertices_, normals_, indices_ };
+    MeshDesc desc{ vertices_, normals_, uvs_, indices_ };
     MeshHandle h = renderer->CreateMesh(desc);
     if (h.IsValid()) {
         handle_ = h;
@@ -324,6 +337,25 @@ void Mesh::UploadToRenderer(IGraphicsAPI* renderer) {
         uploadKind_ = UploadKind::Renderer;
         std::cout << "Mesh::UploadToRenderer -> uploaded to renderer handle=" << h.id << std::endl;
     }
+}
+
+void Mesh::Draw(Material* material, const float* transform) const {
+    if (vertices_.empty() || indices_.empty()) return;
+
+    // If this mesh belongs to a non-GL renderer, draw via the renderer API
+    if (uploadKind_ == UploadKind::Renderer && handle_.IsValid()) {
+        IGraphicsAPI* cur = RendererManager::GetRenderer();
+        if (cur) {
+            cur->DrawMesh(handle_, material, transform);
+            return;
+        }
+    }
+    
+    // Fallback to standard Draw() if no renderer handle or renderer doesn't support material/transform override
+    // Note: Standard Draw() doesn't support material/transform, so this is a best-effort fallback
+    // Ideally, we should set uniforms here if we are in GL mode but not using the renderer API directly
+    // For now, just call Draw() which will use whatever shader is active
+    Draw();
 }
 
 void Mesh::Draw() const {

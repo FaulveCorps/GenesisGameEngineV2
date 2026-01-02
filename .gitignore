@@ -86,6 +86,9 @@ test_cycle_*.bmp
 # Crash capture / Procdump artifacts
 Tools/Procdump.zip
 tools/Procdump/*.dmp
+*.dmp
+dumps/
+Tools/external/procdump/dumps/
 
 # Temporary and misc
 *.tmp
@@ -139,3 +142,6 @@ build-ninja-release/
 /Agenda/**
 
 # End of generated ignores
+
+# Snyk Security Extension - AI Rules (auto-generated)
+.github/instructions/snyk_rules.instructions.md

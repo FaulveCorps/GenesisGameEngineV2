@@ -30,8 +30,9 @@ TEST_CASE("Renderer runtime switch basic") {
     Genesis::Engine::Mesh m;
     std::vector<float> verts = { 0.0f,0.5f,0.0f,  -0.5f,-0.5f,0.0f,  0.5f,-0.5f,0.0f };
     std::vector<float> norms; // empty
+    std::vector<float> uvs; // empty
     std::vector<uint32_t> idx = {0,1,2};
-    m.SetData(verts, norms, idx);
+    m.SetData(verts, norms, uvs, idx);
 
     // Upload to current renderer
     m.UploadToGPU();
