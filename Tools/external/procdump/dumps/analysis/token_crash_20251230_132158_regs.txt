@@ -1,9 +1,0 @@
-Rax 0x7ff77ae25559
-Rcx 0xf904fdd50
-Rdx 0x7ffccc92bcf0
-Rbx 0x1360523ee90
-Rsp 0xf904fdad0
-Rbp 0xf904ff938
-Rsi 0x1360523ef58
-Rdi 0xf904fdd10
-Rip 0x7ff77ac9d21f
