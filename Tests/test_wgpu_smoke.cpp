@@ -24,7 +24,7 @@ TEST_CASE("WGPU smoke test") {
     }
     REQUIRE(sdlInitRes == 0);
 
-    SDL_Window* win = SDL_CreateWindow("WGPU Smoke", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 640, 480, SDL_WINDOW_HIDDEN | SDL_WINDOW_OPENGL);
+    SDL_Window* win = SDL_CreateWindow("WGPU Smoke", 640, 480, SDL_WINDOW_HIDDEN | SDL_WINDOW_OPENGL);
     if (!win) {
         printf("SDL_CreateWindow failed: %s\n", SDL_GetError()); fflush(stdout);
     }
@@ -51,7 +51,7 @@ TEST_CASE("WGPU smoke test") {
         if (!enable || std::strcmp(enable, "1") != 0) {
             printf("Wgpu smoke test disabled by GENESIS_ENABLE_WGPU_TESTS; skipping\n"); fflush(stdout);
             renderer->Shutdown();
-            SDL_GL_DeleteContext(ctx);
+            SDL_GL_DestroyContext(ctx);
             SDL_DestroyWindow(win);
             SDL_Quit();
             SUCCEED("Wgpu not enabled in environment - skipping smoke test");
@@ -90,7 +90,7 @@ TEST_CASE("WGPU smoke test") {
 
     renderer->Shutdown();
 
-    SDL_GL_DeleteContext(ctx);
+    SDL_GL_DestroyContext(ctx);
     SDL_DestroyWindow(win);
     SDL_Quit();
 

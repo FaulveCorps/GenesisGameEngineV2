@@ -12,7 +12,7 @@ TEST_CASE("Software smoke test") {
     }
     REQUIRE(sdlInitRes == 0);
 
-    SDL_Window* win = SDL_CreateWindow("Software Smoke", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 640, 480, SDL_WINDOW_HIDDEN | SDL_WINDOW_OPENGL);
+    SDL_Window* win = SDL_CreateWindow("Software Smoke", 640, 480, SDL_WINDOW_HIDDEN | SDL_WINDOW_OPENGL);
     if (!win) {
         printf("SDL_CreateWindow failed: %s\n", SDL_GetError()); fflush(stdout);
     }
@@ -58,7 +58,7 @@ TEST_CASE("Software smoke test") {
 
     renderer->Shutdown();
 
-    SDL_GL_DeleteContext(ctx);
+    SDL_GL_DestroyContext(ctx);
     SDL_DestroyWindow(win);
     SDL_Quit();
 

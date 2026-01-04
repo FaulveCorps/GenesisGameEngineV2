@@ -39,6 +39,18 @@ public:
     virtual void DrawMesh(const MeshHandle& /*h*/, Material* /*material*/, const float* /*transform*/) { }
 
     virtual void SetGlobalLight(const float /*direction*/[3], const float /*color*/[3], float /*intensity*/) {}
+    
+    struct PointLightData {
+        float position[3];
+        float color[3];
+        float intensity;
+        float radius;
+    };
+    virtual void AddPointLight(const PointLightData& /*light*/) {}
+    virtual void ClearPointLights() {}
+
+    virtual void SetPostProcessParams(float /*exposure*/, float /*gamma*/) {}
+    virtual void SetViewProjection(const float* /*view*/, const float* /*projection*/) {}
 
     // Texture handle for renderer-managed textures
     struct TextureHandle {

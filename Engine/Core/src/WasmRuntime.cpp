@@ -105,6 +105,14 @@ static ResourceLimits g_defaultResourceLimits;
 // Modules scheduled for deferred cleanup (e.g., timed-out modules that still have active calls)
 static std::vector<std::unique_ptr<WasmModule>>& g_shutdownModules = *new std::vector<std::unique_ptr<WasmModule>>;
 
+// Forward declarations for host functions (M3 API raw-style signatures)
+static const void* engine_create_body(IM3Runtime runtime, IM3ImportContext _ctx, uint64_t* _sp, void* _mem);
+static const void* engine_destroy_body(IM3Runtime runtime, IM3ImportContext _ctx, uint64_t* _sp, void* _mem);
+static const void* engine_apply_impulse(IM3Runtime runtime, IM3ImportContext _ctx, uint64_t* _sp, void* _mem);
+static const void* engine_create_distance_joint(IM3Runtime runtime, IM3ImportContext _ctx, uint64_t* _sp, void* _mem);
+static const void* engine_log(IM3Runtime runtime, IM3ImportContext _ctx, uint64_t* _sp, void* _mem);
+static const void* engine_get_time(IM3Runtime runtime, IM3ImportContext _ctx, uint64_t* _sp, void* _mem);
+
 bool WasmRuntime::Init() {
     std::lock_guard<std::mutex> lk(g_wasmMutex);
     if (g_inited) return true;
@@ -114,6 +122,15 @@ bool WasmRuntime::Init() {
         return false;
     }
     g_inited = true;
+    
+    // Register default host functions
+    RegisterHostFunction("env", "engine_create_body", "i(iiiii)", engine_create_body);
+    RegisterHostFunction("env", "engine_destroy_body", "v(i)", engine_destroy_body);
+    RegisterHostFunction("env", "engine_apply_impulse", "v(iii)", engine_apply_impulse);
+    RegisterHostFunction("env", "engine_create_distance_joint", "i(iiiiii)", engine_create_distance_joint);
+    RegisterHostFunction("env", "engine_log", "v(ii)", engine_log);
+    RegisterHostFunction("env", "engine_get_time", "f()", engine_get_time);
+
     std::cout << "WasmRuntime: initialized" << std::endl;
     return true;
 }
@@ -152,12 +169,6 @@ static void UnregisterGlobalHost(size_t id) {
     auto it = std::remove_if(g_globalHostFunctions.begin(), g_globalHostFunctions.end(), [&](const GlobalHostRegistration &g){ return g.id == id; });
     if (it != g_globalHostFunctions.end()) g_globalHostFunctions.erase(it, g_globalHostFunctions.end());
 }
-
-// Forward declarations for host functions (M3 API raw-style signatures)
-static const void* engine_create_body(IM3Runtime runtime, IM3ImportContext _ctx, uint64_t* _sp, void* _mem);
-static const void* engine_destroy_body(IM3Runtime runtime, IM3ImportContext _ctx, uint64_t* _sp, void* _mem);
-static const void* engine_apply_impulse(IM3Runtime runtime, IM3ImportContext _ctx, uint64_t* _sp, void* _mem);
-static const void* engine_create_distance_joint(IM3Runtime runtime, IM3ImportContext _ctx, uint64_t* _sp, void* _mem);
 
 // Host registration token lifecycle
 WasmRuntime::HostBindingToken::HostBindingToken(HostBindingToken&& other) noexcept : id(other.id) { other.id = SIZE_MAX; }
@@ -328,6 +339,30 @@ m3ApiRawFunction(engine_create_distance_joint) {
     float by = by_fixed / 1000.0f;
     auto j = ph->CreateDistanceJoint((IPhysics::BodyHandle)a, (IPhysics::BodyHandle)b, ax, ay, bx, by);
     m3ApiReturn((uint32_t)j);
+}
+
+m3ApiRawFunction(engine_log) {
+    m3ApiGetArg(int32_t, ptr);
+    m3ApiGetArg(int32_t, len);
+    
+    uint32_t memSz = 0;
+    uint8_t* mem = m3_GetMemory(runtime, &memSz, 0);
+    if (!mem) m3ApiTrap("memory access failed");
+    
+    if (ptr < 0 || len < 0 || (uint32_t)(ptr + len) > memSz) m3ApiTrap("bounds check failed");
+    
+    std::string msg((char*)mem + ptr, len);
+    std::cout << "[WASM] " << msg << std::endl;
+    
+    m3ApiSuccess();
+}
+
+m3ApiRawFunction(engine_get_time) {
+    m3ApiReturnType(float);
+    static auto start = std::chrono::steady_clock::now();
+    auto now = std::chrono::steady_clock::now();
+    float t = std::chrono::duration<float>(now - start).count();
+    m3ApiReturn(t);
 }
 
 static bool LoadModuleBytes(const std::string& name, const std::vector<uint8_t>& bytes) {

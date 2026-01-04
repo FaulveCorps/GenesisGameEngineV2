@@ -7,13 +7,7 @@ FetchContent_Declare(
   GIT_REPOSITORY https://github.com/catchorg/Catch2.git
   GIT_TAG v3.4.0
 )
-# Populate Catch2 sources but do not build its library by default
-FetchContent_GetProperties(catch2)
-if(NOT catch2_POPULATED)
-  FetchContent_Populate(catch2)
-endif()
-# Add Catch2 with EXCLUDE_FROM_ALL so its targets are not built unless explicitly referenced
-add_subdirectory(${catch2_SOURCE_DIR} ${catch2_BINARY_DIR} EXCLUDE_FROM_ALL)
+FetchContent_MakeAvailable(catch2)
 
 add_executable(UnitTests
     test_core.cpp
@@ -57,6 +51,8 @@ add_executable(UnitTests
     test_wasm_host_bindings.cpp
     test_wasm_e2e.cpp
     test_wasm_limits.cpp
+    test_animation.cpp
+    test_ui.cpp
     ${catch2_SOURCE_DIR}/extras/catch_amalgamated.cpp
 )
 

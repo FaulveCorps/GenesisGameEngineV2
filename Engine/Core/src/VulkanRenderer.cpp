@@ -1,6 +1,5 @@
 #include "engine/VulkanRenderer.h"
 #include <SDL_vulkan.h>
-#include <SDL_syswm.h>
 #include <iostream>
 #include <vector>
 #include <algorithm>
@@ -9,6 +8,7 @@
 #include <cstring>
 #include <cctype>
 #ifdef _WIN32
+#include <Windows.h>
 #include <vulkan/vulkan_win32.h>
 #endif
 namespace Genesis::Engine {
@@ -21,20 +21,18 @@ bool VulkanRenderer::Init(SDL_Window* window, SDL_GLContext /*glContext*/) {
     m_sdlVulkan = sdlVulkan;
     std::vector<const char*> extensions;
     if (sdlVulkan) {
-        unsigned int count = 0;
-        if (!SDL_Vulkan_GetInstanceExtensions(m_window, &count, nullptr)) {
+        uint32_t count = 0;
+        const char* const* extNames = SDL_Vulkan_GetInstanceExtensions(&count);
+        if (!extNames) {
             std::cerr << "VulkanRenderer: SDL_Vulkan_GetInstanceExtensions failed" << std::endl;
             if (sdlVulkan) SDL_Vulkan_UnloadLibrary();
             return false;
         }
-        extensions.resize(count);
-        if (!SDL_Vulkan_GetInstanceExtensions(m_window, &count, extensions.data())) {
-            std::cerr << "VulkanRenderer: SDL_Vulkan_GetInstanceExtensions failed (2)" << std::endl;
-            if (sdlVulkan) SDL_Vulkan_UnloadLibrary();
-            return false;
-        }
         std::cout << "VulkanRenderer: SDL reported " << count << " required instance extensions:\n";
-        for (unsigned int i = 0; i < count; ++i) std::cout << "  " << extensions[i] << std::endl;
+        for (uint32_t i = 0; i < count; ++i) {
+            extensions.push_back(extNames[i]);
+            std::cout << "  " << extNames[i] << std::endl;
+        }
     } else {
 #ifdef _WIN32
         std::cout << "VulkanRenderer: SDL reports no dynamic Vulkan support; falling back to Win32 surface creation" << std::endl;
@@ -74,7 +72,7 @@ bool VulkanRenderer::Init(SDL_Window* window, SDL_GLContext /*glContext*/) {
 
     // Create a surface via SDL if available; otherwise try a platform-specific surface (Win32)
     if (sdlVulkan) {
-        if (!SDL_Vulkan_CreateSurface(m_window, m_instance, &m_surface)) {
+        if (!SDL_Vulkan_CreateSurface(m_window, m_instance, nullptr, &m_surface)) {
             std::cerr << "VulkanRenderer: SDL_Vulkan_CreateSurface failed: " << SDL_GetError() << std::endl;
             m_available = false;
             vkDestroyInstance(m_instance, nullptr);
@@ -84,18 +82,18 @@ bool VulkanRenderer::Init(SDL_Window* window, SDL_GLContext /*glContext*/) {
         }
     } else {
 #ifdef _WIN32
-        SDL_SysWMinfo wminfo;
-        SDL_VERSION(&wminfo.version);
-        if (!SDL_GetWindowWMInfo(m_window, &wminfo)) {
-            std::cerr << "VulkanRenderer: SDL_GetWindowWMInfo failed" << std::endl;
+        HWND hwnd = (HWND)SDL_GetPointerProperty(SDL_GetWindowProperties(m_window), SDL_PROP_WINDOW_WIN32_HWND_POINTER, NULL);
+        HINSTANCE hinstance = (HINSTANCE)SDL_GetPointerProperty(SDL_GetWindowProperties(m_window), SDL_PROP_WINDOW_WIN32_INSTANCE_POINTER, NULL);
+        if (!hwnd || !hinstance) {
+            std::cerr << "VulkanRenderer: Failed to get HWND/HINSTANCE from SDL window" << std::endl;
             vkDestroyInstance(m_instance, nullptr);
             m_instance = VK_NULL_HANDLE;
             return false;
         }
         VkWin32SurfaceCreateInfoKHR sc{};
         sc.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
-        sc.hwnd = wminfo.info.win.window;
-        sc.hinstance = wminfo.info.win.hinstance;
+        sc.hwnd = hwnd;
+        sc.hinstance = hinstance;
         PFN_vkCreateWin32SurfaceKHR fpCreateWin32 = (PFN_vkCreateWin32SurfaceKHR)vkGetInstanceProcAddr(m_instance, "vkCreateWin32SurfaceKHR");
         if (!fpCreateWin32) { std::cerr << "VulkanRenderer: vkCreateWin32SurfaceKHR not available via vkGetInstanceProcAddr" << std::endl; vkDestroyInstance(m_instance, nullptr); m_instance = VK_NULL_HANDLE; return false; }
         VkResult sr = fpCreateWin32(m_instance, &sc, nullptr, &m_surface);
@@ -284,7 +282,7 @@ bool VulkanRenderer::Init(SDL_Window* window, SDL_GLContext /*glContext*/) {
     VkExtent2D extent = caps.currentExtent;
     if (extent.width == (uint32_t)-1) {
         int w, h;
-        SDL_Vulkan_GetDrawableSize(m_window, &w, &h);
+        SDL_GetWindowSizeInPixels(m_window, &w, &h);
         extent.width = (uint32_t)w;
         extent.height = (uint32_t)h;
     }

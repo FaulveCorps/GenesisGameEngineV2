@@ -12,7 +12,7 @@ TEST_CASE("OpenGLRenderer Mesh Lifecycle", "[renderer][mesh]") {
         FAIL("SDL_Init failed");
     }
 
-    SDL_Window* win = SDL_CreateWindow("MeshTest", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 64, 64, SDL_WINDOW_HIDDEN | SDL_WINDOW_OPENGL);
+    SDL_Window* win = SDL_CreateWindow("MeshTest", 64, 64, SDL_WINDOW_HIDDEN | SDL_WINDOW_OPENGL);
     if (!win) {
         SDL_Quit();
         FAIL("SDL_CreateWindow failed");
@@ -27,7 +27,7 @@ TEST_CASE("OpenGLRenderer Mesh Lifecycle", "[renderer][mesh]") {
     // Check if we should run GL tests
     const char* _enableGL = std::getenv("GENESIS_ENABLE_OPENGL");
     if (!_enableGL || std::strcmp(_enableGL, "1") != 0) {
-        SDL_GL_DeleteContext(ctx);
+        SDL_GL_DestroyContext(ctx);
         SDL_DestroyWindow(win);
         SDL_Quit();
         SUCCEED("OpenGL tests disabled via GENESIS_ENABLE_OPENGL");
@@ -79,7 +79,7 @@ TEST_CASE("OpenGLRenderer Mesh Lifecycle", "[renderer][mesh]") {
 
     renderer.Shutdown();
 
-    SDL_GL_DeleteContext(ctx);
+    SDL_GL_DestroyContext(ctx);
     SDL_DestroyWindow(win);
     SDL_Quit();
 }

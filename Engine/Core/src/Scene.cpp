@@ -2,56 +2,50 @@
 #include "engine/Components.h"
 #include "engine/IGraphics.h"
 #include "engine/MathUtils.h"
+#include "engine/Animation.h"
+#include "engine/UI.h"
 #include <iostream>
 
 namespace Genesis::Engine {
 
-void Scene::Update(double /*dt*/) {
-    // placeholder for systems (physics, animation, etc.)
+void Scene::Update(double dt) {
+    AnimationSystem::Update(*this, dt);
+    UISystem::Update(*this, dt);
 }
 
 void Scene::Render(IGraphicsAPI* renderer) {
     if (!renderer) return;
 
-    // 1. Setup Global Light
-    // Find the first entity with a LightComponent
+    // Clear old point lights
+    renderer->ClearPointLights();
+
+    // 1. Setup Lights
     auto lightView = m_registry.view<LightComponent, Transform>();
     bool lightFound = false;
     for (auto entity : lightView) {
         auto& light = lightView.get<LightComponent>(entity);
         auto& t = lightView.get<Transform>(entity);
         
-        // Calculate direction from rotation (assuming default forward is -Z or similar)
-        // For simplicity, let's just use the rotation as Euler angles to create a forward vector
-        // Or just use the position if it was a point light, but for Directional we need direction.
-        // Let's assume Transform rotation is in radians.
-        // A simple forward vector from Euler angles (pitch, yaw, roll)
-        // But our Transform struct has rx, ry, rz.
-        
-        // Let's construct a rotation matrix and extract forward vector.
-        Matrix4 rotX = Matrix4::CreateRotationX(t.rx);
-        Matrix4 rotY = Matrix4::CreateRotationY(t.ry);
-        Matrix4 rotZ = Matrix4::CreateRotationZ(t.rz);
-        Matrix4 rot = rotZ * rotY * rotX; // ZYX order is common
+        if (light.type == LightType::Directional) {
+            if (!lightFound) {
+                Matrix4 rotX = Matrix4::CreateRotationX(t.rx);
+                Matrix4 rotY = Matrix4::CreateRotationY(t.ry);
+                Matrix4 rotZ = Matrix4::CreateRotationZ(t.rz);
+                Matrix4 rot = rotZ * rotY * rotX; 
 
-        // Assuming default light direction is (0, 0, -1) or similar.
-        // In OpenGL, camera looks down -Z. Light coming from +Z is standard "front" light.
-        // Let's assume the light direction vector points FROM the light source.
-        // Or TO the light source?
-        // pbr.frag uses: vec3 lightDir = normalize(uLightDir); float NdotL = max(dot(n, lightDir), 0.0);
-        // Usually N dot L implies L is vector TO light.
-        // So if light is at (0,10,0), L is (0,1,0).
-        
-        // Let's use the Z axis of the rotation matrix as the direction.
-        // If identity, Z is (0,0,1).
-        float dir[3] = { rot.m[8], rot.m[9], rot.m[10] }; // 3rd column (Z axis)
-        
-        // If we want "To Light", and the object is rotated to look at the scene...
-        // Let's just pass the values and tweak in game.
-        
-        renderer->SetGlobalLight(dir, light.color, light.intensity);
-        lightFound = true;
-        break; // Only support one global light for now
+                float dir[3] = { rot.m[8], rot.m[9], rot.m[10] }; 
+                
+                renderer->SetGlobalLight(dir, light.color, light.intensity);
+                lightFound = true;
+            }
+        } else if (light.type == LightType::Point) {
+            IGraphicsAPI::PointLightData pl;
+            pl.position[0] = t.x; pl.position[1] = t.y; pl.position[2] = t.z;
+            pl.color[0] = light.color[0]; pl.color[1] = light.color[1]; pl.color[2] = light.color[2];
+            pl.intensity = light.intensity;
+            pl.radius = light.range;
+            renderer->AddPointLight(pl);
+        }
     }
 
     if (!lightFound) {
@@ -85,6 +79,9 @@ void Scene::Render(IGraphicsAPI* renderer) {
             mc.model->Draw(transform.m);
         }
     }
+
+    // 3. Render UI
+    UISystem::Render(*this, renderer);
 }
 
 } // namespace Genesis::Engine

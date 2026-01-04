@@ -30,10 +30,10 @@
     },
     {
       "name": "default",
-      "displayName": "Default (Ninja Debug)",
-      "description": "Alias for ninja-debug preset",
-      "inherits": "ninja-debug",
-      "binaryDir": "${sourceDir}/Build"
+      "displayName": "Default (Visual Studio 2022)",
+      "description": "Alias for vs2022 preset (Ninja not detected)",
+      "inherits": "vs2022",
+      "binaryDir": "${sourceDir}/build-vs"
     },
     {
       "name": "vs2022",

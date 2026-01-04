@@ -4,6 +4,9 @@
 #include <SDL.h>
 #include "engine/Engine.h"
 #include "engine/IShaderSubsystem.h"
+#include <filesystem>
+#include <fstream>
+#include <sstream>
 
 namespace Genesis::Engine {
 
@@ -122,6 +125,66 @@ std::shared_ptr<Shader> Shader::FromSource(const std::string& vertexSrc, const s
     return s;
 }
 
+static std::string LoadFileContent(const std::string& path) {
+    std::ifstream f(path);
+    if (!f.is_open()) return "";
+    std::stringstream buffer;
+    buffer << f.rdbuf();
+    return buffer.str();
+}
+
+std::shared_ptr<Shader> Shader::CreateFromFile(const std::string& vertexPath, const std::string& fragmentPath) {
+    std::string vs = LoadFileContent(vertexPath);
+    std::string fs = LoadFileContent(fragmentPath);
+
+    auto s = CreateFromSource(vs, fs);
+    s->vertexPath_ = vertexPath;
+    s->fragmentPath_ = fragmentPath;
+
+    // Initial timestamp
+    try {
+        auto t1 = std::filesystem::last_write_time(vertexPath).time_since_epoch().count();
+        auto t2 = std::filesystem::last_write_time(fragmentPath).time_since_epoch().count();
+        s->lastWriteTime_ = (t1 > t2) ? t1 : t2;
+    } catch (...) {
+        s->lastWriteTime_ = 0;
+    }
+
+    // Attempt immediate compile
+    s->UploadToRenderer(nullptr);
+    return s;
+}
+
+void Shader::ReloadIfChanged() {
+    if (vertexPath_.empty() || fragmentPath_.empty()) return;
+
+    try {
+        auto t1 = std::filesystem::last_write_time(vertexPath_).time_since_epoch().count();
+        auto t2 = std::filesystem::last_write_time(fragmentPath_).time_since_epoch().count();
+        long long currentMax = (t1 > t2) ? t1 : t2;
+
+        if (currentMax > lastWriteTime_) {
+            std::cout << "Hot-Reloading Shader: " << vertexPath_ << " / " << fragmentPath_ << std::endl;
+            lastWriteTime_ = currentMax;
+
+            std::string vs = LoadFileContent(vertexPath_);
+            std::string fs = LoadFileContent(fragmentPath_);
+
+            if (!vs.empty() && !fs.empty()) {
+                vertexSrcGL_ = vs;
+                fragmentSrcGL_ = fs;
+
+                // Destroy old program
+                DestroyOnRenderer(nullptr);
+                // Recreate
+                UploadToRenderer(nullptr);
+            }
+        }
+    } catch (...) {
+        // File access error, ignore
+    }
+}
+
 void Shader::UploadToRenderer(IGraphicsAPI* /*renderer*/) {
     // Prefer using an installed shader subsystem when available.
     if (programID_) return; // already built
@@ -172,10 +235,6 @@ void Shader::UploadToRenderer(IGraphicsAPI* /*renderer*/) {
     unsigned int program = pglCreateProgram();
     pglAttachShader(program, vs);
     pglAttachShader(program, fs);
-
-    // Bind attribute locations so we know where aPos/aNormal map (0 and 1)
-    pglBindAttribLocation(program, 0, "aPos");
-    pglBindAttribLocation(program, 1, "aNormal");
 
     pglLinkProgram(program);
 

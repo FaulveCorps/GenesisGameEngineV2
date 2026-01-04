@@ -8,7 +8,7 @@ TEST_CASE("2D sprite smoke (opengl)") {
     int sdlInitRes = SDL_Init(SDL_INIT_VIDEO);
     REQUIRE(sdlInitRes == 0);
 
-    SDL_Window* win = SDL_CreateWindow("2DTestGL", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 64, 64, SDL_WINDOW_HIDDEN | SDL_WINDOW_OPENGL);
+    SDL_Window* win = SDL_CreateWindow("2DTestGL", 64, 64, SDL_WINDOW_HIDDEN | SDL_WINDOW_OPENGL);
     REQUIRE(win != nullptr);
     SDL_GLContext ctx = SDL_GL_CreateContext(win);
     REQUIRE(ctx != nullptr);
@@ -17,7 +17,7 @@ TEST_CASE("2D sprite smoke (opengl)") {
     if (!r) {
         // OpenGL may not be available on some CI runners; treat as skipped
         SUCCEED("OpenGL renderer not available - skipping GL smoke test");
-        SDL_GL_DeleteContext(ctx);
+        SDL_GL_DestroyContext(ctx);
         SDL_DestroyWindow(win);
         SDL_Quit();
         return;
@@ -37,7 +37,7 @@ TEST_CASE("2D sprite smoke (opengl)") {
     gr->EndFrame();
 
     if (auto cur3 = Genesis::Engine::RendererManager::GetRenderer()) cur3->Shutdown();
-    SDL_GL_DeleteContext(ctx);
+    SDL_GL_DestroyContext(ctx);
     SDL_DestroyWindow(win);
     SDL_Quit();
 }

@@ -32,6 +32,7 @@
 #include "engine/IScripting.h"
 #include "engine/ModManager.h"
 #include "engine/WasmRuntime.h"
+#include "engine/SceneLoader.h"
 #include <thread>
 #include <chrono>
 #include <filesystem>
@@ -39,6 +40,9 @@
 #include <cctype>
 
 int main(int argc, char** argv) {
+    fprintf(stderr, "SampleGame starting (stderr)...\n");
+    fflush(stderr);
+    std::cout << "SampleGame starting..." << std::endl;
     if (!Genesis::Engine::Init()) {
         std::cerr << "Failed to initialize engine" << std::endl;
         return -1;
@@ -169,18 +173,19 @@ int main(int argc, char** argv) {
         if (!sr) return;
 
         std::cout << "SampleGame: software renderer selected; creating visual output window" << std::endl;
-        softwareWindow = SDL_CreateWindow("Software Output", SDL_WINDOWPOS_CENTERED + 40, SDL_WINDOWPOS_CENTERED + 40, softwareW, softwareH, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
+        softwareWindow = SDL_CreateWindow("Software Output", softwareW, softwareH, SDL_WINDOW_RESIZABLE);
         if (!softwareWindow) {
             std::cerr << "SampleGame: software visual window creation failed: " << SDL_GetError() << "; will save BMP to disk as fallback" << std::endl;
             return;
         }
-        softwareSDLRenderer = SDL_CreateRenderer(softwareWindow, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+        softwareSDLRenderer = SDL_CreateRenderer(softwareWindow, NULL);
         if (!softwareSDLRenderer) {
             std::cerr << "SampleGame: SDL_CreateRenderer failed for software output: " << SDL_GetError() << " - falling back to SDL_RENDERER_SOFTWARE\n";
-            softwareSDLRenderer = SDL_CreateRenderer(softwareWindow, -1, SDL_RENDERER_SOFTWARE);
+            softwareSDLRenderer = SDL_CreateRenderer(softwareWindow, "software");
         }
         if (softwareSDLRenderer) {
-            softwareTexture = SDL_CreateTexture(softwareSDLRenderer, SDL_PIXELFORMAT_BGRA32, SDL_TEXTUREACCESS_STREAMING, softwareW, softwareH);
+            SDL_SetRenderVSync(softwareSDLRenderer, 1);
+            softwareTexture = SDL_CreateTexture(softwareSDLRenderer, SDL_PIXELFORMAT_BGRA8888, SDL_TEXTUREACCESS_STREAMING, softwareW, softwareH);
             if (!softwareTexture) {
                 std::cerr << "SampleGame: SDL_CreateTexture failed for software output: " << SDL_GetError() << std::endl;
             } else {
@@ -224,50 +229,54 @@ int main(int argc, char** argv) {
     // Create scene and an entity with a model
     Genesis::Engine::Scene scene;
 
-    auto entity = scene.Registry().create();
+    if (!Genesis::Engine::SceneLoader::LoadScene(scene, "Assets/scenes/default.scene")) {
+        std::cout << "SampleGame: default scene not found, creating hardcoded scene..." << std::endl;
+
+        auto entity = scene.Registry().create();
 #ifdef DIRECTX_SMOKE_TEST
-    std::cout << "DirectX smoke test: skipping model load" << std::endl;
+        std::cout << "DirectX smoke test: skipping model load" << std::endl;
 #else
-    auto modelPtr = std::make_shared<Genesis::Engine::Model>();
-    // Prefer the PBR sample if available, otherwise fall back to triangle.obj
-    namespace fs = std::filesystem;
-    const std::string pbrPath = "Assets/models/pbr_sample.gltf";
-    bool loaded = false;
-    if (fs::exists(pbrPath)) {
-        std::cout << "SampleGame: detected PBR sample, attempting to load: " << pbrPath << std::endl;
-        loaded = modelPtr->Load(pbrPath);
-    } else {
-        std::cout << "SampleGame: PBR sample not found at " << pbrPath << ". Please place a glTF model there to test PBR." << std::endl;
-    }
-    if (!loaded) {
-        if (!modelPtr->Load("Assets/models/triangle.obj")) {
-            std::cerr << "Failed to load model" << std::endl;
+        auto modelPtr = std::make_shared<Genesis::Engine::Model>();
+        // Prefer the PBR sample if available, otherwise fall back to triangle.obj
+        namespace fs = std::filesystem;
+        const std::string pbrPath = "Assets/models/pbr_sample.gltf";
+        bool loaded = false;
+        if (fs::exists(pbrPath)) {
+            std::cout << "SampleGame: detected PBR sample, attempting to load: " << pbrPath << std::endl;
+            loaded = modelPtr->Load(pbrPath);
         } else {
-            loaded = true;
+            std::cout << "SampleGame: PBR sample not found at " << pbrPath << ". Please place a glTF model there to test PBR." << std::endl;
         }
-    }
+        if (!loaded) {
+            if (!modelPtr->Load("Assets/models/triangle.obj")) {
+                std::cerr << "Failed to load model" << std::endl;
+            } else {
+                loaded = true;
+            }
+        }
 
-    if (loaded) {
-        std::cout << "Model loaded successfully!" << std::endl;
+        if (loaded) {
+            std::cout << "Model loaded successfully!" << std::endl;
 
-        scene.Registry().emplace<Genesis::Engine::ModelComponent>(entity, Genesis::Engine::ModelComponent{ modelPtr });
-        scene.Registry().emplace<Genesis::Engine::Transform>(entity, Genesis::Engine::Transform{});
-    }
+            scene.Registry().emplace<Genesis::Engine::ModelComponent>(entity, Genesis::Engine::ModelComponent{ modelPtr });
+            scene.Registry().emplace<Genesis::Engine::Transform>(entity, Genesis::Engine::Transform{});
+        }
 #endif
 
-    // Create a light entity
-    auto lightEntity = scene.Registry().create();
-    Genesis::Engine::LightComponent lightComp;
-    lightComp.type = Genesis::Engine::LightType::Directional;
-    lightComp.color[0] = 1.0f; lightComp.color[1] = 0.95f; lightComp.color[2] = 0.8f; // Warm sunlight
-    lightComp.intensity = 1.5f;
-    scene.Registry().emplace<Genesis::Engine::LightComponent>(lightEntity, lightComp);
-    
-    // Rotate light to point down-ish
-    Genesis::Engine::Transform lightTrans;
-    lightTrans.rx = -0.5f; // Pitch down
-    lightTrans.ry = 0.5f;  // Yaw
-    scene.Registry().emplace<Genesis::Engine::Transform>(lightEntity, lightTrans);
+        // Create a light entity
+        auto lightEntity = scene.Registry().create();
+        Genesis::Engine::LightComponent lightComp;
+        lightComp.type = Genesis::Engine::LightType::Directional;
+        lightComp.color[0] = 1.0f; lightComp.color[1] = 0.95f; lightComp.color[2] = 0.8f; // Warm sunlight
+        lightComp.intensity = 1.5f;
+        scene.Registry().emplace<Genesis::Engine::LightComponent>(lightEntity, lightComp);
+        
+        // Rotate light to point down-ish
+        Genesis::Engine::Transform lightTrans;
+        lightTrans.rx = -0.5f; // Pitch down
+        lightTrans.ry = 0.5f;  // Yaw
+        scene.Registry().emplace<Genesis::Engine::Transform>(lightEntity, lightTrans);
+    }
 
 
     // Setup profiler and ImGui
@@ -523,19 +532,27 @@ int main(int argc, char** argv) {
         Genesis::Engine::Stats::Reset();
 
         auto currentRenderer = Genesis::Engine::RendererManager::GetRenderer();
-        if (currentRenderer) currentRenderer->BeginFrame();
+        if (currentRenderer) {
+            currentRenderer->BeginFrame();
+            
+            // Demo: oscillate exposure to show post-processing working
+            static float demoTime = 0.0f;
+            demoTime += 0.016f;
+            float exposure = 1.0f + 0.5f * std::sin(demoTime);
+            currentRenderer->SetPostProcessParams(exposure, 2.2f);
+        }
 
         // scene update/render
         scene.Update(0.016);
         scene.Render(currentRenderer);
-        std::cout << "Main: after scene.Render" << std::endl;
+        // std::cout << "Main: after scene.Render" << std::endl;
 
         // Note: Model rendering now uses vertex arrays (faster than immediate mode)
-        gui.Render(profiler);
-        std::cout << "Main: after gui.Render" << std::endl;
+        gui.Render(profiler, &scene);
+        // std::cout << "Main: after gui.Render" << std::endl;
 
         if (currentRenderer) currentRenderer->EndFrame();
-        std::cout << "Main: after renderer.EndFrame" << std::endl;
+        // std::cout << "Main: after renderer.EndFrame" << std::endl;
 
         // Save/load hotkeys
         if (auto in = Genesis::Engine::GetInputSubsystem()) {
@@ -615,13 +632,12 @@ int main(int argc, char** argv) {
                 if (softwareTexture && softwareSDLRenderer) {
                     SDL_UpdateTexture(softwareTexture, nullptr, softwarePixels.data(), softwareW * 4);
                     SDL_RenderClear(softwareSDLRenderer);
-                    SDL_RenderCopy(softwareSDLRenderer, softwareTexture, nullptr, nullptr);
+                    SDL_RenderTexture(softwareSDLRenderer, softwareTexture, nullptr, nullptr);
                     SDL_RenderPresent(softwareSDLRenderer);
                 } else {
                     static bool saved = false;
                     if (!saved) {
-                        SDL_Surface* surf = SDL_CreateRGBSurfaceFrom((void*)softwarePixels.data(), softwareW, softwareH, 32, softwareW * 4,
-                            0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000);
+                        SDL_Surface* surf = SDL_CreateSurfaceFrom(softwareW, softwareH, SDL_PIXELFORMAT_BGRA8888, (void*)softwarePixels.data(), softwareW * 4);
                         if (surf) {
                             std::string fname = "software_render.bmp";
                             if (SDL_SaveBMP(surf, fname.c_str()) == 0) {
@@ -630,9 +646,9 @@ int main(int argc, char** argv) {
                             } else {
                                 std::cerr << "SampleGame: failed to save BMP: " << SDL_GetError() << std::endl;
                             }
-                            SDL_FreeSurface(surf);
+                            SDL_DestroySurface(surf);
                         } else {
-                            std::cerr << "SampleGame: SDL_CreateRGBSurfaceFrom failed: " << SDL_GetError() << std::endl;
+                            std::cerr << "SampleGame: SDL_CreateSurfaceFrom failed: " << SDL_GetError() << std::endl;
                         }
                     }
                 }
@@ -648,7 +664,7 @@ int main(int argc, char** argv) {
             snprintf(buf, sizeof(buf), "SampleGame - Renderer: %s | FPS: %.1f", cur->GetName().c_str(), profiler.GetFPS());
             SDL_SetWindowTitle(window.GetSDLWindow(), buf);
         }
-        std::cout << "Main: after profiler.EndFrame" << std::endl;
+        // std::cout << "Main: after profiler.EndFrame" << std::endl;
     };
 
     Uint32 lastToggleTime = 0;
@@ -676,7 +692,7 @@ int main(int argc, char** argv) {
             {
                 auto in = Genesis::Engine::GetInputSubsystem();
                 Uint32 now = SDL_GetTicks();
-                if (in && (in->WasKeyPressed(SDL_SCANCODE_F2) || in->WasControllerButtonPressed(0, SDL_CONTROLLER_BUTTON_START)) && now - lastToggleTime > 300) {
+                if (in && (in->WasKeyPressed(SDL_SCANCODE_F2) || in->WasControllerButtonPressed(0, SDL_GAMEPAD_BUTTON_START)) && now - lastToggleTime > 300) {
                     lastToggleTime = now;
                     if (Genesis::Engine::RendererManager::CycleRenderer(window.GetSDLWindow(), window.GetGLContext())) {
                         setupSoftwareVisual(Genesis::Engine::RendererManager::GetRenderer());
@@ -698,8 +714,7 @@ int main(int argc, char** argv) {
                         if (auto sr = dynamic_cast<Genesis::Engine::SoftwareRenderer*>(Genesis::Engine::RendererManager::GetRenderer())) {
                             std::vector<uint8_t> pixels;
                             if (sr->ReadbackOffscreen(static_cast<uint32_t>(softwareW), static_cast<uint32_t>(softwareH), pixels)) {
-                                SDL_Surface* surf = SDL_CreateRGBSurfaceFrom((void*)pixels.data(), softwareW, softwareH, 32, softwareW * 4,
-                                    0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000);
+                                SDL_Surface* surf = SDL_CreateSurfaceFrom(softwareW, softwareH, SDL_PIXELFORMAT_BGRA8888, (void*)pixels.data(), softwareW * 4);
                                 if (surf) {
                                     std::string fname = (artifacts / ("screenshot_auto_stress_" + std::to_string(cyclesDone) + ".bmp")).string();
                                     if (SDL_SaveBMP(surf, fname.c_str()) == 0) {
@@ -707,7 +722,7 @@ int main(int argc, char** argv) {
                                     } else {
                                         std::cerr << "SampleGame: failed to save auto BMP: " << SDL_GetError() << std::endl;
                                     }
-                                    SDL_FreeSurface(surf);
+                                    SDL_DestroySurface(surf);
                                 }
                             } else {
                                 std::cerr << "SampleGame: auto ReadbackOffscreen failed (stress)" << std::endl;
@@ -733,7 +748,7 @@ int main(int argc, char** argv) {
             {
                 auto in = Genesis::Engine::GetInputSubsystem();
                 Uint32 now = SDL_GetTicks();
-                if (in && (in->WasKeyPressed(SDL_SCANCODE_F2) || in->WasControllerButtonPressed(0, SDL_CONTROLLER_BUTTON_START)) && now - lastToggleTime > 300) {
+                if (in && (in->WasKeyPressed(SDL_SCANCODE_F2) || in->WasControllerButtonPressed(0, SDL_GAMEPAD_BUTTON_START)) && now - lastToggleTime > 300) {
                     lastToggleTime = now;
                     if (Genesis::Engine::RendererManager::CycleRenderer(window.GetSDLWindow(), window.GetGLContext())) {
                         setupSoftwareVisual(Genesis::Engine::RendererManager::GetRenderer());
@@ -755,8 +770,7 @@ int main(int argc, char** argv) {
                         if (auto sr = dynamic_cast<Genesis::Engine::SoftwareRenderer*>(Genesis::Engine::RendererManager::GetRenderer())) {
                             std::vector<uint8_t> pixels;
                             if (sr->ReadbackOffscreen(static_cast<uint32_t>(softwareW), static_cast<uint32_t>(softwareH), pixels)) {
-                                SDL_Surface* surf = SDL_CreateRGBSurfaceFrom((void*)pixels.data(), softwareW, softwareH, 32, softwareW * 4,
-                                    0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000);
+                                SDL_Surface* surf = SDL_CreateSurfaceFrom(softwareW, softwareH, SDL_PIXELFORMAT_BGRA8888, (void*)pixels.data(), softwareW * 4);
                                 if (surf) {
                                     std::string fname = (artifacts / ("screenshot_auto_" + std::to_string(cyclesDone) + ".bmp")).string();
                                     if (SDL_SaveBMP(surf, fname.c_str()) == 0) {
@@ -764,7 +778,7 @@ int main(int argc, char** argv) {
                                     } else {
                                         std::cerr << "SampleGame: failed to save auto BMP: " << SDL_GetError() << std::endl;
                                     }
-                                    SDL_FreeSurface(surf);
+                                    SDL_DestroySurface(surf);
                                 }
                             } else {
                                 std::cerr << "SampleGame: auto ReadbackOffscreen failed" << std::endl;

@@ -129,8 +129,8 @@ public:
         unsigned int program = pglCreateProgram();
         pglAttachShader(program, vs);
         pglAttachShader(program, fs);
-        pglBindAttribLocation(program, 0, "aPos");
-        pglBindAttribLocation(program, 1, "aNormal");
+        // pglBindAttribLocation(program, 0, "aPos");
+        // pglBindAttribLocation(program, 1, "aNormal");
 
         pglLinkProgram(program);
         int linked = 0;

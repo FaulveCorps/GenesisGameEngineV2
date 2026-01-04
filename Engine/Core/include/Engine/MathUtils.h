@@ -90,6 +90,45 @@ struct Matrix4 {
     Matrix4 operator*(const Matrix4& other) const {
         return Multiply(other);
     }
+
+    static Matrix4 CreateLookAt(float eyeX, float eyeY, float eyeZ,
+                                float centerX, float centerY, float centerZ,
+                                float upX, float upY, float upZ) {
+        float fx = centerX - eyeX;
+        float fy = centerY - eyeY;
+        float fz = centerZ - eyeZ;
+        float rlf = 1.0f / std::sqrt(fx*fx + fy*fy + fz*fz);
+        fx *= rlf; fy *= rlf; fz *= rlf;
+
+        float rx = fy * upZ - fz * upY;
+        float ry = fz * upX - fx * upZ;
+        float rz = fx * upY - fy * upX;
+        float rlr = 1.0f / std::sqrt(rx*rx + ry*ry + rz*rz);
+        rx *= rlr; ry *= rlr; rz *= rlr;
+
+        float ux = ry * fz - rz * fy;
+        float uy = rz * fx - rx * fz;
+        float uz = rx * fy - ry * fx;
+
+        Matrix4 mat;
+        mat.m[0] = rx; mat.m[4] = ry; mat.m[8] = rz; mat.m[12] = -(rx * eyeX + ry * eyeY + rz * eyeZ);
+        mat.m[1] = ux; mat.m[5] = uy; mat.m[9] = uz; mat.m[13] = -(ux * eyeX + uy * eyeY + uz * eyeZ);
+        mat.m[2] = -fx; mat.m[6] = -fy; mat.m[10] = -fz; mat.m[14] = (fx * eyeX + fy * eyeY + fz * eyeZ);
+        mat.m[3] = 0.0f; mat.m[7] = 0.0f; mat.m[11] = 0.0f; mat.m[15] = 1.0f;
+        return mat;
+    }
+
+    static Matrix4 CreateOrtho(float left, float right, float bottom, float top, float zNear, float zFar) {
+        Matrix4 mat;
+        mat.m[0] = 2.0f / (right - left);
+        mat.m[5] = 2.0f / (top - bottom);
+        mat.m[10] = -2.0f / (zFar - zNear);
+        mat.m[12] = -(right + left) / (right - left);
+        mat.m[13] = -(top + bottom) / (top - bottom);
+        mat.m[14] = -(zFar + zNear) / (zFar - zNear);
+        mat.m[15] = 1.0f;
+        return mat;
+    }
 };
 
 } // namespace Genesis::Engine

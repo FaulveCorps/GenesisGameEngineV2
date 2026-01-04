@@ -19,6 +19,12 @@ public:
     // Convenience: compile immediately for GL (returns nullptr on failure)
     static std::shared_ptr<Shader> FromSource(const std::string& vertexSrc, const std::string& fragmentSrc);
 
+    // Create from file paths. Supports hot-reloading via ReloadIfChanged().
+    static std::shared_ptr<Shader> CreateFromFile(const std::string& vertexPath, const std::string& fragmentPath);
+
+    // Checks if source files have changed and reloads/recompiles if necessary.
+    void ReloadIfChanged();
+
     // Upload/recreate resources on the given renderer (called on renderer switch)
     void UploadToRenderer(IGraphicsAPI* renderer);
     void DestroyOnRenderer(IGraphicsAPI* renderer);
@@ -34,6 +40,11 @@ private:
     // Stored source (GL/GLSL for now). In future, add WGSL/HLSL variants.
     std::string vertexSrcGL_;
     std::string fragmentSrcGL_;
+
+    // File paths for hot-reloading
+    std::string vertexPath_;
+    std::string fragmentPath_;
+    long long lastWriteTime_ = 0;
 
     // GL program id (0 == not created)
     unsigned int programID_ = 0;

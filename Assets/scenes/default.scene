@@ -1,0 +1,18 @@
+# Default Scene
+ENTITY
+TRANSFORM 0 0 0 0 0 0 1 1 1
+MODEL Assets/models/pbr_sample.gltf
+
+ENTITY
+TRANSFORM 0 0 0 -0.5 0.5 0 1 1 1
+LIGHT 0 1.0 0.95 0.8 1.5
+
+# Red Point Light
+ENTITY
+TRANSFORM 2.0 1.0 2.0 0 0 0 1 1 1
+LIGHT 1 1.0 0.0 0.0 5.0 10.0
+
+# Blue Point Light
+ENTITY
+TRANSFORM -2.0 1.0 -2.0 0 0 0 1 1 1
+LIGHT 1 0.0 0.0 1.0 5.0 10.0

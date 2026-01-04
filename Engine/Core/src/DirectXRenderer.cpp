@@ -6,7 +6,6 @@
 #include <Windows.h>
 #include <d3d11.h>
 #include <d3dcompiler.h>
-#include <SDL_syswm.h>
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "d3dcompiler.lib")
 #endif
@@ -16,13 +15,11 @@ namespace Genesis::Engine {
 bool DirectXRenderer::Init(SDL_Window* window, SDL_GLContext /*glContext*/) {
 #ifdef _WIN32
     // Create D3D11 device and swap chain using SDL window handle
-    SDL_SysWMinfo wmInfo;
-    SDL_VERSION(&wmInfo.version);
-    if (!SDL_GetWindowWMInfo(window, &wmInfo)) {
-        std::cerr << "DirectXRenderer: SDL_GetWindowWMInfo failed: " << SDL_GetError() << std::endl;
+    HWND hwnd = (HWND)SDL_GetPointerProperty(SDL_GetWindowProperties(window), SDL_PROP_WINDOW_WIN32_HWND_POINTER, NULL);
+    if (!hwnd) {
+        std::cerr << "DirectXRenderer: Failed to get HWND from SDL window" << std::endl;
         return false;
     }
-    HWND hwnd = wmInfo.info.win.window;
 
     DXGI_SWAP_CHAIN_DESC sd = {};
     sd.BufferCount = 1;

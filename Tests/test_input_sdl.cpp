@@ -28,10 +28,10 @@ TEST_CASE("SDLInput: press/release events are detected", "[input][sdl]") {
 
     // Simulate key down for 'A'
     SDL_Event e{};
-    e.type = SDL_KEYDOWN;
-    e.key.keysym.scancode = SDL_SCANCODE_A;
-    e.key.keysym.sym = SDLK_a;
-    e.key.state = SDL_PRESSED;
+    e.type = SDL_EVENT_KEY_DOWN;
+    e.key.scancode = SDL_SCANCODE_A;
+    e.key.key = SDLK_A;
+    e.key.down = true;
     SDL_PushEvent(&e);
 
     in->Update(0.016);
@@ -41,10 +41,10 @@ TEST_CASE("SDLInput: press/release events are detected", "[input][sdl]") {
 
     // Simulate key up
     SDL_Event e2{};
-    e2.type = SDL_KEYUP;
-    e2.key.keysym.scancode = SDL_SCANCODE_A;
-    e2.key.keysym.sym = SDLK_a;
-    e2.key.state = SDL_RELEASED;
+    e2.type = SDL_EVENT_KEY_UP;
+    e2.key.scancode = SDL_SCANCODE_A;
+    e2.key.key = SDLK_A;
+    e2.key.down = false;
     SDL_PushEvent(&e2);
 
     in->Update(0.016);
@@ -53,7 +53,7 @@ TEST_CASE("SDLInput: press/release events are detected", "[input][sdl]") {
 
     // Mouse button press
     SDL_Event me{};
-    me.type = SDL_MOUSEBUTTONDOWN;
+    me.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
     me.button.button = SDL_BUTTON_LEFT;
     me.button.x = 10; me.button.y = 20;
     SDL_PushEvent(&me);
@@ -67,7 +67,7 @@ TEST_CASE("SDLInput: press/release events are detected", "[input][sdl]") {
 
     // Mouse release
     SDL_Event me2{};
-    me2.type = SDL_MOUSEBUTTONUP;
+    me2.type = SDL_EVENT_MOUSE_BUTTON_UP;
     me2.button.button = SDL_BUTTON_LEFT;
     me2.button.x = 11; me2.button.y = 22;
     SDL_PushEvent(&me2);

@@ -31,7 +31,7 @@ TEST_CASE("Shader subsystem: GL backend create & compile", "[subsystem][shader][
     int sdlInitRes = SDL_Init(SDL_INIT_VIDEO);
     REQUIRE(sdlInitRes == 0);
 
-    SDL_Window* win = SDL_CreateWindow("ShaderSubsystemTest", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 64, 64, SDL_WINDOW_HIDDEN | SDL_WINDOW_OPENGL);
+    SDL_Window* win = SDL_CreateWindow("ShaderSubsystemTest", 64, 64, SDL_WINDOW_HIDDEN | SDL_WINDOW_OPENGL);
     REQUIRE(win != nullptr);
     SDL_GLContext ctx = SDL_GL_CreateContext(win);
     REQUIRE(ctx != nullptr);
@@ -40,7 +40,7 @@ TEST_CASE("Shader subsystem: GL backend create & compile", "[subsystem][shader][
     bool ok = Genesis::Engine::CreateShaderSubsystem("opengl");
     if (!ok) {
         WARN("Opengl shader subsystem not available on this host; skipping GL compile test") ;
-        SDL_GL_DeleteContext(ctx);
+        SDL_GL_DestroyContext(ctx);
         SDL_DestroyWindow(win);
         SDL_Quit();
         SUCCEED("Skipped GL backend test");
@@ -71,7 +71,7 @@ TEST_CASE("Shader subsystem: GL backend create & compile", "[subsystem][shader][
     }
 
     // Clean up
-    SDL_GL_DeleteContext(ctx);
+    SDL_GL_DestroyContext(ctx);
     SDL_DestroyWindow(win);
     SDL_Quit();
 }

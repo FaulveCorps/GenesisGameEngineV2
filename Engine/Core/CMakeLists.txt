@@ -11,26 +11,26 @@ if (NOT DEFINED VCPKG_INSTALLED)
   endif()
 endif()
 
-# Prefer SDL2, fallback to SDL3 for compatibility
+# Prefer SDL3, fallback to SDL2
 set(SDL_INCLUDE_DIR "")
 
-if (EXISTS "${VCPKG_INSTALLED}/include/SDL2")
-  set(SDL_INCLUDE_DIR "${VCPKG_INSTALLED}/include/SDL2")
-  find_library(SDL_LIBRARY NAMES SDL2 PATHS "${VCPKG_INSTALLED}/lib" NO_DEFAULT_PATH)
-endif()
-
-if (NOT SDL_LIBRARY AND EXISTS "${VCPKG_INSTALLED}/include/SDL3")
+if (EXISTS "${VCPKG_INSTALLED}/include/SDL3")
   set(SDL_INCLUDE_DIR "${VCPKG_INSTALLED}/include/SDL3")
   find_library(SDL_LIBRARY NAMES SDL3 PATHS "${VCPKG_INSTALLED}/lib" NO_DEFAULT_PATH)
 endif()
 
+if (NOT SDL_LIBRARY AND EXISTS "${VCPKG_INSTALLED}/include/SDL2")
+  set(SDL_INCLUDE_DIR "${VCPKG_INSTALLED}/include/SDL2")
+  find_library(SDL_LIBRARY NAMES SDL2 PATHS "${VCPKG_INSTALLED}/lib" NO_DEFAULT_PATH)
+endif()
+
 # Final attempt: prefer concrete lib files from vcpkg if present
-if (EXISTS "${VCPKG_INSTALLED}/lib/SDL2.lib")
-  set(SDL_LIBRARY "${VCPKG_INSTALLED}/lib/SDL2.lib")
-elseif (EXISTS "${VCPKG_INSTALLED}/lib/SDL3.lib")
+if (EXISTS "${VCPKG_INSTALLED}/lib/SDL3.lib")
   set(SDL_LIBRARY "${VCPKG_INSTALLED}/lib/SDL3.lib")
+elseif (EXISTS "${VCPKG_INSTALLED}/lib/SDL2.lib")
+  set(SDL_LIBRARY "${VCPKG_INSTALLED}/lib/SDL2.lib")
 elseif (NOT SDL_LIBRARY)
-  find_library(SDL_LIBRARY NAMES SDL2 SDL3 PATHS "${VCPKG_INSTALLED}/lib" NO_DEFAULT_PATH)
+  find_library(SDL_LIBRARY NAMES SDL3 SDL2 PATHS "${VCPKG_INSTALLED}/lib" NO_DEFAULT_PATH)
 endif()
 
 if (NOT SDL_LIBRARY)
@@ -40,6 +40,8 @@ endif()
 # OpenGL
 find_package(OpenGL REQUIRED)
 
+# GLM
+find_package(glm CONFIG REQUIRED)
 
 # Assimp - manually find 
 find_path(ASSIMP_INCLUDE_DIR assimp/scene.h PATHS "${VCPKG_INSTALLED}/include" NO_DEFAULT_PATH REQUIRED)
@@ -52,6 +54,13 @@ FetchContent_Declare(
   GIT_TAG v3.11.0
 )
 FetchContent_MakeAvailable(entt)
+
+FetchContent_Declare(
+  imgui
+  GIT_REPOSITORY https://github.com/ocornut/imgui.git
+  GIT_TAG docking
+)
+FetchContent_MakeAvailable(imgui)
 
 add_library(EngineCore STATIC
     src/Engine.cpp
@@ -98,7 +107,19 @@ add_library(EngineCore STATIC
     src/stb_image_impl.cpp
     src/WasmHostBindings.cpp
     src/WasmRuntime.cpp
+    src/SceneLoader.cpp
+    src/AnimationSystem.cpp
+    src/UISystem.cpp
+    ${imgui_SOURCE_DIR}/imgui.cpp
+    ${imgui_SOURCE_DIR}/imgui_draw.cpp
+    ${imgui_SOURCE_DIR}/imgui_tables.cpp
+    ${imgui_SOURCE_DIR}/imgui_widgets.cpp
+    ${imgui_SOURCE_DIR}/imgui_demo.cpp
+    ${imgui_SOURCE_DIR}/backends/imgui_impl_sdl3.cpp
+    ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
 )  
+
+target_compile_definitions(EngineCore PUBLIC GENESIS_ENABLE_OPENGL=1)
 
 # Ensure preferred SDL include is searched early (prefer SDL2 when present)
 if (DEFINED SDL_INCLUDE_DIR)
@@ -110,11 +131,13 @@ target_include_directories(EngineCore PUBLIC
   ${entt_SOURCE_DIR}/single_include
   ${SDL_INCLUDE_DIR}
   ${ASSIMP_INCLUDE_DIR}
+  ${imgui_SOURCE_DIR}
+  ${imgui_SOURCE_DIR}/backends
 ) 
 
 target_compile_features(EngineCore PUBLIC cxx_std_17)
 
-target_link_libraries(EngineCore PUBLIC ${SDL_LIBRARY} OpenGL::GL ${ASSIMP_LIBRARY})
+target_link_libraries(EngineCore PUBLIC ${SDL_LIBRARY} OpenGL::GL ${ASSIMP_LIBRARY} glm::glm)
 
 # stb single-file image library (optional) - fetch via FetchContent
 FetchContent_Declare(
