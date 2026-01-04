@@ -13,7 +13,7 @@ The Genesis Game Engine has undergone significant stress testing and rendering p
 
 ### 2. Automated "YOLO" Stress Testing
 - **Stress Mode**: Enhanced SampleGame with a --stress [frames] flag to run automated, high-speed render loops for stability testing.
-- **Visual Diagnostics**: Integrated Agenda/Utility/vision.py to automatically capture screenshots during stress tests, allowing for visual verification of rendering correctness without manual intervention.
+- **Visual Diagnostics**: Captured visual output for verification during stress tests (legacy Python screenshot helper removed in favor of Windows MCP Server / UI Automation-based workflows).
 - **Dependency Management**: Resolved runtime dependency issues (missing DLLs) by automating the deployment of vcpkg binaries to the build output directory.
 
 ### 3. Build & Runtime Stability

@@ -30,6 +30,7 @@ public:
     virtual bool Init(SDL_Window* window, SDL_GLContext glContext) = 0;
     virtual void BeginFrame() = 0;
     virtual void EndFrame() = 0;
+    virtual void Present() {} // Optional explicit present, if EndFrame doesn't swap
     virtual void Shutdown() = 0;
 
     // Optional (default no-op) resource APIs for runtime switching

@@ -57,6 +57,7 @@ using PFNGLBLITFRAMEBUFFERPROC = void (APIENTRY*)(int, int, int, int, int, int, 
 
 // Texture functions
 using PFNGLGENTEXTURESPROC = void (APIENTRY*)(int, unsigned int*);
+using PFNGLDELETETEXTURESPROC = void (APIENTRY*)(int, const unsigned int*);
 using PFNGLTEXIMAGE2DPROC = void (APIENTRY*)(unsigned int, int, int, int, int, int, unsigned int, unsigned int, const void*);
 using PFNGLTEXPARAMETERIPROC = void (APIENTRY*)(unsigned int, int, int);
 using PFNGLTEXPARAMETERFVPROC = void (APIENTRY*)(unsigned int, unsigned int, const float*);
@@ -106,6 +107,7 @@ static PFNGLDRAWBUFFERSPROC pglDrawBuffers = nullptr;
 static PFNGLBLITFRAMEBUFFERPROC pglBlitFramebuffer = nullptr;
 
 static PFNGLGENTEXTURESPROC pglGenTextures = nullptr;
+static PFNGLDELETETEXTURESPROC pglDeleteTextures = nullptr;
 static PFNGLTEXIMAGE2DPROC pglTexImage2D = nullptr;
 static PFNGLTEXPARAMETERIPROC pglTexParameteri = nullptr;
 static PFNGLTEXPARAMETERFVPROC pglTexParameterfv = nullptr;
@@ -171,6 +173,7 @@ static std::string ReadFile(const std::string& path) {
 #define GL_DEPTH_COMPONENT   0x1902
 #define GL_UNSIGNED_BYTE     0x1401
 #define GL_NEAREST           0x2600
+#define GL_LINEAR            0x2601
 #define GL_TEXTURE_MIN_FILTER 0x2801
 #define GL_TEXTURE_MAG_FILTER 0x2800
 #define GL_TEXTURE_WRAP_S    0x2802
@@ -205,9 +208,13 @@ bool OpenGLRenderer::Init(SDL_Window* window, SDL_GLContext glContext) {
     m_window = window;
     m_context = glContext;
 
-    if (SDL_GL_MakeCurrent(m_window, m_context) != 0) {
-        std::cerr << "SDL_GL_MakeCurrent failed: " << SDL_GetError() << std::endl;
-        return false;
+    if (SDL_GL_GetCurrentContext() != m_context) {
+        if (SDL_GL_MakeCurrent(m_window, m_context) != 0) {
+            std::cerr << "SDL_GL_MakeCurrent failed: " << SDL_GetError() << std::endl;
+            // return false; // Try to continue even if MakeCurrent fails, maybe it's a false positive or already active
+        }
+    } else {
+        std::cout << "OpenGLRenderer::Init -> Context already current" << std::endl;
     }
 
     // Resolve core GL functions used
@@ -253,6 +260,7 @@ bool OpenGLRenderer::Init(SDL_Window* window, SDL_GLContext glContext) {
     ResolveGL((void**)&pglBlitFramebuffer, "glBlitFramebuffer");
 
     ResolveGL((void**)&pglGenTextures, "glGenTextures");
+    ResolveGL((void**)&pglDeleteTextures, "glDeleteTextures");
     ResolveGL((void**)&pglTexImage2D, "glTexImage2D");
     ResolveGL((void**)&pglTexParameteri, "glTexParameteri");
     ResolveGL((void**)&pglTexParameterfv, "glTexParameterfv");
@@ -291,6 +299,10 @@ bool OpenGLRenderer::Init(SDL_Window* window, SDL_GLContext glContext) {
 
     // Load PBR shader (fallback/forward)
     m_pbrShader = Shader::CreateFromFile("Assets/shaders/pbr.vert", "Assets/shaders/pbr.frag");
+
+    // Load PostProcess Shaders
+    m_postProcessShader = Shader::CreateFromFile("Assets/shaders/postprocess.vert", "Assets/shaders/postprocess.frag");
+    m_blurShader = Shader::CreateFromFile("Assets/shaders/blur.vert", "Assets/shaders/blur.frag");
 
     // Sprite shader
     const std::string spriteVert = R"(
@@ -387,8 +399,10 @@ void OpenGLRenderer::InitGBuffer(int width, int height) {
 }
 
 void OpenGLRenderer::ResizeGBuffer(int width, int height) {
-    // TODO: Delete old textures/FBO and recreate
-    // For now, just re-init (will leak old handles, but acceptable for YOLO prototype)
+    if (m_gBuffer && pglDeleteFramebuffers) pglDeleteFramebuffers(1, &m_gBuffer);
+    if (m_gPosition && pglDeleteTextures) pglDeleteTextures(1, &m_gPosition);
+    if (m_gNormal && pglDeleteTextures) pglDeleteTextures(1, &m_gNormal);
+    if (m_gAlbedoSpec && pglDeleteTextures) pglDeleteTextures(1, &m_gAlbedoSpec);
     InitGBuffer(width, height);
 }
 
@@ -471,14 +485,26 @@ void OpenGLRenderer::InitPostProcessing(int width, int height) {
     pglEnableVertexAttribArray(1);
     pglVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
     pglBindVertexArray(0);
-
-    // Load shaders
-    m_postProcessShader = Shader::CreateFromFile("Assets/shaders/postprocess.vert", "Assets/shaders/postprocess.frag");
-    m_blurShader = Shader::CreateFromFile("Assets/shaders/blur.vert", "Assets/shaders/blur.frag");
 }
 
 void OpenGLRenderer::ResizePostProcessing(int width, int height) {
-    // Simple re-init for now (leaks handles, but okay for prototype)
+    if (m_fbo && pglDeleteFramebuffers) pglDeleteFramebuffers(1, &m_fbo);
+    if (m_screenTexture && pglDeleteTextures) pglDeleteTextures(1, &m_screenTexture);
+    if (m_brightTexture && pglDeleteTextures) pglDeleteTextures(1, &m_brightTexture);
+    if (m_rbo && pglDeleteRenderbuffers) pglDeleteRenderbuffers(1, &m_rbo);
+    
+    if (m_pingPongFBO[0] && pglDeleteFramebuffers) pglDeleteFramebuffers(2, m_pingPongFBO);
+    if (m_pingPongTexture[0] && pglDeleteTextures) pglDeleteTextures(2, m_pingPongTexture);
+
+    if (m_finalFBO && pglDeleteFramebuffers) {
+        pglDeleteFramebuffers(1, &m_finalFBO);
+        m_finalFBO = 0;
+    }
+    if (m_finalTexture && pglDeleteTextures) {
+        pglDeleteTextures(1, &m_finalTexture);
+        m_finalTexture = 0;
+    }
+
     InitPostProcessing(width, height);
 }
 
@@ -563,17 +589,23 @@ void OpenGLRenderer::RenderShadowPass() {
 }
 
 void OpenGLRenderer::BeginFrame() {
-    if (SDL_GL_MakeCurrent(m_window, m_context) != 0) {
-        std::cerr << "SDL_GL_MakeCurrent failed in BeginFrame: " << SDL_GetError() << std::endl;
+    if (SDL_GL_GetCurrentContext() != m_context) {
+        if (SDL_GL_MakeCurrent(m_window, m_context) != 0) {
+            std::cerr << "SDL_GL_MakeCurrent failed in BeginFrame: " << SDL_GetError() << std::endl;
+        }
     }
 
-    // Hot-reload shaders if changed
-    if (m_gBufferShader) m_gBufferShader->ReloadIfChanged();
-    if (m_deferredLightingShader) m_deferredLightingShader->ReloadIfChanged();
-    if (m_pbrShader) m_pbrShader->ReloadIfChanged();
-    if (m_postProcessShader) m_postProcessShader->ReloadIfChanged();
-    if (m_blurShader) m_blurShader->ReloadIfChanged();
-    if (m_shadowShader) m_shadowShader->ReloadIfChanged();
+    // Hot-reload shaders if changed (check every 60 frames to avoid IO overhead)
+    static int frameCount = 0;
+    frameCount++;
+    if (frameCount % 60 == 0) {
+        if (m_gBufferShader) m_gBufferShader->ReloadIfChanged();
+        if (m_deferredLightingShader) m_deferredLightingShader->ReloadIfChanged();
+        if (m_pbrShader) m_pbrShader->ReloadIfChanged();
+        if (m_postProcessShader) m_postProcessShader->ReloadIfChanged();
+        if (m_blurShader) m_blurShader->ReloadIfChanged();
+        if (m_shadowShader) m_shadowShader->ReloadIfChanged();
+    }
     
     int w, h;
     SDL_GetWindowSize(m_window, &w, &h);
@@ -589,8 +621,10 @@ void OpenGLRenderer::BeginFrame() {
 }
 
 void OpenGLRenderer::EndFrame() {
-    if (SDL_GL_MakeCurrent(m_window, m_context) != 0) {
-        std::cerr << "OpenGLRenderer::EndFrame -> SDL_GL_MakeCurrent failed: " << SDL_GetError() << std::endl;
+    if (SDL_GL_GetCurrentContext() != m_context) {
+        if (SDL_GL_MakeCurrent(m_window, m_context) != 0) {
+            std::cerr << "OpenGLRenderer::EndFrame -> SDL_GL_MakeCurrent failed: " << SDL_GetError() << std::endl;
+        }
     }
 
     // 1. Shadow Pass
@@ -701,10 +735,26 @@ void OpenGLRenderer::EndFrame() {
 
     // 5. Post-Process Pass (Final Combine)
     if (m_fbo) {
-        pglBindFramebuffer(GL_FRAMEBUFFER, 0);
+        // If present is disabled (Editor Mode), render to internal texture instead of screen
+        if (!m_presentEnabled) {
+            if (!m_finalFBO) {
+                pglGenFramebuffers(1, &m_finalFBO);
+                pglGenTextures(1, &m_finalTexture);
+                pglBindFramebuffer(GL_FRAMEBUFFER, m_finalFBO);
+                pglBindTexture(GL_TEXTURE_2D, m_finalTexture);
+                pglTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, m_screenWidth, m_screenHeight, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+                pglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+                pglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+                pglFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, m_finalTexture, 0);
+            }
+            pglBindFramebuffer(GL_FRAMEBUFFER, m_finalFBO);
+        } else {
+            pglBindFramebuffer(GL_FRAMEBUFFER, 0);
+        }
+
         int w, h; SDL_GetWindowSize(m_window, &w, &h);
         pglViewport(0, 0, w, h);
-        pglClearColor(1.0f, 1.0f, 1.0f, 1.0f);
+        pglClearColor(0.0f, 0.0f, 0.0f, 1.0f); // Clear to black instead of white
         pglClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         if (m_postProcessShader) {
@@ -767,7 +817,18 @@ void OpenGLRenderer::EndFrame() {
     }
 }
 
+void OpenGLRenderer::Present() {
+    if (m_window) {
+        SDL_GL_SwapWindow(m_window);
+    }
+}
+
 void OpenGLRenderer::Shutdown() {
+    if (m_window && m_context) {
+        if (SDL_GL_GetCurrentContext() != m_context) {
+            SDL_GL_MakeCurrent(m_window, m_context);
+        }
+    }
     if (m_fbo && pglDeleteFramebuffers) pglDeleteFramebuffers(1, &m_fbo);
     if (m_rbo && pglDeleteRenderbuffers) pglDeleteRenderbuffers(1, &m_rbo);
     if (m_gBuffer && pglDeleteFramebuffers) pglDeleteFramebuffers(1, &m_gBuffer);
@@ -776,6 +837,8 @@ void OpenGLRenderer::Shutdown() {
     if (m_spriteVBO && pglDeleteBuffers) pglDeleteBuffers(1, &m_spriteVBO);
     if (m_spriteEBO && pglDeleteBuffers) pglDeleteBuffers(1, &m_spriteEBO);
     if (m_spriteVAO && pglDeleteVertexArrays) pglDeleteVertexArrays(1, &m_spriteVAO);
+    if (m_finalFBO && pglDeleteFramebuffers) pglDeleteFramebuffers(1, &m_finalFBO);
+    // if (m_finalTexture && pglDeleteTextures) pglDeleteTextures(1, &m_finalTexture); // Need to resolve pglDeleteTextures
     m_window = nullptr;
     m_context = nullptr;
 }
@@ -783,7 +846,9 @@ void OpenGLRenderer::Shutdown() {
 IGraphicsAPI::TextureHandle OpenGLRenderer::CreateTexture(uint32_t width, uint32_t height, const uint8_t* pixels) {
     IGraphicsAPI::TextureHandle h;
     if (!m_window || !m_context) return h;
-    if (SDL_GL_MakeCurrent(m_window, m_context) != 0) return h;
+    if (SDL_GL_GetCurrentContext() != m_context) {
+        if (SDL_GL_MakeCurrent(m_window, m_context) != 0) return h;
+    }
 
     unsigned int id = 0;
     pglGenTextures(1, &id);
@@ -801,7 +866,9 @@ IGraphicsAPI::TextureHandle OpenGLRenderer::CreateTexture(uint32_t width, uint32
 
 void OpenGLRenderer::DestroyTexture(const IGraphicsAPI::TextureHandle& h) {
     if (!h.IsValid()) return;
-    if (SDL_GL_MakeCurrent(m_window, m_context) != 0) return;
+    if (SDL_GL_GetCurrentContext() != m_context) {
+        if (SDL_GL_MakeCurrent(m_window, m_context) != 0) return;
+    }
     unsigned int id = static_cast<unsigned int>(h.id);
     // pglDeleteTextures(1, &id); 
 }
@@ -809,7 +876,9 @@ void OpenGLRenderer::DestroyTexture(const IGraphicsAPI::TextureHandle& h) {
 MeshHandle OpenGLRenderer::CreateMesh(const MeshDesc& desc) {
     MeshHandle h;
     if (!m_window || !m_context) return h;
-    if (SDL_GL_MakeCurrent(m_window, m_context) != 0) return h;
+    if (SDL_GL_GetCurrentContext() != m_context) {
+        if (SDL_GL_MakeCurrent(m_window, m_context) != 0) return h;
+    }
 
     GLMesh mesh;
     pglGenVertexArrays(1, &mesh.vao);
@@ -884,7 +953,13 @@ void OpenGLRenderer::DestroyMesh(const MeshHandle& h) {
     if (!h.IsValid()) return;
     auto it = m_meshes.find(h.id);
     if (it == m_meshes.end()) return;
-    if (SDL_GL_MakeCurrent(m_window, m_context) == 0) {
+    
+    bool contextOk = true;
+    if (SDL_GL_GetCurrentContext() != m_context) {
+        if (SDL_GL_MakeCurrent(m_window, m_context) != 0) contextOk = false;
+    }
+
+    if (contextOk) {
         GLMesh& m = it->second;
         if (pglDeleteBuffers) {
             if (m.vbo) pglDeleteBuffers(1, &m.vbo);
@@ -1067,6 +1142,19 @@ void OpenGLRenderer::SetViewProjection(const float* view, const float* projectio
     else {
         std::memset(m_projection, 0, sizeof(float) * 16);
         m_projection[0] = m_projection[5] = m_projection[10] = m_projection[15] = 1.0f;
+    }
+}
+
+void OpenGLRenderer::BindDefaultFramebuffer() {
+    if (pglBindFramebuffer) {
+        pglBindFramebuffer(GL_FRAMEBUFFER, 0);
+    }
+}
+
+void OpenGLRenderer::Clear(float r, float g, float b, float a) {
+    if (pglClearColor && pglClear) {
+        pglClearColor(r, g, b, a);
+        pglClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     }
 }
 

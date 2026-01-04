@@ -39,6 +39,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # ============================================================================
 add_subdirectory(Engine/Core)
 add_subdirectory(GameProjects/SampleGame)
+add_subdirectory(Editor)
 add_subdirectory(Tools)
 add_subdirectory(Plugins/SamplePlugin)
 add_subdirectory(tests)

@@ -80,6 +80,8 @@ bool Window::Init(const std::string& title, int width, int height) {
 
     std::cout << "Window created successfully" << std::endl;
 
+    m_windowId = SDL_GetWindowID(m_window);
+
     // Create a GL context (used by future renderer)
     std::cout << "Creating OpenGL context..." << std::endl;
     m_glContext = SDL_GL_CreateContext(m_window);
@@ -93,6 +95,14 @@ bool Window::Init(const std::string& title, int width, int height) {
     }
 
     std::cout << "OpenGL context created successfully" << std::endl;
+
+    // Enable VSync
+    if (!SDL_GL_SetSwapInterval(1)) {
+        std::cerr << "Warning: Unable to set VSync! SDL Error: " << SDL_GetError() << std::endl;
+    } else {
+        std::cout << "VSync enabled." << std::endl;
+    }
+
     std::cout << "Window initialized: " << width << "x" << height << std::endl;
     return true;
 }
@@ -106,16 +116,25 @@ void Window::Shutdown() {
         SDL_DestroyWindow(m_window);
         m_window = nullptr;
     }
+    m_windowId = 0;
     SDL_Quit();
 }
 
-bool Window::PollEvents() {
+bool Window::PollEvents(EventCallback callback) {
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
+        if (callback) {
+            callback(event);
+        }
         if (event.type == SDL_EVENT_QUIT)
             return false;
-        if (event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED)
-            return false;
+        if (event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED) {
+            // ImGui multi-viewport creates additional SDL windows; do not treat their close
+            // requests as a request to exit the whole app.
+            if (event.window.windowID == m_windowId) {
+                return false;
+            }
+        }
     }
     return true;
 }

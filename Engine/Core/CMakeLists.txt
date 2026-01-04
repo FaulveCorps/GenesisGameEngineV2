@@ -62,6 +62,13 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(imgui)
 
+FetchContent_Declare(
+  imguizmo
+  GIT_REPOSITORY https://github.com/CedricGuillemet/ImGuizmo.git
+  GIT_TAG master
+)
+FetchContent_MakeAvailable(imguizmo)
+
 add_library(EngineCore STATIC
     src/Engine.cpp
     src/Window.cpp
@@ -117,6 +124,7 @@ add_library(EngineCore STATIC
     ${imgui_SOURCE_DIR}/imgui_demo.cpp
     ${imgui_SOURCE_DIR}/backends/imgui_impl_sdl3.cpp
     ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
+    ${imguizmo_SOURCE_DIR}/ImGuizmo.cpp
 )  
 
 target_compile_definitions(EngineCore PUBLIC GENESIS_ENABLE_OPENGL=1)
@@ -133,6 +141,7 @@ target_include_directories(EngineCore PUBLIC
   ${ASSIMP_INCLUDE_DIR}
   ${imgui_SOURCE_DIR}
   ${imgui_SOURCE_DIR}/backends
+  ${imguizmo_SOURCE_DIR}
 ) 
 
 target_compile_features(EngineCore PUBLIC cxx_std_17)

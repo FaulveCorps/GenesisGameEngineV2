@@ -23,6 +23,7 @@ public:
     bool Init(SDL_Window* window, SDL_GLContext glContext) override;
     void BeginFrame() override;
     void EndFrame() override;
+    void Present() override;
     void Shutdown() override;
 
     std::string GetName() const override { return std::string("opengl"); }
@@ -49,6 +50,13 @@ public:
                      uint32_t color = 0xFFFFFFFF) override;
 
     void SetPresentEnabled(bool enabled) { m_presentEnabled = enabled; }
+    
+    // Returns the texture ID of the final rendered frame (for Editor Viewport)
+    // If 0, the frame was rendered to the default framebuffer.
+    uint64_t GetFinalTextureID() const { return (uint64_t)m_finalTexture; }
+
+    void BindDefaultFramebuffer();
+    void Clear(float r, float g, float b, float a);
 
 private:
     bool m_presentEnabled = true;
@@ -102,6 +110,10 @@ private:
     std::shared_ptr<Shader> m_postProcessShader;
     int m_screenWidth = 0;
     int m_screenHeight = 0;
+
+    // Final Output FBO (for Editor Viewport)
+    unsigned int m_finalFBO = 0;
+    unsigned int m_finalTexture = 0;
 
     // Bloom resources
     unsigned int m_brightTexture = 0;
