@@ -6,6 +6,7 @@
 #include <sstream>
 #include <iostream>
 #include <filesystem>
+#include <iomanip>
 
 namespace Genesis::Engine {
 
@@ -31,6 +32,14 @@ bool SceneLoader::LoadScene(Scene& scene, const std::string& filePath) {
         if (token == "ENTITY") {
             currentEntity = scene.Registry().create();
         }
+        else if (token == "NAME" && currentEntity != entt::null) {
+            // NAME may contain spaces. Read the rest of the line.
+            std::string rest;
+            std::getline(ss, rest);
+            // Trim leading spaces.
+            while (!rest.empty() && (rest[0] == ' ' || rest[0] == '\t')) rest.erase(rest.begin());
+            scene.Registry().emplace_or_replace<NameComponent>(currentEntity, NameComponent{rest});
+        }
         else if (token == "TRANSFORM" && currentEntity != entt::null) {
             Transform t;
             ss >> t.x >> t.y >> t.z >> t.rx >> t.ry >> t.rz >> t.sx >> t.sy >> t.sz;
@@ -41,7 +50,10 @@ bool SceneLoader::LoadScene(Scene& scene, const std::string& filePath) {
             ss >> path;
             auto model = std::make_shared<Model>();
             if (model->Load(path)) {
-                scene.Registry().emplace<ModelComponent>(currentEntity, ModelComponent{model});
+                ModelComponent mc;
+                mc.model = model;
+                mc.sourcePath = path;
+                scene.Registry().emplace<ModelComponent>(currentEntity, mc);
             } else {
                 std::cerr << "SceneLoader: Failed to load model " << path << std::endl;
             }
@@ -60,6 +72,75 @@ bool SceneLoader::LoadScene(Scene& scene, const std::string& filePath) {
     
     std::cout << "SceneLoader: Loaded scene from " << filePath << std::endl;
     return true;
+}
+
+bool SceneLoader::SaveScene(const Scene& scene, const std::string& filePath) {
+    namespace fs = std::filesystem;
+    try {
+        fs::path outPath(filePath);
+        if (outPath.has_parent_path()) {
+            fs::create_directories(outPath.parent_path());
+        }
+
+        std::ofstream file(filePath, std::ios::binary | std::ios::trunc);
+        if (!file.is_open()) {
+            std::cerr << "SceneLoader: Failed to open for write: " << filePath << std::endl;
+            return false;
+        }
+
+        file << "# Saved Scene\n";
+        file << std::fixed << std::setprecision(6);
+
+        const auto& reg = scene.Registry();
+
+        // Note: entt registry iteration order is stable per run, but not guaranteed across runs.
+        // For now, we just serialize in registry order.
+        reg.each([&](auto entity) {
+            file << "ENTITY\n";
+            if (reg.any_of<NameComponent>(entity)) {
+                const auto& nc = reg.get<NameComponent>(entity);
+                if (!nc.name.empty()) {
+                    file << "NAME " << nc.name << "\n";
+                }
+            }
+
+            if (reg.any_of<Transform>(entity)) {
+                const auto& t = reg.get<Transform>(entity);
+                file << "TRANSFORM "
+                     << t.x << " " << t.y << " " << t.z << " "
+                     << t.rx << " " << t.ry << " " << t.rz << " "
+                     << t.sx << " " << t.sy << " " << t.sz << "\n";
+            }
+
+            if (reg.any_of<ModelComponent>(entity)) {
+                const auto& mc = reg.get<ModelComponent>(entity);
+                if (!mc.sourcePath.empty()) {
+                    file << "MODEL " << mc.sourcePath << "\n";
+                } else {
+                    // Keep silent by default; editor can show a warning if needed.
+                }
+            }
+
+            if (reg.any_of<LightComponent>(entity)) {
+                const auto& l = reg.get<LightComponent>(entity);
+                file << "LIGHT " << (int)l.type << " "
+                     << l.color[0] << " " << l.color[1] << " " << l.color[2] << " "
+                     << l.intensity;
+                if (l.type == LightType::Point) {
+                    file << " " << l.range;
+                }
+                file << "\n";
+            }
+
+            file << "\n";
+        });
+
+        std::cout << "SceneLoader: Saved scene to " << filePath << std::endl;
+        return true;
+    } catch (const std::exception& e) {
+        std::cerr << "SceneLoader: SaveScene failed: " << e.what() << std::endl;
+        return false;
+    }
 }
 
 }

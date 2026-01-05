@@ -7,8 +7,8 @@
 
 TEST_CASE("SDLInput: controller button/axis events are detected", "[input][gamepad]") {
     // Try to initialize the GameController subsystem; if not available, skip.
-    if (SDL_Init(SDL_INIT_EVENTS | SDL_INIT_GAMEPAD) != 0) {
-        if (SDL_Init(SDL_INIT_EVENTS | SDL_INIT_JOYSTICK) != 0) {
+    if (!SDL_Init(SDL_INIT_EVENTS | SDL_INIT_GAMEPAD)) {
+        if (!SDL_Init(SDL_INIT_EVENTS | SDL_INIT_JOYSTICK)) {
             WARN("SDL gamecontroller/joystick not available; skipping gamepad test");
             SDL_Quit();
             return;

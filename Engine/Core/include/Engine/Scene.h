@@ -11,6 +11,7 @@ public:
     ~Scene() = default;
 
     entt::registry& Registry() { return m_registry; }
+    const entt::registry& Registry() const { return m_registry; }
     void Clear() { m_registry.clear(); }
 
     void Update(double dt);

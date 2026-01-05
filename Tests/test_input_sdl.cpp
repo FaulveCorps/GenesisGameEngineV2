@@ -6,8 +6,8 @@
 
 TEST_CASE("SDLInput: press/release events are detected", "[input][sdl]") {
     // Initialize SDL event subsystem (or skip if not available)
-    if (SDL_Init(SDL_INIT_EVENTS) != 0) {
-        if (SDL_Init(SDL_INIT_VIDEO) != 0) {
+    if (!SDL_Init(SDL_INIT_EVENTS)) {
+        if (!SDL_Init(SDL_INIT_VIDEO)) {
             WARN("SDL not available; skipping SDLInput event test.");
             SDL_Quit();
             return;

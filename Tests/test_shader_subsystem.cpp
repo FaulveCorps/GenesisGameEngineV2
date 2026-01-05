@@ -28,8 +28,8 @@ TEST_CASE("Shader subsystem: Null backend available", "[subsystem][shader]") {
 }
 
 TEST_CASE("Shader subsystem: GL backend create & compile", "[subsystem][shader][opengl]") {
-    int sdlInitRes = SDL_Init(SDL_INIT_VIDEO);
-    REQUIRE(sdlInitRes == 0);
+    bool sdlInitRes = SDL_Init(SDL_INIT_VIDEO);
+    REQUIRE(sdlInitRes == true);
 
     SDL_Window* win = SDL_CreateWindow("ShaderSubsystemTest", 64, 64, SDL_WINDOW_HIDDEN | SDL_WINDOW_OPENGL);
     REQUIRE(win != nullptr);

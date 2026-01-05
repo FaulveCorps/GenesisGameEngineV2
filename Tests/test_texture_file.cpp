@@ -12,8 +12,8 @@
 #endif
 
 TEST_CASE("Texture file load and recreate") {
-    int sdlInitRes = SDL_Init(SDL_INIT_VIDEO);
-    REQUIRE(sdlInitRes == 0);
+    bool sdlInitRes = SDL_Init(SDL_INIT_VIDEO);
+    REQUIRE(sdlInitRes == true);
 
     SDL_Window* win = SDL_CreateWindow("TextureFileTest", 64, 64, SDL_WINDOW_HIDDEN | SDL_WINDOW_OPENGL);
     REQUIRE(win != nullptr);
@@ -28,7 +28,7 @@ TEST_CASE("Texture file load and recreate") {
     uint8_t data[w*h*4] = { 255,0,0,255, 0,255,0,255, 0,0,255,255, 255,255,0,255 };
     memcpy(surf->pixels, data, sizeof(data));
     std::string fname = "temp_test_tex.bmp";
-    REQUIRE(SDL_SaveBMP(surf, fname.c_str()) == 0);
+    REQUIRE(SDL_SaveBMP(surf, fname.c_str()) == true);
     SDL_DestroySurface(surf);
 
     auto r = Genesis::Engine::GraphicsFactory::CreateRenderer(win, ctx, {"opengl"}, false);

@@ -10,8 +10,8 @@
 #endif
 
 TEST_CASE("2D sprite readback (opengl)") {
-    int sdlInitRes = SDL_Init(SDL_INIT_VIDEO);
-    REQUIRE(sdlInitRes == 0);
+    bool sdlInitRes = SDL_Init(SDL_INIT_VIDEO);
+    REQUIRE(sdlInitRes == true);
 
     SDL_Window* win = SDL_CreateWindow("2DGLReadback", 64, 64, SDL_WINDOW_OPENGL | SDL_WINDOW_HIDDEN);
     REQUIRE(win != nullptr);

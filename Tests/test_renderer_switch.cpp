@@ -6,8 +6,8 @@
 #include <SDL.h>
 
 TEST_CASE("Renderer runtime switch basic") {
-    int sdlInitRes = SDL_Init(SDL_INIT_VIDEO);
-    REQUIRE(sdlInitRes == 0);
+    bool sdlInitRes = SDL_Init(SDL_INIT_VIDEO);
+    REQUIRE(sdlInitRes == true);
 
     SDL_Window* win = SDL_CreateWindow("RendererSwitchTest", 64, 64, SDL_WINDOW_HIDDEN | SDL_WINDOW_OPENGL);
     REQUIRE(win != nullptr);

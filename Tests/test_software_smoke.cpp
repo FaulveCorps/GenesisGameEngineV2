@@ -6,11 +6,11 @@
 TEST_CASE("Software smoke test") {
     printf("Software smoke test: starting\n"); fflush(stdout);
 
-    int sdlInitRes = SDL_Init(SDL_INIT_VIDEO);
-    if (sdlInitRes != 0) {
+    bool sdlInitRes = SDL_Init(SDL_INIT_VIDEO);
+    if (!sdlInitRes) {
         printf("SDL_Init failed: %s\n", SDL_GetError()); fflush(stdout);
     }
-    REQUIRE(sdlInitRes == 0);
+    REQUIRE(sdlInitRes == true);
 
     SDL_Window* win = SDL_CreateWindow("Software Smoke", 640, 480, SDL_WINDOW_HIDDEN | SDL_WINDOW_OPENGL);
     if (!win) {

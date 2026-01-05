@@ -17,7 +17,10 @@
 #include "imgui_impl_opengl3.h"
 #include "ImGuizmo.h"
 #include <cmath>
+#include <algorithm>
 #include <filesystem>
+#include <string>
+#include <vector>
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -104,6 +107,28 @@ int main(int argc, char** argv) {
     char commandSearchBuffer[128] = "";
     int selectedCommandIndex = 0;
 
+    // Scene / File State
+    std::string currentScenePath;
+    bool sceneDirty = false;
+    bool requestResetLayout = false;
+    bool showOpenSceneModal = false;
+    bool showSaveAsSceneModal = false;
+    bool showAboutModal = false;
+    bool focusInspectorName = false;
+    char scenePathBuffer[512] = "";
+
+    // Unsaved changes workflow
+    enum class PendingSceneAction {
+        None,
+        Quit,
+        NewScene,
+        ShowOpenScene,
+        LoadScenePath
+    };
+    PendingSceneAction pendingAction = PendingSceneAction::None;
+    std::string pendingScenePath;
+    bool showUnsavedChangesModal = false;
+
     // Editor Camera State
     glm::vec3 cameraPos = glm::vec3(0.0f, 2.0f, 5.0f);
     glm::vec3 cameraRot = glm::vec3(-20.0f, 0.0f, 0.0f); // Pitch, Yaw, Roll
@@ -125,9 +150,12 @@ int main(int argc, char** argv) {
     // Load default scene or create empty
     if (!Genesis::Engine::SceneLoader::LoadScene(scene, "Assets/scenes/default.scene")) {
         std::cout << "Editor: default scene not found, creating empty scene..." << std::endl;
+        currentScenePath.clear();
+        sceneDirty = true;
         
         // Create a default light so we can see things
         auto lightEntity = scene.Registry().create();
+        scene.Registry().emplace<Genesis::Engine::NameComponent>(lightEntity, Genesis::Engine::NameComponent{"Directional Light"});
         Genesis::Engine::LightComponent lightComp;
         lightComp.type = Genesis::Engine::LightType::Directional;
         lightComp.color[0] = 1.0f; lightComp.color[1] = 1.0f; lightComp.color[2] = 1.0f;
@@ -144,12 +172,14 @@ int main(int argc, char** argv) {
 
         // Create a Cube Entity for visual reference
         auto cubeEntity = scene.Registry().create();
+        scene.Registry().emplace<Genesis::Engine::NameComponent>(cubeEntity, Genesis::Engine::NameComponent{"Cube"});
         Genesis::Engine::Transform cubeTrans;
         cubeTrans.y = 0.0f;
         scene.Registry().emplace<Genesis::Engine::Transform>(cubeEntity, cubeTrans);
         
         auto modelComp = scene.Registry().emplace<Genesis::Engine::ModelComponent>(cubeEntity);
         modelComp.model = std::make_shared<Genesis::Engine::Model>();
+        modelComp.sourcePath.clear();
         
         // Manually create a cube mesh
         Genesis::Engine::Mesh cubeMesh;
@@ -202,6 +232,10 @@ int main(int argc, char** argv) {
         // For now, I'll just modify Model.h to add `AddMesh(Mesh&& mesh)`.
         modelComp.model->AddMesh(std::move(cubeMesh));
     }
+    else {
+        currentScenePath = "Assets/scenes/default.scene";
+        sceneDirty = false;
+    }
 
     // Setup profiler and ImGui
     Genesis::Engine::Profiler profiler;
@@ -211,20 +245,70 @@ int main(int argc, char** argv) {
 
     uint64_t lastTime = SDL_GetPerformanceCounter();
 
-    while (window.PollEvents([](const SDL_Event& event) {
-        ImGui_ImplSDL3_ProcessEvent(&event);
-    })) {
+    bool running = true;
+
+    auto DoNewScene = [&]() {
+        scene.Clear();
+        selectedEntity = entt::null;
+        currentScenePath.clear();
+        sceneDirty = true;
+
+        // Default light
+        auto lightEntity = scene.Registry().create();
+        scene.Registry().emplace<Genesis::Engine::NameComponent>(lightEntity, Genesis::Engine::NameComponent{"Directional Light"});
+        Genesis::Engine::LightComponent lightComp;
+        lightComp.type = Genesis::Engine::LightType::Directional;
+        lightComp.color[0] = 1.0f; lightComp.color[1] = 0.95f; lightComp.color[2] = 0.8f;
+        lightComp.intensity = 1.5f;
+        scene.Registry().emplace<Genesis::Engine::LightComponent>(lightEntity, lightComp);
+        Genesis::Engine::Transform lightTrans;
+        lightTrans.rx = -0.5f;
+        lightTrans.ry = 0.5f;
+        scene.Registry().emplace<Genesis::Engine::Transform>(lightEntity, lightTrans);
+        selectedEntity = lightEntity;
+    };
+
+    auto MaybePromptUnsaved = [&](PendingSceneAction action, const std::string& path = std::string()) {
+        if (!sceneDirty) return false;
+        pendingAction = action;
+        pendingScenePath = path;
+        showUnsavedChangesModal = true;
+        return true;
+    };
+
+    auto RequestQuit = [&]() {
+        if (!MaybePromptUnsaved(PendingSceneAction::Quit)) {
+            running = false;
+        }
+    };
+
+    while (running) {
+        // Pump SDL events (and intercept OS quit/close requests so we can prompt for unsaved changes).
+        SDL_Event event;
+        while (SDL_PollEvent(&event)) {
+            ImGui_ImplSDL3_ProcessEvent(&event);
+
+            if (event.type == SDL_EVENT_QUIT) {
+                RequestQuit();
+            }
+
+            if (event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED) {
+                // ImGui multi-viewport creates additional SDL windows; do not treat their close
+                // requests as a request to exit the whole app.
+                if (event.window.windowID == window.GetWindowID()) {
+                    RequestQuit();
+                }
+            }
+        }
+
+        if (!running) break;
+
         uint64_t now = SDL_GetPerformanceCounter();
         double dt = (double)((now - lastTime) * 1000 / SDL_GetPerformanceFrequency()) / 1000.0;
         lastTime = now;
 
         // Clamp dt to avoid huge jumps (e.g. debugging)
         if (dt > 0.1) dt = 0.1;
-
-        // If the user manually takes control, cancel view-cube animation.
-        if (ImGui::IsMouseDown(ImGuiMouseButton_Right)) {
-            viewCubeAnimating = false;
-        }
 
         // Smooth camera animation toward view-cube target.
         if (viewCubeAnimating) {
@@ -245,7 +329,13 @@ int main(int argc, char** argv) {
             cameraRot.z = euler.z;
         }
 
-        // Global Shortcuts
+        profiler.BeginFrame();
+
+        // Start ImGui frame
+        gui.NewFrame();
+        ImGuizmo::BeginFrame();
+
+        // Global Shortcuts (Editor)
         if (ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_P)) {
             showCommandPalette = !showCommandPalette;
             if (showCommandPalette) {
@@ -255,79 +345,47 @@ int main(int argc, char** argv) {
             }
         }
 
-        if (!ImGui::GetIO().WantTextInput && ImGui::IsKeyPressed(ImGuiKey_G)) {
-            showGrid = !showGrid;
+        if (!ImGui::GetIO().WantTextInput) {
+            if (ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_N)) {
+                if (!MaybePromptUnsaved(PendingSceneAction::NewScene)) {
+                    DoNewScene();
+                }
+            }
+            if (ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_O)) {
+                if (!MaybePromptUnsaved(PendingSceneAction::ShowOpenScene)) {
+                    showOpenSceneModal = true;
+                    if (!currentScenePath.empty()) {
+                        strncpy_s(scenePathBuffer, currentScenePath.c_str(), sizeof(scenePathBuffer) - 1);
+                    } else {
+                        strncpy_s(scenePathBuffer, "Assets/scenes/default.scene", sizeof(scenePathBuffer) - 1);
+                    }
+                }
+            }
+            if (ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_S) && !ImGui::GetIO().KeyShift) {
+                if (currentScenePath.empty()) {
+                    showSaveAsSceneModal = true;
+                    strncpy_s(scenePathBuffer, "Assets/scenes/scene.scene", sizeof(scenePathBuffer) - 1);
+                } else {
+                    if (Genesis::Engine::SceneLoader::SaveScene(scene, currentScenePath)) {
+                        sceneDirty = false;
+                    }
+                }
+            }
+            if (ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_S) && ImGui::GetIO().KeyShift) {
+                showSaveAsSceneModal = true;
+                if (!currentScenePath.empty()) {
+                    strncpy_s(scenePathBuffer, currentScenePath.c_str(), sizeof(scenePathBuffer) - 1);
+                } else {
+                    strncpy_s(scenePathBuffer, "Assets/scenes/scene.scene", sizeof(scenePathBuffer) - 1);
+                }
+            }
         }
-
-        // Gizmo Shortcuts
-        if (!ImGui::GetIO().WantTextInput && !ImGuizmo::IsUsing()) {
-            if (ImGui::IsKeyPressed(ImGuiKey_W)) currentGizmoOperation = ImGuizmo::TRANSLATE;
-            if (ImGui::IsKeyPressed(ImGuiKey_E)) currentGizmoOperation = ImGuizmo::ROTATE;
-            if (ImGui::IsKeyPressed(ImGuiKey_R)) currentGizmoOperation = ImGuizmo::SCALE;
-        }
-
-        // Camera Movement
-        if (ImGui::IsMouseDown(ImGuiMouseButton_Right)) {
-            // Only move if hovering viewport or already moving
-            // For now, global right click works
-            
-            float speed = 5.0f * (float)dt;
-            if (ImGui::IsKeyDown(ImGuiKey_LeftShift)) speed *= 2.0f;
-
-            glm::vec3 forward;
-            forward.x = sin(glm::radians(cameraRot.y)) * cos(glm::radians(cameraRot.x));
-            forward.y = -sin(glm::radians(cameraRot.x));
-            forward.z = -cos(glm::radians(cameraRot.y)) * cos(glm::radians(cameraRot.x));
-            forward = glm::normalize(forward);
-
-            glm::vec3 right = glm::normalize(glm::cross(forward, glm::vec3(0, 1, 0)));
-            glm::vec3 up = glm::normalize(glm::cross(right, forward));
-
-            if (ImGui::IsKeyDown(ImGuiKey_W)) cameraPos += forward * speed;
-            if (ImGui::IsKeyDown(ImGuiKey_S)) cameraPos -= forward * speed;
-            if (ImGui::IsKeyDown(ImGuiKey_A)) cameraPos -= right * speed;
-            if (ImGui::IsKeyDown(ImGuiKey_D)) cameraPos += right * speed;
-            if (ImGui::IsKeyDown(ImGuiKey_Q)) cameraPos -= glm::vec3(0, 1, 0) * speed;
-            if (ImGui::IsKeyDown(ImGuiKey_E)) cameraPos += glm::vec3(0, 1, 0) * speed;
-
-            // Mouse Look
-            ImVec2 delta = ImGui::GetIO().MouseDelta;
-            cameraRot.y -= delta.x * 0.1f; // Invert X for intuitive look
-            cameraRot.x -= delta.y * 0.1f; // Invert Y
-        }
-
-        profiler.BeginFrame();
-        
-        // Start ImGui frame
-        gui.NewFrame();
-        ImGuizmo::BeginFrame();
-
-        if (currentRenderer) {
-            currentRenderer->BeginFrame();
-        }
-
-        // Update Camera Matrices
-        glm::mat4 view = glm::mat4(1.0f);
-        view = glm::rotate(view, glm::radians(cameraRot.x), glm::vec3(1, 0, 0));
-        view = glm::rotate(view, glm::radians(cameraRot.y), glm::vec3(0, 1, 0));
-        view = glm::translate(view, -cameraPos);
-
-        glm::mat4 projection = glm::perspective(glm::radians(45.0f), 16.0f / 9.0f, 0.1f, 100.0f);
-        
-        if (currentRenderer) {
-            currentRenderer->SetViewProjection(glm::value_ptr(view), glm::value_ptr(projection));
-        }
-
-        // Update scene (physics, animation, etc.)
-        // In editor mode, we might want to pause physics/scripts unless "Play" is pressed.
-        // For now, we'll just update it.
-        scene.Update(dt); 
-
-        // Render scene
-        scene.Render(currentRenderer);
-
-        if (currentRenderer) {
-            currentRenderer->EndFrame(); // Renders scene to backbuffer (no swap)
+        if (!ImGui::GetIO().WantTextInput && ImGui::IsKeyPressed(ImGuiKey_Delete)) {
+            if (selectedEntity != entt::null && scene.Registry().valid(selectedEntity)) {
+                scene.Registry().destroy(selectedEntity);
+                selectedEntity = entt::null;
+                sceneDirty = true;
+            }
         }
 
         // Render Editor UI (on top of scene)
@@ -365,6 +423,12 @@ int main(int argc, char** argv) {
             }
         }
 
+        if (requestResetLayout) {
+            requestResetLayout = false;
+            first_time = true;
+            ImGui::DockBuilderRemoveNode(dockspace_id);
+        }
+
         // Custom Title Bar (VS Code Style)
         ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0, 8)); // Taller bar
         if (ImGui::BeginMainMenuBar()) {
@@ -373,12 +437,47 @@ int main(int argc, char** argv) {
             ImGui::Separator();
 
             if (ImGui::BeginMenu("File")) {
-                if (ImGui::MenuItem("Exit")) { /* TODO: Exit loop */ }
+                if (ImGui::MenuItem("New Scene", "Ctrl+N")) {
+                    if (!MaybePromptUnsaved(PendingSceneAction::NewScene)) {
+                        DoNewScene();
+                    }
+                }
+                if (ImGui::MenuItem("Open Scene...", "Ctrl+O")) {
+                    if (!MaybePromptUnsaved(PendingSceneAction::ShowOpenScene)) {
+                        showOpenSceneModal = true;
+                        if (!currentScenePath.empty()) {
+                            strncpy_s(scenePathBuffer, currentScenePath.c_str(), sizeof(scenePathBuffer) - 1);
+                        } else {
+                            strncpy_s(scenePathBuffer, "Assets/scenes/default.scene", sizeof(scenePathBuffer) - 1);
+                        }
+                    }
+                }
+                if (ImGui::MenuItem("Save", "Ctrl+S")) {
+                    if (currentScenePath.empty()) {
+                        showSaveAsSceneModal = true;
+                        strncpy_s(scenePathBuffer, "Assets/scenes/scene.scene", sizeof(scenePathBuffer) - 1);
+                    } else {
+                        if (Genesis::Engine::SceneLoader::SaveScene(scene, currentScenePath)) {
+                            sceneDirty = false;
+                        }
+                    }
+                }
+                if (ImGui::MenuItem("Save As...", "Ctrl+Shift+S")) {
+                    showSaveAsSceneModal = true;
+                    if (!currentScenePath.empty()) {
+                        strncpy_s(scenePathBuffer, currentScenePath.c_str(), sizeof(scenePathBuffer) - 1);
+                    } else {
+                        strncpy_s(scenePathBuffer, "Assets/scenes/scene.scene", sizeof(scenePathBuffer) - 1);
+                    }
+                }
+                ImGui::Separator();
+                if (ImGui::MenuItem("Exit", "Alt+F4")) { RequestQuit(); }
                 ImGui::EndMenu();
             }
             if (ImGui::BeginMenu("View")) {
                 if (ImGui::MenuItem("Toggle Zen Mode", "Ctrl+K Z", &zenMode)) {}
                 if (ImGui::MenuItem("Toggle Grid", "G", &showGrid)) {}
+                if (ImGui::MenuItem("Reset Layout")) { requestResetLayout = true; }
                 ImGui::EndMenu();
             }
             if (ImGui::BeginMenu("Window")) {
@@ -386,6 +485,10 @@ int main(int argc, char** argv) {
                 ImGui::MenuItem("Inspector");
                 ImGui::MenuItem("Scene Hierarchy");
                 ImGui::MenuItem("Content Browser");
+                ImGui::EndMenu();
+            }
+            if (ImGui::BeginMenu("Help")) {
+                if (ImGui::MenuItem("About")) { showAboutModal = true; }
                 ImGui::EndMenu();
             }
 
@@ -480,12 +583,7 @@ int main(int argc, char** argv) {
                 }
             }
             ImGui::SameLine(0, 0);
-            if (DrawWindowButton("Close", 2)) { 
-                // Break loop to exit
-                SDL_Event quitEvent;
-                quitEvent.type = SDL_EVENT_QUIT;
-                SDL_PushEvent(&quitEvent);
-            }
+            if (DrawWindowButton("Close", 2)) { RequestQuit(); }
 
             ImGui::EndMainMenuBar();
         }
@@ -498,19 +596,120 @@ int main(int argc, char** argv) {
         ImVec2 viewportContentMin = ImGui::GetWindowContentRegionMin();
         ImVec2 viewportTopLeft = ImVec2(viewportWindowPos.x + viewportContentMin.x, viewportWindowPos.y + viewportContentMin.y);
         ImVec2 viewportSize = ImGui::GetContentRegionAvail();
+
+        const bool viewportHovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows);
+        const bool viewportFocused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
+
+        // Avoid conflicts: don't let gizmo hotkeys fire while camera navigation is active.
+        const bool cameraNavActive = viewportFocused && viewportHovered && ImGui::IsMouseDown(ImGuiMouseButton_Right) && !ImGui::GetIO().WantTextInput;
+
+        // Gizmo Shortcuts
+        if (!cameraNavActive && !ImGui::GetIO().WantTextInput && !ImGuizmo::IsUsing()) {
+            if (ImGui::IsKeyPressed(ImGuiKey_W)) currentGizmoOperation = ImGuizmo::TRANSLATE;
+            if (ImGui::IsKeyPressed(ImGuiKey_E)) currentGizmoOperation = ImGuizmo::ROTATE;
+            if (ImGui::IsKeyPressed(ImGuiKey_R)) currentGizmoOperation = ImGuizmo::SCALE;
+        }
+
+        if (!ImGui::GetIO().WantTextInput && ImGui::IsKeyPressed(ImGuiKey_G)) {
+            // Keep this scoped to viewport focus to avoid toggling grid while typing elsewhere.
+            if (viewportFocused) showGrid = !showGrid;
+        }
+
+        // Camera Navigation (viewport-scoped)
+        if (cameraNavActive) {
+            viewCubeAnimating = false;
+
+            float speed = 5.0f * (float)dt;
+            if (ImGui::IsKeyDown(ImGuiKey_LeftShift)) speed *= 2.0f;
+
+            glm::vec3 forward;
+            forward.x = sin(glm::radians(cameraRot.y)) * cos(glm::radians(cameraRot.x));
+            forward.y = -sin(glm::radians(cameraRot.x));
+            forward.z = -cos(glm::radians(cameraRot.y)) * cos(glm::radians(cameraRot.x));
+            forward = glm::normalize(forward);
+
+            glm::vec3 right = glm::normalize(glm::cross(forward, glm::vec3(0, 1, 0)));
+
+            if (ImGui::IsKeyDown(ImGuiKey_W)) cameraPos += forward * speed;
+            if (ImGui::IsKeyDown(ImGuiKey_S)) cameraPos -= forward * speed;
+            if (ImGui::IsKeyDown(ImGuiKey_A)) cameraPos -= right * speed;
+            if (ImGui::IsKeyDown(ImGuiKey_D)) cameraPos += right * speed;
+            if (ImGui::IsKeyDown(ImGuiKey_Q)) cameraPos -= glm::vec3(0, 1, 0) * speed;
+            if (ImGui::IsKeyDown(ImGuiKey_E)) cameraPos += glm::vec3(0, 1, 0) * speed;
+
+            // Mouse Look
+            ImVec2 delta = ImGui::GetIO().MouseDelta;
+            cameraRot.y -= delta.x * 0.1f; // Invert X for intuitive look
+            cameraRot.x -= delta.y * 0.1f; // Invert Y
+        }
+
+        // Update Camera Matrices
+        glm::mat4 view = glm::mat4(1.0f);
+        view = glm::rotate(view, glm::radians(cameraRot.x), glm::vec3(1, 0, 0));
+        view = glm::rotate(view, glm::radians(cameraRot.y), glm::vec3(0, 1, 0));
+        view = glm::translate(view, -cameraPos);
+
+        glm::mat4 projection = glm::perspective(glm::radians(45.0f), 16.0f / 9.0f, 0.1f, 100.0f);
         
         // Update Projection Aspect Ratio based on Viewport Size
         if (viewportSize.x > 0 && viewportSize.y > 0) {
             projection = glm::perspective(glm::radians(45.0f), viewportSize.x / viewportSize.y, 0.1f, 100.0f);
-            if (currentRenderer) {
-                currentRenderer->SetViewProjection(glm::value_ptr(view), glm::value_ptr(projection));
-            }
+        }
+
+        // Render scene (now that camera matrices are final)
+        if (currentRenderer) {
+            currentRenderer->BeginFrame();
+            currentRenderer->SetViewProjection(glm::value_ptr(view), glm::value_ptr(projection));
+        }
+
+        scene.Update(dt);
+        scene.Render(currentRenderer);
+
+        if (currentRenderer) {
+            currentRenderer->EndFrame(); // Renders scene to internal texture (no swap)
         }
 
         if (auto glRenderer = dynamic_cast<Genesis::Engine::OpenGLRenderer*>(currentRenderer)) {
             uint64_t texID = glRenderer->GetFinalTextureID();
             // Invert V for OpenGL texture in ImGui
             ImGui::Image((ImTextureID)texID, viewportSize, ImVec2(0, 1), ImVec2(1, 0));
+        }
+
+        // Drag/drop onto the viewport: create entity from a model, or open a dropped .scene
+        if (ImGui::BeginDragDropTarget()) {
+            if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("CONTENT_BROWSER_ITEM")) {
+                const char* droppedPath = (const char*)payload->Data;
+                if (droppedPath && droppedPath[0] != 0) {
+                    std::filesystem::path p(droppedPath);
+                    std::string ext = p.extension().string();
+                    std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) { return (char)std::tolower(c); });
+
+                    if (ext == ".scene") {
+                        if (!MaybePromptUnsaved(PendingSceneAction::LoadScenePath, p.string())) {
+                            if (Genesis::Engine::SceneLoader::LoadScene(scene, p.string())) {
+                                currentScenePath = p.string();
+                                sceneDirty = false;
+                                selectedEntity = entt::null;
+                            }
+                        }
+                    } else if (ext == ".gltf" || ext == ".glb" || ext == ".obj" || ext == ".fbx") {
+                        auto e = scene.Registry().create();
+                        scene.Registry().emplace<Genesis::Engine::NameComponent>(e, Genesis::Engine::NameComponent{p.stem().string()});
+                        scene.Registry().emplace<Genesis::Engine::Transform>(e);
+                        Genesis::Engine::ModelComponent mc;
+                        mc.model = std::make_shared<Genesis::Engine::Model>();
+                        mc.sourcePath = p.string();
+                        if (mc.model->Load(mc.sourcePath)) {
+                            scene.Registry().emplace<Genesis::Engine::ModelComponent>(e, mc);
+                            selectedEntity = e;
+                            sceneDirty = true;
+                        } else {
+                            scene.Registry().destroy(e);
+                        }
+                    }
+                }
+            }
+            ImGui::EndDragDropTarget();
         }
 
         // Draw Grid
@@ -631,9 +830,10 @@ int main(int argc, char** argv) {
             auto& tc = scene.Registry().get<Genesis::Engine::Transform>(selectedEntity);
             glm::mat4 transform = glm::mat4(1.0f);
             transform = glm::translate(transform, glm::vec3(tc.x, tc.y, tc.z));
-            transform = glm::rotate(transform, glm::radians(tc.rx), glm::vec3(1, 0, 0));
-            transform = glm::rotate(transform, glm::radians(tc.ry), glm::vec3(0, 1, 0));
-            transform = glm::rotate(transform, glm::radians(tc.rz), glm::vec3(0, 0, 1));
+            // Transform rotation is stored in radians.
+            transform = glm::rotate(transform, tc.rx, glm::vec3(1, 0, 0));
+            transform = glm::rotate(transform, tc.ry, glm::vec3(0, 1, 0));
+            transform = glm::rotate(transform, tc.rz, glm::vec3(0, 0, 1));
             transform = glm::scale(transform, glm::vec3(tc.sx, tc.sy, tc.sz));
 
             ImGuizmo::Manipulate(glm::value_ptr(view), glm::value_ptr(projection), currentGizmoOperation, currentGizmoMode, glm::value_ptr(transform));
@@ -643,8 +843,12 @@ int main(int argc, char** argv) {
                 ImGuizmo::DecomposeMatrixToComponents(glm::value_ptr(transform), matrixTranslation, matrixRotation, matrixScale);
                 
                 tc.x = matrixTranslation[0]; tc.y = matrixTranslation[1]; tc.z = matrixTranslation[2];
-                tc.rx = matrixRotation[0]; tc.ry = matrixRotation[1]; tc.rz = matrixRotation[2];
+                // ImGuizmo gives rotation in degrees; store radians to match engine.
+                tc.rx = glm::radians(matrixRotation[0]);
+                tc.ry = glm::radians(matrixRotation[1]);
+                tc.rz = glm::radians(matrixRotation[2]);
                 tc.sx = matrixScale[0]; tc.sy = matrixScale[1]; tc.sz = matrixScale[2];
+                sceneDirty = true;
             }
         }
 
@@ -656,20 +860,119 @@ int main(int argc, char** argv) {
             ImGui::Begin("Scene Hierarchy");
             if (ImGui::Button("Create Entity")) {
                 auto e = scene.Registry().create();
+                scene.Registry().emplace<Genesis::Engine::NameComponent>(e, Genesis::Engine::NameComponent{"Entity " + std::to_string((uint32_t)e)});
                 scene.Registry().emplace<Genesis::Engine::Transform>(e);
                 selectedEntity = e;
+                sceneDirty = true;
             }
             ImGui::Separator();
+
+            // Rename popup state
+            static entt::entity renameEntity = entt::null;
+            static char renameBuf[128] = "";
+
+            // F2 focuses rename for selected entity
+            if (ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) && ImGui::IsKeyPressed(ImGuiKey_F2)) {
+                if (selectedEntity != entt::null && scene.Registry().valid(selectedEntity)) {
+                    renameEntity = selectedEntity;
+                    std::string label;
+                    if (scene.Registry().any_of<Genesis::Engine::NameComponent>(selectedEntity)) {
+                        const auto& nc = scene.Registry().get<Genesis::Engine::NameComponent>(selectedEntity);
+                        label = nc.name.empty() ? ("Entity " + std::to_string((uint32_t)selectedEntity)) : nc.name;
+                    } else {
+                        label = "Entity " + std::to_string((uint32_t)selectedEntity);
+                    }
+                    strncpy_s(renameBuf, label.c_str(), sizeof(renameBuf) - 1);
+                    ImGui::OpenPopup("Rename Entity");
+                }
+            }
+
             scene.Registry().each([&](auto entity) {
-                std::string label = "Entity " + std::to_string((uint32_t)entity);
+                std::string label;
+                if (scene.Registry().any_of<Genesis::Engine::NameComponent>(entity)) {
+                    const auto& nc = scene.Registry().get<Genesis::Engine::NameComponent>(entity);
+                    label = nc.name.empty() ? ("Entity " + std::to_string((uint32_t)entity)) : nc.name;
+                } else {
+                    label = "Entity " + std::to_string((uint32_t)entity);
+                }
                 bool isSelected = (selectedEntity == entity);
                 if (ImGui::Selectable(label.c_str(), isSelected)) {
                     selectedEntity = entity;
                 }
+
+                if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+                    renameEntity = entity;
+                    std::string curName = label;
+                    strncpy_s(renameBuf, curName.c_str(), sizeof(renameBuf) - 1);
+                    ImGui::OpenPopup("Rename Entity");
+                }
+
+                if (ImGui::BeginPopupContextItem()) {
+                    if (ImGui::MenuItem("Rename", "F2")) {
+                        renameEntity = entity;
+                        std::string curName = label;
+                        strncpy_s(renameBuf, curName.c_str(), sizeof(renameBuf) - 1);
+                        ImGui::OpenPopup("Rename Entity");
+                    }
+                    if (ImGui::MenuItem("Duplicate")) {
+                        auto dup = scene.Registry().create();
+                        if (scene.Registry().any_of<Genesis::Engine::NameComponent>(entity)) {
+                            auto nc = scene.Registry().get<Genesis::Engine::NameComponent>(entity);
+                            if (!nc.name.empty()) nc.name += " Copy";
+                            scene.Registry().emplace<Genesis::Engine::NameComponent>(dup, nc);
+                        }
+                        if (scene.Registry().any_of<Genesis::Engine::Transform>(entity)) {
+                            scene.Registry().emplace<Genesis::Engine::Transform>(dup, scene.Registry().get<Genesis::Engine::Transform>(entity));
+                        }
+                        if (scene.Registry().any_of<Genesis::Engine::LightComponent>(entity)) {
+                            scene.Registry().emplace<Genesis::Engine::LightComponent>(dup, scene.Registry().get<Genesis::Engine::LightComponent>(entity));
+                        }
+                        if (scene.Registry().any_of<Genesis::Engine::ModelComponent>(entity)) {
+                            scene.Registry().emplace<Genesis::Engine::ModelComponent>(dup, scene.Registry().get<Genesis::Engine::ModelComponent>(entity));
+                        }
+                        selectedEntity = dup;
+                        sceneDirty = true;
+                    }
+                    if (ImGui::MenuItem("Delete", "Del")) {
+                        if (scene.Registry().valid(entity)) {
+                            scene.Registry().destroy(entity);
+                            if (selectedEntity == entity) selectedEntity = entt::null;
+                            sceneDirty = true;
+                        }
+                    }
+                    ImGui::EndPopup();
+                }
+
                 if (isSelected) {
                     ImGui::SetItemDefaultFocus();
                 }
             });
+
+            if (ImGui::BeginPopupModal("Rename Entity", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+                ImGui::TextUnformatted("Name:");
+                ImGui::PushItemWidth(300.0f);
+                ImGui::InputText("##rename", renameBuf, sizeof(renameBuf));
+                ImGui::PopItemWidth();
+
+                bool commit = ImGui::Button("OK") || ImGui::IsKeyPressed(ImGuiKey_Enter);
+                ImGui::SameLine();
+                bool cancel = ImGui::Button("Cancel") || ImGui::IsKeyPressed(ImGuiKey_Escape);
+
+                if (commit) {
+                    if (renameEntity != entt::null && scene.Registry().valid(renameEntity)) {
+                        scene.Registry().emplace_or_replace<Genesis::Engine::NameComponent>(renameEntity, Genesis::Engine::NameComponent{std::string(renameBuf)});
+                        sceneDirty = true;
+                    }
+                    renameEntity = entt::null;
+                    ImGui::CloseCurrentPopup();
+                }
+                if (cancel) {
+                    renameEntity = entt::null;
+                    ImGui::CloseCurrentPopup();
+                }
+                ImGui::EndPopup();
+            }
+
             ImGui::End();
         }
 
@@ -677,15 +980,45 @@ int main(int argc, char** argv) {
         if (!zenMode) {
             ImGui::Begin("Inspector");
             if (selectedEntity != entt::null && scene.Registry().valid(selectedEntity)) {
-                ImGui::Text("Entity ID: %d", (uint32_t)selectedEntity);
+                // Name (persistent edit buffer)
+                static entt::entity lastNameEditEntity = entt::null;
+                static char nameEditBuf[256] = "";
+                if (selectedEntity != lastNameEditEntity) {
+                    std::string name;
+                    if (scene.Registry().any_of<Genesis::Engine::NameComponent>(selectedEntity)) {
+                        name = scene.Registry().get<Genesis::Engine::NameComponent>(selectedEntity).name;
+                    } else {
+                        name = "Entity " + std::to_string((uint32_t)selectedEntity);
+                    }
+                    strncpy_s(nameEditBuf, name.c_str(), sizeof(nameEditBuf) - 1);
+                    lastNameEditEntity = selectedEntity;
+                }
+                if (focusInspectorName) {
+                    ImGui::SetKeyboardFocusHere();
+                    focusInspectorName = false;
+                }
+                if (ImGui::InputText("Name", nameEditBuf, sizeof(nameEditBuf))) {
+                    scene.Registry().emplace_or_replace<Genesis::Engine::NameComponent>(selectedEntity, Genesis::Engine::NameComponent{std::string(nameEditBuf)});
+                    sceneDirty = true;
+                }
+                ImGui::Text("Entity ID: %u", (uint32_t)selectedEntity);
                 ImGui::Separator();
 
                 if (scene.Registry().all_of<Genesis::Engine::Transform>(selectedEntity)) {
                     if (ImGui::CollapsingHeader("Transform", ImGuiTreeNodeFlags_DefaultOpen)) {
                         auto& tc = scene.Registry().get<Genesis::Engine::Transform>(selectedEntity);
-                        ImGui::DragFloat3("Position", &tc.x, 0.1f);
-                        ImGui::DragFloat3("Rotation", &tc.rx, 0.1f);
-                        ImGui::DragFloat3("Scale", &tc.sx, 0.1f);
+                        if (ImGui::DragFloat3("Position", &tc.x, 0.1f)) sceneDirty = true;
+
+                        // Show rotation in degrees, store radians.
+                        float rotDeg[3] = { glm::degrees(tc.rx), glm::degrees(tc.ry), glm::degrees(tc.rz) };
+                        if (ImGui::DragFloat3("Rotation (deg)", rotDeg, 0.5f)) {
+                            tc.rx = glm::radians(rotDeg[0]);
+                            tc.ry = glm::radians(rotDeg[1]);
+                            tc.rz = glm::radians(rotDeg[2]);
+                            sceneDirty = true;
+                        }
+
+                        if (ImGui::DragFloat3("Scale", &tc.sx, 0.01f, 0.0f, 1000.0f)) sceneDirty = true;
                     }
                 }
 
@@ -696,11 +1029,47 @@ int main(int argc, char** argv) {
                         int currentType = (int)lc.type;
                         if (ImGui::Combo("Type", &currentType, types, IM_ARRAYSIZE(types))) {
                             lc.type = (Genesis::Engine::LightType)currentType;
+                            sceneDirty = true;
                         }
-                        ImGui::ColorEdit3("Color", lc.color);
-                        ImGui::DragFloat("Intensity", &lc.intensity, 0.1f, 0.0f, 100.0f);
+                        if (ImGui::ColorEdit3("Color", lc.color)) sceneDirty = true;
+                        if (ImGui::DragFloat("Intensity", &lc.intensity, 0.1f, 0.0f, 100.0f)) sceneDirty = true;
                         if (lc.type == Genesis::Engine::LightType::Point) {
-                            ImGui::DragFloat("Range", &lc.range, 0.1f, 0.0f, 1000.0f);
+                            if (ImGui::DragFloat("Range", &lc.range, 0.1f, 0.0f, 1000.0f)) sceneDirty = true;
+                        }
+                    }
+                }
+
+                if (scene.Registry().all_of<Genesis::Engine::ModelComponent>(selectedEntity)) {
+                    if (ImGui::CollapsingHeader("Model", ImGuiTreeNodeFlags_DefaultOpen)) {
+                        auto& mc = scene.Registry().get<Genesis::Engine::ModelComponent>(selectedEntity);
+                        ImGui::TextWrapped("Source: %s", mc.sourcePath.empty() ? "(unspecified)" : mc.sourcePath.c_str());
+
+                        if (ImGui::Button("Reload") && mc.model && !mc.sourcePath.empty()) {
+                            mc.model->Load(mc.sourcePath);
+                        }
+                        ImGui::SameLine();
+                        if (ImGui::Button("Remove")) {
+                            scene.Registry().remove<Genesis::Engine::ModelComponent>(selectedEntity);
+                            sceneDirty = true;
+                        }
+
+                        ImGui::TextUnformatted("Drag a model from Content Browser onto this panel to assign.");
+                        if (ImGui::BeginDragDropTarget()) {
+                            if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("CONTENT_BROWSER_ITEM")) {
+                                const char* droppedPath = (const char*)payload->Data;
+                                if (droppedPath && droppedPath[0] != 0) {
+                                    std::filesystem::path p(droppedPath);
+                                    std::string ext = p.extension().string();
+                                    std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) { return (char)std::tolower(c); });
+                                    if (ext == ".gltf" || ext == ".glb" || ext == ".obj" || ext == ".fbx") {
+                                        if (!mc.model) mc.model = std::make_shared<Genesis::Engine::Model>();
+                                        mc.sourcePath = p.string();
+                                        mc.model->Load(mc.sourcePath);
+                                        sceneDirty = true;
+                                    }
+                                }
+                            }
+                            ImGui::EndDragDropTarget();
                         }
                     }
                 }
@@ -712,6 +1081,16 @@ int main(int argc, char** argv) {
                     if (ImGui::MenuItem("Light")) {
                         if (!scene.Registry().all_of<Genesis::Engine::LightComponent>(selectedEntity)) {
                             scene.Registry().emplace<Genesis::Engine::LightComponent>(selectedEntity);
+                            sceneDirty = true;
+                        }
+                    }
+                    if (ImGui::MenuItem("Model")) {
+                        if (!scene.Registry().all_of<Genesis::Engine::ModelComponent>(selectedEntity)) {
+                            Genesis::Engine::ModelComponent mc;
+                            mc.model = std::make_shared<Genesis::Engine::Model>();
+                            mc.sourcePath.clear();
+                            scene.Registry().emplace<Genesis::Engine::ModelComponent>(selectedEntity, mc);
+                            sceneDirty = true;
                         }
                     }
                     ImGui::EndPopup();
@@ -725,7 +1104,23 @@ int main(int argc, char** argv) {
         // Content Browser
         if (!zenMode) {
             ImGui::Begin("Content Browser");
-            if (std::filesystem::exists("Assets")) {
+            static std::filesystem::path contentDir = "Assets";
+            static char contentSearch[128] = "";
+
+            if (std::filesystem::exists(contentDir)) {
+                // Toolbar
+                if (contentDir != std::filesystem::path("Assets")) {
+                    if (ImGui::Button("<")) {
+                        contentDir = contentDir.parent_path();
+                    }
+                    ImGui::SameLine();
+                }
+                ImGui::TextWrapped("%s", contentDir.string().c_str());
+                ImGui::SameLine();
+                ImGui::SetNextItemWidth(200.0f);
+                ImGui::InputTextWithHint("##contentSearch", "Search...", contentSearch, sizeof(contentSearch));
+                ImGui::Separator();
+
                 float padding = 16.0f;
                 float thumbnailSize = 64.0f;
                 float cellSize = thumbnailSize + padding;
@@ -735,15 +1130,51 @@ int main(int argc, char** argv) {
 
                 ImGui::Columns(columnCount, 0, false);
 
-                for (const auto& entry : std::filesystem::directory_iterator("Assets")) {
+                std::vector<std::filesystem::directory_entry> entries;
+                for (const auto& entry : std::filesystem::directory_iterator(contentDir)) {
+                    entries.push_back(entry);
+                }
+                std::sort(entries.begin(), entries.end(), [](const auto& a, const auto& b) {
+                    if (a.is_directory() != b.is_directory()) return a.is_directory() > b.is_directory();
+                    return a.path().filename().string() < b.path().filename().string();
+                });
+
+                for (const auto& entry : entries) {
                     std::string path = entry.path().string();
                     std::string filename = entry.path().filename().string();
+
+                    if (contentSearch[0] != 0) {
+                        std::string fLower = filename;
+                        std::string sLower = contentSearch;
+                        std::transform(fLower.begin(), fLower.end(), fLower.begin(), [](unsigned char c) { return (char)std::tolower(c); });
+                        std::transform(sLower.begin(), sLower.end(), sLower.begin(), [](unsigned char c) { return (char)std::tolower(c); });
+                        if (fLower.find(sLower) == std::string::npos) continue;
+                    }
                     
                     ImGui::PushID(filename.c_str());
                     // Placeholder for thumbnail
                     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
                     ImGui::ImageButton(filename.c_str(), (ImTextureID)0, ImVec2(thumbnailSize, thumbnailSize));
                     ImGui::PopStyleColor();
+
+                    if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+                        if (entry.is_directory()) {
+                            contentDir = entry.path();
+                        } else {
+                            std::string ext = entry.path().extension().string();
+                            std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) { return (char)std::tolower(c); });
+                            if (ext == ".scene") {
+                                const std::string pathStr = entry.path().string();
+                                if (!MaybePromptUnsaved(PendingSceneAction::LoadScenePath, pathStr)) {
+                                    if (Genesis::Engine::SceneLoader::LoadScene(scene, pathStr)) {
+                                        currentScenePath = pathStr;
+                                        sceneDirty = false;
+                                        selectedEntity = entt::null;
+                                    }
+                                }
+                            }
+                        }
+                    }
 
                     if (ImGui::BeginDragDropSource()) {
                         ImGui::SetDragDropPayload("CONTENT_BROWSER_ITEM", path.c_str(), path.length() + 1);
@@ -786,11 +1217,15 @@ int main(int argc, char** argv) {
 
             // Commands List
             const char* commands[] = {
+                "File: New Scene",
+                "File: Open Scene...",
+                "File: Save",
+                "File: Save As...",
                 "File: Exit",
-                "View: Toggle Wireframe",
                 "View: Reset Layout",
                 "View: Toggle Zen Mode",
                 "Entity: Create New",
+                "Entity: Rename Selected",
                 "Entity: Delete Selected",
                 "Window: Toggle Fullscreen",
                 "Help: About"
@@ -805,21 +1240,66 @@ int main(int argc, char** argv) {
                 if (ImGui::Selectable(commands[i], isSelected)) {
                     // Execute Command
                     std::string cmd = commands[i];
-                    if (cmd == "File: Exit") {
-                        SDL_Event quitEvent; quitEvent.type = SDL_EVENT_QUIT; SDL_PushEvent(&quitEvent);
+                    if (cmd == "File: New Scene") {
+                        if (!MaybePromptUnsaved(PendingSceneAction::NewScene)) {
+                            DoNewScene();
+                        }
+                    }
+                    else if (cmd == "File: Open Scene...") {
+                        if (!MaybePromptUnsaved(PendingSceneAction::ShowOpenScene)) {
+                            showOpenSceneModal = true;
+                            if (!currentScenePath.empty()) {
+                                strncpy_s(scenePathBuffer, currentScenePath.c_str(), sizeof(scenePathBuffer) - 1);
+                            } else {
+                                strncpy_s(scenePathBuffer, "Assets/scenes/default.scene", sizeof(scenePathBuffer) - 1);
+                            }
+                        }
+                    }
+                    else if (cmd == "File: Save") {
+                        if (currentScenePath.empty()) {
+                            showSaveAsSceneModal = true;
+                            strncpy_s(scenePathBuffer, "Assets/scenes/scene.scene", sizeof(scenePathBuffer) - 1);
+                        } else {
+                            if (Genesis::Engine::SceneLoader::SaveScene(scene, currentScenePath)) {
+                                sceneDirty = false;
+                            }
+                        }
+                    }
+                    else if (cmd == "File: Save As...") {
+                        showSaveAsSceneModal = true;
+                        if (!currentScenePath.empty()) {
+                            strncpy_s(scenePathBuffer, currentScenePath.c_str(), sizeof(scenePathBuffer) - 1);
+                        } else {
+                            strncpy_s(scenePathBuffer, "Assets/scenes/scene.scene", sizeof(scenePathBuffer) - 1);
+                        }
+                    }
+                    else if (cmd == "File: Exit") {
+                        RequestQuit();
                     }
                     else if (cmd == "View: Toggle Zen Mode") {
                         zenMode = !zenMode;
                     }
+                    else if (cmd == "View: Reset Layout") {
+                        requestResetLayout = true;
+                    }
                     else if (cmd == "Entity: Create New") {
                         auto e = scene.Registry().create();
+                        scene.Registry().emplace<Genesis::Engine::NameComponent>(e, Genesis::Engine::NameComponent{"Entity " + std::to_string((uint32_t)e)});
                         scene.Registry().emplace<Genesis::Engine::Transform>(e);
                         selectedEntity = e;
+                        sceneDirty = true;
+                    }
+                    else if (cmd == "Entity: Rename Selected") {
+                        if (selectedEntity != entt::null && scene.Registry().valid(selectedEntity)) {
+                            zenMode = false;
+                            focusInspectorName = true;
+                        }
                     }
                     else if (cmd == "Entity: Delete Selected") {
                         if (selectedEntity != entt::null && scene.Registry().valid(selectedEntity)) {
                             scene.Registry().destroy(selectedEntity);
                             selectedEntity = entt::null;
+                            sceneDirty = true;
                         }
                     }
                     else if (cmd == "Window: Toggle Fullscreen") {
@@ -827,6 +1307,9 @@ int main(int argc, char** argv) {
                             SDL_SetWindowFullscreen(window.GetSDLWindow(), 0);
                         else
                             SDL_SetWindowFullscreen(window.GetSDLWindow(), true);
+                    }
+                    else if (cmd == "Help: About") {
+                        showAboutModal = true;
                     }
                     
                     showCommandPalette = false;
@@ -842,6 +1325,229 @@ int main(int argc, char** argv) {
             }
 
             ImGui::EndPopup();
+        }
+
+        // Open Scene modal
+        if (showOpenSceneModal) {
+            ImGui::OpenPopup("Open Scene");
+        }
+        if (ImGui::BeginPopupModal("Open Scene", &showOpenSceneModal, ImGuiWindowFlags_AlwaysAutoResize)) {
+            ImGui::TextUnformatted("Scene path:");
+            ImGui::PushItemWidth(520.0f);
+            ImGui::InputText("##openScenePath", scenePathBuffer, sizeof(scenePathBuffer));
+            ImGui::PopItemWidth();
+            ImGui::TextDisabled("Tip: double-click a .scene in Content Browser to open it.");
+
+            if (ImGui::Button("Open") || ImGui::IsKeyPressed(ImGuiKey_Enter)) {
+                if (!MaybePromptUnsaved(PendingSceneAction::LoadScenePath, std::string(scenePathBuffer))) {
+                    if (Genesis::Engine::SceneLoader::LoadScene(scene, scenePathBuffer)) {
+                        currentScenePath = scenePathBuffer;
+                        sceneDirty = false;
+                        selectedEntity = entt::null;
+                    }
+                }
+                showOpenSceneModal = false;
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Cancel") || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+                showOpenSceneModal = false;
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndPopup();
+        }
+
+        // Save As modal
+        if (showSaveAsSceneModal) {
+            ImGui::OpenPopup("Save Scene As");
+        }
+        if (ImGui::BeginPopupModal("Save Scene As", &showSaveAsSceneModal, ImGuiWindowFlags_AlwaysAutoResize)) {
+            ImGui::TextUnformatted("Save to path:");
+            ImGui::PushItemWidth(520.0f);
+            ImGui::InputText("##saveScenePath", scenePathBuffer, sizeof(scenePathBuffer));
+            ImGui::PopItemWidth();
+            if (ImGui::Button("Save") || ImGui::IsKeyPressed(ImGuiKey_Enter)) {
+                if (Genesis::Engine::SceneLoader::SaveScene(scene, scenePathBuffer)) {
+                    currentScenePath = scenePathBuffer;
+                    sceneDirty = false;
+
+                    // If a destructive action was pending, run it now.
+                    if (pendingAction != PendingSceneAction::None) {
+                        auto action = pendingAction;
+                        auto p = pendingScenePath;
+                        pendingAction = PendingSceneAction::None;
+                        pendingScenePath.clear();
+                        if (action == PendingSceneAction::Quit) {
+                            running = false;
+                        } else if (action == PendingSceneAction::NewScene) {
+                            DoNewScene();
+                        } else if (action == PendingSceneAction::ShowOpenScene) {
+                            showOpenSceneModal = true;
+                        } else if (action == PendingSceneAction::LoadScenePath) {
+                            if (Genesis::Engine::SceneLoader::LoadScene(scene, p)) {
+                                currentScenePath = p;
+                                sceneDirty = false;
+                                selectedEntity = entt::null;
+                            }
+                        }
+                    }
+                }
+                showSaveAsSceneModal = false;
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Cancel") || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+                showSaveAsSceneModal = false;
+                // If we got here via an unsaved-changes prompt, treat cancel as cancelling the pending action.
+                if (pendingAction != PendingSceneAction::None) {
+                    pendingAction = PendingSceneAction::None;
+                    pendingScenePath.clear();
+                }
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndPopup();
+        }
+
+        // Unsaved changes modal
+        if (showUnsavedChangesModal) {
+            ImGui::OpenPopup("Unsaved Changes");
+        }
+        if (ImGui::BeginPopupModal("Unsaved Changes", &showUnsavedChangesModal, ImGuiWindowFlags_AlwaysAutoResize)) {
+            ImGui::TextUnformatted("You have unsaved changes.");
+            ImGui::TextUnformatted("Save before continuing?");
+            ImGui::Separator();
+
+            static bool lastSaveFailed = false;
+            if (lastSaveFailed) {
+                ImGui::TextColored(ImVec4(1, 0.4f, 0.4f, 1), "Save failed.");
+            }
+
+            if (ImGui::Button("Save")) {
+                lastSaveFailed = false;
+                bool shouldClose = false;
+
+                if (currentScenePath.empty()) {
+                    showSaveAsSceneModal = true;
+                    strncpy_s(scenePathBuffer, "Assets/scenes/scene.scene", sizeof(scenePathBuffer) - 1);
+                    shouldClose = true;
+                } else {
+                    if (Genesis::Engine::SceneLoader::SaveScene(scene, currentScenePath)) {
+                        sceneDirty = false;
+
+                        auto action = pendingAction;
+                        auto p = pendingScenePath;
+                        pendingAction = PendingSceneAction::None;
+                        pendingScenePath.clear();
+
+                        if (action == PendingSceneAction::Quit) {
+                            running = false;
+                        } else if (action == PendingSceneAction::NewScene) {
+                            DoNewScene();
+                        } else if (action == PendingSceneAction::ShowOpenScene) {
+                            showOpenSceneModal = true;
+                        } else if (action == PendingSceneAction::LoadScenePath) {
+                            if (Genesis::Engine::SceneLoader::LoadScene(scene, p)) {
+                                currentScenePath = p;
+                                sceneDirty = false;
+                                selectedEntity = entt::null;
+                            }
+                        }
+                        shouldClose = true;
+                    } else {
+                        lastSaveFailed = true;
+                    }
+                }
+
+                if (shouldClose) {
+                    showUnsavedChangesModal = false;
+                    ImGui::CloseCurrentPopup();
+                }
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Don't Save")) {
+                lastSaveFailed = false;
+                auto action = pendingAction;
+                auto p = pendingScenePath;
+                pendingAction = PendingSceneAction::None;
+                pendingScenePath.clear();
+
+                if (action == PendingSceneAction::Quit) {
+                    // Explicitly discard changes.
+                    sceneDirty = false;
+                    running = false;
+                } else if (action == PendingSceneAction::NewScene) {
+                    DoNewScene();
+                } else if (action == PendingSceneAction::ShowOpenScene) {
+                    showOpenSceneModal = true;
+                } else if (action == PendingSceneAction::LoadScenePath) {
+                    if (Genesis::Engine::SceneLoader::LoadScene(scene, p)) {
+                        currentScenePath = p;
+                        sceneDirty = false;
+                        selectedEntity = entt::null;
+                    }
+                }
+
+                showUnsavedChangesModal = false;
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Cancel") || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+                lastSaveFailed = false;
+                pendingAction = PendingSceneAction::None;
+                pendingScenePath.clear();
+                showUnsavedChangesModal = false;
+                ImGui::CloseCurrentPopup();
+            }
+
+            ImGui::EndPopup();
+        }
+
+        // About modal
+        if (showAboutModal) {
+            ImGui::OpenPopup("About Genesis Editor");
+            showAboutModal = false;
+        }
+        if (ImGui::BeginPopupModal("About Genesis Editor", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+            ImGui::TextUnformatted("Genesis Editor");
+            ImGui::Separator();
+            ImGui::TextWrapped("Usability improvements: scene save/load, entity naming/rename, viewport-scoped camera controls, drag-and-drop model spawning, content browser navigation.");
+            ImGui::TextWrapped("Renderer: %s", currentRenderer ? currentRenderer->GetName().c_str() : "(none)");
+            if (ImGui::Button("Close") || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndPopup();
+        }
+
+        // Status bar
+        {
+            ImGuiViewport* vp = ImGui::GetMainViewport();
+            const float barH = 22.0f;
+            ImGui::SetNextWindowPos(ImVec2(vp->Pos.x, vp->Pos.y + vp->Size.y - barH));
+            ImGui::SetNextWindowSize(ImVec2(vp->Size.x, barH));
+            ImGui::SetNextWindowViewport(vp->ID);
+            ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoDocking |
+                                     ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings |
+                                     ImGuiWindowFlags_NoNavFocus;
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8, 2));
+            if (ImGui::Begin("##StatusBar", nullptr, flags)) {
+                const char* dirtyMark = sceneDirty ? "*" : "";
+                std::string sceneLabel = currentScenePath.empty() ? std::string("(unsaved)") : currentScenePath;
+                ImGui::Text("Scene: %s%s", sceneLabel.c_str(), dirtyMark);
+                ImGui::SameLine();
+                ImGui::TextDisabled(" | ");
+                ImGui::SameLine();
+                ImGui::Text("FPS: %.1f", ImGui::GetIO().Framerate);
+                ImGui::SameLine();
+                ImGui::TextDisabled(" | ");
+                ImGui::SameLine();
+                ImGui::Text("Renderer: %s", currentRenderer ? currentRenderer->GetName().c_str() : "none");
+                ImGui::SameLine();
+                ImGui::TextDisabled(" | ");
+                ImGui::SameLine();
+                ImGui::Text("Cam: (%.2f, %.2f, %.2f)", cameraPos.x, cameraPos.y, cameraPos.z);
+            }
+            ImGui::End();
+            ImGui::PopStyleVar();
         }
 
         ImGui::Render();

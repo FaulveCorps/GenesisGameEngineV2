@@ -42,7 +42,7 @@ static PFNGLGETVERTEXATTRIBIVPROC pglGetVertexAttribiv = nullptr;
 static PFNGLGETERRORPROC pglGetErrorPtr = nullptr;
 
 int main(int argc, char** argv) {
-    if (SDL_Init(SDL_INIT_VIDEO) != 0) {
+    if (!SDL_Init(SDL_INIT_VIDEO)) {
         std::cerr << "SDL_Init failed: " << SDL_GetError() << std::endl;
         return 1;
     }

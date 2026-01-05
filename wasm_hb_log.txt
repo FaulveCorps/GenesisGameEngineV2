@@ -2752,3 +2752,234 @@ DumpCallbacksSnapshot: context=CallExported - callsite snapshot: sleep_mod2:run 
 DumpCallbacksSnapshot: key=env:test_sleep ptr=000001FAC67DC180
 DumpCallbacksSnapshot: key=env:test_sleep memory preview:F8 39 5F DA F6 7F 00 00 01 00 00 00 00 00 00 00 50 99 16 C8 FA 01 00 00 00 00 10 00 00 00 00 00 F0 EE 81 C6 FA 01 00 00 E0 EE 81 C6 FA 01 00 00 28 06 7A C6 FA 01 00 00 32 00 00 00 00 00 00 00
 WriteMiniDumpForException: wrote dump Tools\external\procdump\dumps\token_crash_20260104_121649.dmp context: CallExported_m3_CallArgv_failed_withctx
+DumpCallbacksSnapshot: context=CallExported - before m3_CallArgv entries=0
+DumpCallbacksSnapshot: context=CallExported - before m3_CallArgv entries=1
+DumpCallbacksSnapshot: key=env:test_ping ptr=0000023AC53D2FC0
+DumpCallbacksSnapshot: key=env:test_ping memory preview:88 DA 28 4E F6 7F 00 00 01 00 00 00 00 00 00 00 A0 9C C5 C6 3A 02 00 00 00 00 10 00 00 00 00 00 10 D3 41 C5 3A 02 00 00 00 D3 41 C5 3A 02 00 00 08 95 C4 C6 3A 02 00 00 88 13 00 00 00 00 00 00
+host_trampoline_raw: exec_limit=5000 elapsed_ms=0
+host_trampoline_raw: elapsed_ms=0
+DumpCallbacksSnapshot: context=CallExported - before m3_CallArgv entries=0
+DumpCallbacksSnapshot: context=CallExported - before m3_CallArgv entries=1
+DumpCallbacksSnapshot: key=env:test_ping ptr=000002E84700ECB0
+DumpCallbacksSnapshot: key=env:test_ping memory preview:88 DA 28 4E F6 7F 00 00 01 00 00 00 00 00 00 00 A0 30 98 48 E8 02 00 00 00 00 10 00 00 00 00 00 50 6C 05 47 E8 02 00 00 40 6C 05 47 E8 02 00 00 B8 F5 FE 46 E8 02 00 00 88 13 00 00 00 00 00 00
+host_trampoline_raw: exec_limit=5000 elapsed_ms=0
+host_trampoline_raw: elapsed_ms=0
+DumpCallbacksSnapshot: context=CallExported - before m3_CallArgv entries=1
+DumpCallbacksSnapshot: key=env:test_ping ptr=000002E84700ECB0
+DumpCallbacksSnapshot: key=env:test_ping memory preview:88 DA 28 4E F6 7F 00 00 01 00 00 00 00 00 00 00 A0 30 98 48 E8 02 00 00 00 00 10 00 00 00 00 00 50 6C 05 47 E8 02 00 00 40 6C 05 47 E8 02 00 00 B8 F5 FE 46 E8 02 00 00 88 13 00 00 00 00 00 00
+host_trampoline_raw: exec_limit=5000 elapsed_ms=0
+host_trampoline_raw: elapsed_ms=0
+RegisterVoidString: holder=000002E846FEEFA0 module=000002E8489831C0 key=env:host_log runtime=000002E8489CE990
+RegisterVoidString: keyPtrAddr=000002E8470302E0
+trampoline_v: ptr=0 len=5
+trampoline_v: modRuntime=000002E8489CE990
+trampoline_v: mem=000002E8499200C8 memSz=65536
+trampoline_v: about to call callback with s_preview='hello (len=5)'
+trampoline_v: exec_limit=1000 elapsed_ms=0
+trampoline_v: callback returned
+trampoline_v: about to call m3ApiSuccess()
+Token::~Token: entering ns=env name=host_log sig=v(ii) module=000002E8489831C0 thread=2364
+ScopedVectoredDump: handler=000002E848964900
+Token::~Token: g_callbacks addr=000002E846FAA360 g_callback_keys addr=000002E846FAA5A0 g_import_userdata addr=000002E846FA9790
+Token::~Token: sizes: g_callbacks=2 g_callback_keys=2 g_import_userdata=2
+Token::~Token: removing callback immediately for key='env:host_log'
+Token::~Token: immediate unregister succeeded for key='env:host_log'
+ScopedVectoredDump: removed handler=000002E848964900
+RegisterVoidString: holder=000002E846FEFB00 module=000002E848982E60 key=env:host_log runtime=000002E849921E20
+RegisterVoidString: keyPtrAddr=000002E8470302E0
+trampoline_v: ptr=0 len=5
+trampoline_v: modRuntime=000002E849921E20
+trampoline_v: mem=000002E8489DE9F8 memSz=65536
+Token::~Token: entering ns=env name=host_log sig=v(ii) module=000002E848982E60 thread=2364
+ScopedVectoredDump: handler=000002E848964C60
+Token::~Token: g_callbacks addr=000002E846FAA360 g_callback_keys addr=000002E846FAA5A0 g_import_userdata addr=000002E846FA9790
+Token::~Token: sizes: g_callbacks=2 g_callback_keys=2 g_import_userdata=2
+Token::~Token: removing callback immediately for key='env:host_log'
+Token::~Token: immediate unregister succeeded for key='env:host_log'
+ScopedVectoredDump: removed handler=000002E848964C60
+RegisterVoidString: holder=000002E846FEFFE0 module=000002E848982F80 key=env:host_log runtime=000002E849921E20
+RegisterVoidString: keyPtrAddr=000002E8470302E0
+Token::~Token: entering ns=env name=host_log sig=v(ii) module=000002E848982F80 thread=2364
+ScopedVectoredDump: handler=000002E848964900
+Token::~Token: g_callbacks addr=000002E846FAA360 g_callback_keys addr=000002E846FAA5A0 g_import_userdata addr=000002E846FA9790
+Token::~Token: sizes: g_callbacks=2 g_callback_keys=2 g_import_userdata=2
+Token::~Token: removing callback immediately for key='env:host_log'
+Token::~Token: immediate unregister succeeded for key='env:host_log'
+ScopedVectoredDump: removed handler=000002E848964900
+trampoline_v: ptr=0 len=5
+DumpCallbacksSnapshot: context=CallExported - before m3_CallArgv entries=2
+DumpCallbacksSnapshot: key=env:test_ping ptr=000002E84700ECB0
+DumpCallbacksSnapshot: key=env:test_ping memory preview:88 DA 28 4E F6 7F 00 00 01 00 00 00 00 00 00 00 A0 30 98 48 E8 02 00 00 00 00 10 00 00 00 00 00 50 6C 05 47 E8 02 00 00 40 6C 05 47 E8 02 00 00 B8 F5 FE 46 E8 02 00 00 88 13 00 00 00 00 00 00
+DumpCallbacksSnapshot: key=env:host_log ptr=000002E84700F9D0
+DumpCallbacksSnapshot: key=env:host_log memory preview:88 DA 28 4E F6 7F 00 00 01 00 00 00 00 00 00 00 20 35 98 48 E8 02 00 00 00 00 10 00 00 00 00 00 10 5E 05 47 E8 02 00 00 00 5E 05 47 E8 02 00 00 08 F0 FE 46 E8 02 00 00 32 00 00 00 00 00 00 00
+host_trampoline_raw: exec_limit=50 elapsed_ms=200
+host_trampoline_raw: host callback execution time exceeded; trapping
+DumpCallbacksSnapshot: context=CallExported - after m3_CallArgv failed entries=2
+DumpCallbacksSnapshot: key=env:test_ping ptr=000002E84700ECB0
+DumpCallbacksSnapshot: key=env:test_ping memory preview:88 DA 28 4E F6 7F 00 00 01 00 00 00 00 00 00 00 A0 30 98 48 E8 02 00 00 00 00 10 00 00 00 00 00 50 6C 05 47 E8 02 00 00 40 6C 05 47 E8 02 00 00 B8 F5 FE 46 E8 02 00 00 88 13 00 00 00 00 00 00
+DumpCallbacksSnapshot: key=env:host_log ptr=000002E84700F9D0
+DumpCallbacksSnapshot: key=env:host_log memory preview:88 DA 28 4E F6 7F 00 00 01 00 00 00 00 00 00 00 20 35 98 48 E8 02 00 00 00 00 10 00 00 00 00 00 10 5E 05 47 E8 02 00 00 00 5E 05 47 E8 02 00 00 08 F0 FE 46 E8 02 00 00 32 00 00 00 00 00 00 00
+DumpCallbacksSnapshot: context=CallExported - callsite snapshot: sleep_test:run entries=2
+DumpCallbacksSnapshot: key=env:test_ping ptr=000002E84700ECB0
+DumpCallbacksSnapshot: key=env:test_ping memory preview:88 DA 28 4E F6 7F 00 00 01 00 00 00 00 00 00 00 A0 30 98 48 E8 02 00 00 00 00 10 00 00 00 00 00 50 6C 05 47 E8 02 00 00 40 6C 05 47 E8 02 00 00 B8 F5 FE 46 E8 02 00 00 88 13 00 00 00 00 00 00
+DumpCallbacksSnapshot: key=env:host_log ptr=000002E84700F9D0
+DumpCallbacksSnapshot: key=env:host_log memory preview:88 DA 28 4E F6 7F 00 00 01 00 00 00 00 00 00 00 20 35 98 48 E8 02 00 00 00 00 10 00 00 00 00 00 10 5E 05 47 E8 02 00 00 00 5E 05 47 E8 02 00 00 08 F0 FE 46 E8 02 00 00 32 00 00 00 00 00 00 00
+WriteMiniDumpForException: wrote dump Tools\external\procdump\dumps\token_crash_20260105_174719.dmp context: CallExported_m3_CallArgv_failed_withctx
+Token::~Token: entering ns=env name=test_ping sig=v() module=000002E8489830A0 thread=2364
+ScopedVectoredDump: handler=000002E848964C60
+Token::~Token: g_callbacks addr=000002E846FAA360 g_callback_keys addr=000002E846FAA5A0 g_import_userdata addr=000002E846FA9790
+Token::~Token: sizes: g_callbacks=2 g_callback_keys=2 g_import_userdata=2
+Token::~Token: removing callback immediately for key='env:test_ping'
+Token::~Token: immediate unregister succeeded for key='env:test_ping'
+ScopedVectoredDump: removed handler=000002E848964C60
+Token::~Token: entering ns=env name=host_log sig=v(ii) module=000002E848983520 thread=2364
+ScopedVectoredDump: handler=000002E848964750
+Token::~Token: g_callbacks addr=000002E846FAA360 g_callback_keys addr=000002E846FAA5A0 g_import_userdata addr=000002E846FA9790
+Token::~Token: sizes: g_callbacks=1 g_callback_keys=2 g_import_userdata=1
+Token::~Token: removing callback immediately for key='env:host_log'
+Token::~Token: immediate unregister succeeded for key='env:host_log'
+ScopedVectoredDump: removed handler=000002E848964750
+DumpCallbacksSnapshot: context=CallExported - before m3_CallArgv entries=1
+DumpCallbacksSnapshot: key=env:test_ping ptr=000002E84700FCF0
+DumpCallbacksSnapshot: key=env:test_ping memory preview:88 DA 28 4E F6 7F 00 00 01 00 00 00 00 00 00 00 C0 31 98 48 E8 02 00 00 00 00 10 00 00 00 00 00 D0 67 05 47 E8 02 00 00 C0 67 05 47 E8 02 00 00 28 F8 FE 46 E8 02 00 00 88 13 00 00 00 00 00 00
+host_trampoline_raw: exec_limit=5000 elapsed_ms=0
+host_trampoline_raw: elapsed_ms=0
+DumpCallbacksSnapshot: context=CallExported - before m3_CallArgv entries=1
+DumpCallbacksSnapshot: key=env:test_ping ptr=000002E84700FCF0
+DumpCallbacksSnapshot: key=env:test_ping memory preview:88 DA 28 4E F6 7F 00 00 01 00 00 00 00 00 00 00 C0 31 98 48 E8 02 00 00 00 00 10 00 00 00 00 00 D0 67 05 47 E8 02 00 00 C0 67 05 47 E8 02 00 00 28 F8 FE 46 E8 02 00 00 88 13 00 00 00 00 00 00
+host_trampoline_raw: exec_limit=5000 elapsed_ms=0
+host_trampoline_raw: elapsed_ms=0
+Token::~Token: entering ns=env name=test_ping sig=v() module=000002E8489831C0 thread=2364
+ScopedVectoredDump: handler=000002E848964C60
+Token::~Token: g_callbacks addr=000002E846FAA360 g_callback_keys addr=000002E846FAA5A0 g_import_userdata addr=000002E846FA9790
+Token::~Token: sizes: g_callbacks=1 g_callback_keys=2 g_import_userdata=1
+Token::~Token: removing callback immediately for key='env:test_ping'
+Token::~Token: immediate unregister succeeded for key='env:test_ping'
+ScopedVectoredDump: removed handler=000002E848964C60
+DumpCallbacksSnapshot: context=CallExported - before m3_CallArgv entries=0
+DumpCallbacksSnapshot: context=CallExported - before m3_CallArgv entries=1
+DumpCallbacksSnapshot: key=env:test_ping ptr=000001F4BC353AB0
+DumpCallbacksSnapshot: key=env:test_ping memory preview:88 DA CD 2A F7 7F 00 00 01 00 00 00 00 00 00 00 B0 E7 67 BC F4 01 00 00 00 00 10 00 00 00 00 00 00 CA 3E BC F4 01 00 00 F0 C9 3E BC F4 01 00 00 A8 95 5C BC F4 01 00 00 88 13 00 00 00 00 00 00
+host_trampoline_raw: exec_limit=5000 elapsed_ms=0
+host_trampoline_raw: elapsed_ms=0
+DumpCallbacksSnapshot: context=CallExported - before m3_CallArgv entries=1
+DumpCallbacksSnapshot: key=env:test_ping ptr=000001F4BC353AB0
+DumpCallbacksSnapshot: key=env:test_ping memory preview:88 DA CD 2A F7 7F 00 00 01 00 00 00 00 00 00 00 B0 E7 67 BC F4 01 00 00 00 00 10 00 00 00 00 00 00 CA 3E BC F4 01 00 00 F0 C9 3E BC F4 01 00 00 A8 95 5C BC F4 01 00 00 88 13 00 00 00 00 00 00
+host_trampoline_raw: exec_limit=5000 elapsed_ms=0
+host_trampoline_raw: elapsed_ms=0
+RegisterVoidString: holder=000001F4BC5C9950 module=000001F4BC67EB10 key=env:host_log runtime=000001F4BC412FB0
+RegisterVoidString: keyPtrAddr=000001F4BC697960
+trampoline_v: ptr=0 len=5
+trampoline_v: modRuntime=000001F4BC412FB0
+trampoline_v: mem=000001F4BAE8D4E8 memSz=65536
+trampoline_v: about to call callback with s_preview='hello (len=5)'
+trampoline_v: exec_limit=1000 elapsed_ms=0
+trampoline_v: callback returned
+trampoline_v: about to call m3ApiSuccess()
+Token::~Token: entering ns=env name=host_log sig=v(ii) module=000001F4BC67EB10 thread=12864
+ScopedVectoredDump: handler=000001F4BC3D0810
+Token::~Token: g_callbacks addr=000001F4B04AEF90 g_callback_keys addr=000001F4B04AE840 g_import_userdata addr=000001F4B04AF2F0
+Token::~Token: sizes: g_callbacks=2 g_callback_keys=2 g_import_userdata=2
+Token::~Token: removing callback immediately for key='env:host_log'
+Token::~Token: immediate unregister succeeded for key='env:host_log'
+ScopedVectoredDump: removed handler=000001F4BC3D0810
+RegisterVoidString: holder=000001F4BC5C8290 module=000001F4BC67F650 key=env:host_log runtime=000001F4BC412FB0
+RegisterVoidString: keyPtrAddr=000001F4BC697960
+trampoline_v: ptr=0 len=5
+trampoline_v: modRuntime=000001F4BC412FB0
+trampoline_v: mem=000001F4BAE8D4E8 memSz=65536
+Token::~Token: entering ns=env name=host_log sig=v(ii) module=000001F4BC67F650 thread=12864
+ScopedVectoredDump: handler=000001F4BC3D0360
+Token::~Token: g_callbacks addr=000001F4B04AEF90 g_callback_keys addr=000001F4B04AE840 g_import_userdata addr=000001F4B04AF2F0
+Token::~Token: sizes: g_callbacks=2 g_callback_keys=2 g_import_userdata=2
+Token::~Token: removing callback immediately for key='env:host_log'
+Token::~Token: immediate unregister succeeded for key='env:host_log'
+ScopedVectoredDump: removed handler=000001F4BC3D0360
+RegisterVoidString: holder=000001F4BC5C80F0 module=000001F4BC67E0F0 key=env:host_log runtime=000001F4BC412FB0
+RegisterVoidString: keyPtrAddr=000001F4BC697960
+Token::~Token: entering ns=env name=host_log sig=v(ii) module=000001F4BC67E0F0 thread=12864
+ScopedVectoredDump: handler=000001F4BC3D0C30
+Token::~Token: g_callbacks addr=000001F4B04AEF90 g_callback_keys addr=000001F4B04AE840 g_import_userdata addr=000001F4B04AF2F0
+Token::~Token: sizes: g_callbacks=2 g_callback_keys=2 g_import_userdata=2
+Token::~Token: removing callback immediately for key='env:host_log'
+Token::~Token: immediate unregister succeeded for key='env:host_log'
+ScopedVectoredDump: removed handler=000001F4BC3D0C30
+trampoline_v: ptr=0 len=5
+DumpCallbacksSnapshot: context=CallExported - before m3_CallArgv entries=2
+DumpCallbacksSnapshot: key=env:test_ping ptr=000001F4BC353AB0
+DumpCallbacksSnapshot: key=env:test_ping memory preview:88 DA CD 2A F7 7F 00 00 01 00 00 00 00 00 00 00 B0 E7 67 BC F4 01 00 00 00 00 10 00 00 00 00 00 00 CA 3E BC F4 01 00 00 F0 C9 3E BC F4 01 00 00 A8 95 5C BC F4 01 00 00 88 13 00 00 00 00 00 00
+DumpCallbacksSnapshot: key=env:host_log ptr=000001F4BC3538D0
+DumpCallbacksSnapshot: key=env:host_log memory preview:88 DA CD 2A F7 7F 00 00 01 00 00 00 00 00 00 00 30 DA 67 BC F4 01 00 00 00 00 10 00 00 00 00 00 E0 CB 3E BC F4 01 00 00 D0 CB 3E BC F4 01 00 00 58 81 5C BC F4 01 00 00 32 00 00 00 00 00 00 00
+host_trampoline_raw: exec_limit=50 elapsed_ms=200
+host_trampoline_raw: host callback execution time exceeded; trapping
+DumpCallbacksSnapshot: context=CallExported - after m3_CallArgv failed entries=2
+DumpCallbacksSnapshot: key=env:test_ping ptr=000001F4BC353AB0
+DumpCallbacksSnapshot: key=env:test_ping memory preview:88 DA CD 2A F7 7F 00 00 01 00 00 00 00 00 00 00 B0 E7 67 BC F4 01 00 00 00 00 10 00 00 00 00 00 00 CA 3E BC F4 01 00 00 F0 C9 3E BC F4 01 00 00 A8 95 5C BC F4 01 00 00 88 13 00 00 00 00 00 00
+DumpCallbacksSnapshot: key=env:host_log ptr=000001F4BC3538D0
+DumpCallbacksSnapshot: key=env:host_log memory preview:88 DA CD 2A F7 7F 00 00 01 00 00 00 00 00 00 00 30 DA 67 BC F4 01 00 00 00 00 10 00 00 00 00 00 E0 CB 3E BC F4 01 00 00 D0 CB 3E BC F4 01 00 00 58 81 5C BC F4 01 00 00 32 00 00 00 00 00 00 00
+DumpCallbacksSnapshot: context=CallExported - callsite snapshot: sleep_test:run entries=2
+DumpCallbacksSnapshot: key=env:test_ping ptr=000001F4BC353AB0
+DumpCallbacksSnapshot: key=env:test_ping memory preview:88 DA CD 2A F7 7F 00 00 01 00 00 00 00 00 00 00 B0 E7 67 BC F4 01 00 00 00 00 10 00 00 00 00 00 00 CA 3E BC F4 01 00 00 F0 C9 3E BC F4 01 00 00 A8 95 5C BC F4 01 00 00 88 13 00 00 00 00 00 00
+DumpCallbacksSnapshot: key=env:host_log ptr=000001F4BC3538D0
+DumpCallbacksSnapshot: key=env:host_log memory preview:88 DA CD 2A F7 7F 00 00 01 00 00 00 00 00 00 00 30 DA 67 BC F4 01 00 00 00 00 10 00 00 00 00 00 E0 CB 3E BC F4 01 00 00 D0 CB 3E BC F4 01 00 00 58 81 5C BC F4 01 00 00 32 00 00 00 00 00 00 00
+WriteMiniDumpForException: wrote dump Tools\external\procdump\dumps\token_crash_20260105_180705.dmp context: CallExported_m3_CallArgv_failed_withctx
+Token::~Token: entering ns=env name=test_ping sig=v() module=000001F4BC67E7B0 thread=12864
+ScopedVectoredDump: handler=000001F4BC3D0300
+Token::~Token: g_callbacks addr=000001F4B04AEF90 g_callback_keys addr=000001F4B04AE840 g_import_userdata addr=000001F4B04AF2F0
+Token::~Token: sizes: g_callbacks=2 g_callback_keys=2 g_import_userdata=2
+Token::~Token: removing callback immediately for key='env:test_ping'
+Token::~Token: immediate unregister succeeded for key='env:test_ping'
+ScopedVectoredDump: removed handler=000001F4BC3D0300
+Token::~Token: entering ns=env name=host_log sig=v(ii) module=000001F4BC67DA30 thread=12864
+ScopedVectoredDump: handler=000001F4BC3D09F0
+Token::~Token: g_callbacks addr=000001F4B04AEF90 g_callback_keys addr=000001F4B04AE840 g_import_userdata addr=000001F4B04AF2F0
+Token::~Token: sizes: g_callbacks=1 g_callback_keys=2 g_import_userdata=1
+Token::~Token: removing callback immediately for key='env:host_log'
+Token::~Token: immediate unregister succeeded for key='env:host_log'
+ScopedVectoredDump: removed handler=000001F4BC3D09F0
+DumpCallbacksSnapshot: context=CallExported - before m3_CallArgv entries=1
+DumpCallbacksSnapshot: key=env:test_ping ptr=000001F4BC3535B0
+DumpCallbacksSnapshot: key=env:test_ping memory preview:88 DA CD 2A F7 7F 00 00 01 00 00 00 00 00 00 00 F0 F2 67 BC F4 01 00 00 00 00 10 00 00 00 00 00 00 C1 3E BC F4 01 00 00 F0 C0 3E BC F4 01 00 00 58 81 5C BC F4 01 00 00 88 13 00 00 00 00 00 00
+host_trampoline_raw: exec_limit=5000 elapsed_ms=0
+host_trampoline_raw: elapsed_ms=0
+DumpCallbacksSnapshot: context=CallExported - before m3_CallArgv entries=1
+DumpCallbacksSnapshot: key=env:test_ping ptr=000001F4BC3535B0
+DumpCallbacksSnapshot: key=env:test_ping memory preview:88 DA CD 2A F7 7F 00 00 01 00 00 00 00 00 00 00 F0 F2 67 BC F4 01 00 00 00 00 10 00 00 00 00 00 00 C1 3E BC F4 01 00 00 F0 C0 3E BC F4 01 00 00 58 81 5C BC F4 01 00 00 88 13 00 00 00 00 00 00
+host_trampoline_raw: exec_limit=5000 elapsed_ms=0
+host_trampoline_raw: elapsed_ms=0
+Token::~Token: entering ns=env name=test_ping sig=v() module=000001F4BC67F2F0 thread=12864
+ScopedVectoredDump: handler=000001F4BC3D0390
+Token::~Token: g_callbacks addr=000001F4B04AEF90 g_callback_keys addr=000001F4B04AE840 g_import_userdata addr=000001F4B04AF2F0
+Token::~Token: sizes: g_callbacks=1 g_callback_keys=2 g_import_userdata=1
+Token::~Token: removing callback immediately for key='env:test_ping'
+Token::~Token: immediate unregister succeeded for key='env:test_ping'
+ScopedVectoredDump: removed handler=000001F4BC3D0390
+DumpCallbacksSnapshot: context=CallExported - before m3_CallArgv entries=0
+DumpCallbacksSnapshot: context=CallExported - before m3_CallArgv entries=0
+DumpCallbacksSnapshot: context=CallExported - before m3_CallArgv entries=0
+DumpCallbacksSnapshot: context=CallExported - before m3_CallArgv entries=0
+DumpCallbacksSnapshot: context=CallExported - before m3_CallArgv entries=0
+DumpCallbacksSnapshot: context=CallExported - before m3_CallArgv entries=1
+DumpCallbacksSnapshot: key=env:test_sleep ptr=000001F4BC352CF0
+DumpCallbacksSnapshot: key=env:test_sleep memory preview:88 DA CD 2A F7 7F 00 00 01 00 00 00 00 00 00 00 70 EE 67 BC F4 01 00 00 00 00 10 00 00 00 00 00 00 D9 3E BC F4 01 00 00 F0 D8 3E BC F4 01 00 00 F8 82 5C BC F4 01 00 00 88 13 00 00 00 00 00 00
+host_trampoline_raw: exec_limit=5000 elapsed_ms=3000
+host_trampoline_raw: elapsed_ms=3000
+Token::~Token: entering ns=env name=test_sleep sig=v() module=000001F4BC67EE70 thread=12864
+ScopedVectoredDump: handler=000001F4BC3D05A0
+Token::~Token: g_callbacks addr=000001F4B04AEF90 g_callback_keys addr=000001F4B04AE840 g_import_userdata addr=000001F4B04AF2F0
+Token::~Token: sizes: g_callbacks=1 g_callback_keys=3 g_import_userdata=1
+Token::~Token: removing callback immediately for key='env:test_sleep'
+Token::~Token: immediate unregister succeeded for key='env:test_sleep'
+ScopedVectoredDump: removed handler=000001F4BC3D05A0
+DumpCallbacksSnapshot: context=CallExported - before m3_CallArgv entries=1
+DumpCallbacksSnapshot: key=env:test_sleep ptr=000001F4BC3533D0
+DumpCallbacksSnapshot: key=env:test_sleep memory preview:88 DA CD 2A F7 7F 00 00 01 00 00 00 00 00 00 00 50 ED 67 BC F4 01 00 00 00 00 10 00 00 00 00 00 20 CE 3E BC F4 01 00 00 10 CE 3E BC F4 01 00 00 48 8A 5C BC F4 01 00 00 32 00 00 00 00 00 00 00
+host_trampoline_raw: exec_limit=50 elapsed_ms=3000
+host_trampoline_raw: host callback execution time exceeded; trapping
+DumpCallbacksSnapshot: context=CallExported - after m3_CallArgv failed entries=1
+DumpCallbacksSnapshot: key=env:test_sleep ptr=000001F4BC3533D0
+DumpCallbacksSnapshot: key=env:test_sleep memory preview:88 DA CD 2A F7 7F 00 00 01 00 00 00 00 00 00 00 50 ED 67 BC F4 01 00 00 00 00 10 00 00 00 00 00 20 CE 3E BC F4 01 00 00 10 CE 3E BC F4 01 00 00 48 8A 5C BC F4 01 00 00 32 00 00 00 00 00 00 00
+DumpCallbacksSnapshot: context=CallExported - callsite snapshot: sleep_mod2:run entries=1
+DumpCallbacksSnapshot: key=env:test_sleep ptr=000001F4BC3533D0
+DumpCallbacksSnapshot: key=env:test_sleep memory preview:88 DA CD 2A F7 7F 00 00 01 00 00 00 00 00 00 00 50 ED 67 BC F4 01 00 00 00 00 10 00 00 00 00 00 20 CE 3E BC F4 01 00 00 10 CE 3E BC F4 01 00 00 48 8A 5C BC F4 01 00 00 32 00 00 00 00 00 00 00
+WriteMiniDumpForException: wrote dump Tools\external\procdump\dumps\token_crash_20260105_180715.dmp context: CallExported_m3_CallArgv_failed_withctx

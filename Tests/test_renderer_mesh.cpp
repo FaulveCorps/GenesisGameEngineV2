@@ -8,7 +8,7 @@
 
 TEST_CASE("OpenGLRenderer Mesh Lifecycle", "[renderer][mesh]") {
     // Setup SDL/GL context
-    if (SDL_Init(SDL_INIT_VIDEO) != 0) {
+    if (!SDL_Init(SDL_INIT_VIDEO)) {
         FAIL("SDL_Init failed");
     }
 
