@@ -36,9 +36,12 @@ SDL_HitTestResult SDLCALL HitTestCallback(SDL_Window* win, const SDL_Point* area
     SDL_GetWindowSize(win, &w, &h);
     
     const int RESIZE_BORDER = 8;
-    const int TITLE_BAR_HEIGHT = 30;
-    const int CONTROLS_WIDTH = 120; // Width for Min/Max/Close buttons
-    const int MENU_WIDTH = 500;     // Approximate width for Menu items (File, Window, etc.)
+    // Keep these in sync with the custom titlebar styling below.
+    // VS Code-like caption buttons are a bit roomier than default.
+    // (Option B sizing): make the caption area and hit zones clearly larger.
+    const int TITLE_BAR_HEIGHT = 42;
+    const int CONTROLS_WIDTH = 192; // 3 * 64px (Min/Max/Close)
+    const int MENU_WIDTH = 600;     // Approximate width for Menu items (File, View, Window, Help)
 
     // Resize Borders
     if (area->x < RESIZE_BORDER && area->y < RESIZE_BORDER) return SDL_HITTEST_RESIZE_TOPLEFT;
@@ -392,6 +395,17 @@ int main(int argc, char** argv) {
     Genesis::Engine::Profiler profiler;
     Genesis::Engine::ImGuiLayer gui(window.GetSDLWindow(), window.GetGLContext());
 
+    // Global UI sizing tweak (Editor-only): make widgets/buttons slightly roomier.
+    // This helps match the more comfortable click targets users expect from tools like VS Code.
+    {
+        ImGuiStyle& style = ImGui::GetStyle();
+        // (Option B sizing): clearly larger click targets.
+        style.FramePadding = ImVec2(style.FramePadding.x + 4.0f, style.FramePadding.y + 4.0f);
+        style.ItemSpacing = ImVec2(style.ItemSpacing.x + 4.0f, style.ItemSpacing.y + 2.0f);
+        style.ScrollbarSize += 4.0f;
+        style.GrabMinSize += 4.0f;
+    }
+
     std::cout << "Editor initialized. Entering main loop..." << std::endl;
 
     uint64_t lastTime = SDL_GetPerformanceCounter();
@@ -545,43 +559,59 @@ int main(int argc, char** argv) {
         // Custom Editor Layout
         ImGuiID dockspace_id = ImGui::DockSpaceOverViewport(0, ImGui::GetMainViewport());
 
-        static bool first_time = true;
-        if (first_time) {
-            first_time = false;
-            
-            // Check if layout already exists (e.g. from imgui.ini)
-            // If not, build default layout
-            if (!ImGui::DockBuilderGetNode(dockspace_id)) {
-                ImGui::DockBuilderRemoveNode(dockspace_id);
-                ImGui::DockBuilderAddNode(dockspace_id, ImGuiDockNodeFlags_DockSpace);
-                ImGui::DockBuilderSetNodeSize(dockspace_id, ImGui::GetMainViewport()->Size);
+        // Default docking layout
+        //
+        // ImGui will automatically restore a user's custom layout from imgui.ini if present.
+        // On a *fresh* startup there may be no ini file yet, so we proactively build a sensible
+        // default arrangement to avoid forcing users to reorganize panels.
+        auto BuildDefaultDockLayout = [&](ImGuiID rootDockId) {
+            ImGui::DockBuilderRemoveNode(rootDockId);
+            ImGui::DockBuilderAddNode(rootDockId, ImGuiDockNodeFlags_DockSpace);
+            ImGui::DockBuilderSetNodeSize(rootDockId, ImGui::GetMainViewport()->Size);
 
-                ImGuiID dock_main_id = dockspace_id;
-                ImGuiID dock_id_right = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Right, 0.25f, nullptr, &dock_main_id);
-                ImGuiID dock_id_left = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Left, 0.25f, nullptr, &dock_main_id);
-                ImGuiID dock_id_bottom = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Down, 0.25f, nullptr, &dock_main_id);
-                
-                // Split Left into Top (Hierarchy) and Bottom (Content Browser)
-                ImGuiID dock_id_left_bottom = ImGui::DockBuilderSplitNode(dock_id_left, ImGuiDir_Down, 0.5f, nullptr, &dock_id_left);
+            ImGuiID dock_main_id = rootDockId;
+            ImGuiID dock_id_right = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Right, 0.28f, nullptr, &dock_main_id);
+            ImGuiID dock_id_left = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Left, 0.22f, nullptr, &dock_main_id);
+            ImGuiID dock_id_bottom = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Down, 0.28f, nullptr, &dock_main_id);
 
-                ImGui::DockBuilderDockWindow("Viewport", dock_main_id);
-                ImGui::DockBuilderDockWindow("Inspector", dock_id_right);
-                ImGui::DockBuilderDockWindow("Scene Hierarchy", dock_id_left);
-                ImGui::DockBuilderDockWindow("Content Browser", dock_id_left_bottom);
-                ImGui::DockBuilderDockWindow("Console", dock_id_bottom);
+            // Split Left into Top (Hierarchy) and Bottom (Content Browser)
+            ImGuiID dock_id_left_bottom = ImGui::DockBuilderSplitNode(dock_id_left, ImGuiDir_Down, 0.45f, nullptr, &dock_id_left);
 
-                ImGui::DockBuilderFinish(dockspace_id);
+            ImGui::DockBuilderDockWindow("Viewport", dock_main_id);
+            ImGui::DockBuilderDockWindow("Inspector", dock_id_right);
+            ImGui::DockBuilderDockWindow("Scene Hierarchy", dock_id_left);
+            ImGui::DockBuilderDockWindow("Content Browser", dock_id_left_bottom);
+            ImGui::DockBuilderDockWindow("Console", dock_id_bottom);
+
+            ImGui::DockBuilderFinish(rootDockId);
+        };
+
+        static bool defaultDockLayoutAppliedThisRun = false;
+        if (!defaultDockLayoutAppliedThisRun) {
+            const char* ini = ImGui::GetIO().IniFilename;
+            bool iniExists = false;
+            if (ini && ini[0] != '\0') {
+                std::error_code ec;
+                iniExists = std::filesystem::exists(std::filesystem::path(ini), ec);
             }
+
+            // If there's no imgui.ini yet, this is likely a first run: apply a sensible default.
+            if (!iniExists) {
+                BuildDefaultDockLayout(dockspace_id);
+            }
+
+            defaultDockLayoutAppliedThisRun = true;
         }
 
         if (requestResetLayout) {
             requestResetLayout = false;
-            first_time = true;
-            ImGui::DockBuilderRemoveNode(dockspace_id);
+            BuildDefaultDockLayout(dockspace_id);
         }
 
         // Custom Title Bar (VS Code Style)
-        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0, 8)); // Taller bar
+        // (Option B sizing): clearly larger targets.
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(10, 12));
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(12, 8));
         if (ImGui::BeginMainMenuBar()) {
             // Icon / Title
             ImGui::Text("  Genesis  ");
@@ -644,7 +674,8 @@ int main(int argc, char** argv) {
             }
 
             // Window Controls (Right Aligned)
-            float buttonWidth = 45.0f;
+            // Slightly larger click targets to match desktop IDE/editor expectations.
+            float buttonWidth = 64.0f;
             float buttonHeight = ImGui::GetWindowHeight(); // Match menu bar height
             float controlsWidth = buttonWidth * 3;
             ImGui::SetCursorPosX(ImGui::GetWindowWidth() - controlsWidth);
@@ -678,11 +709,11 @@ int main(int argc, char** argv) {
 
                 // Draw Icon (Centered)
                 ImVec2 center = ImVec2(pos.x + size.x * 0.5f, pos.y + size.y * 0.5f);
-                float iconSize = 10.0f; // Fixed size for crisp look
+                float iconSize = 13.0f; // Slightly larger for the bigger button
                 float half = iconSize * 0.5f;
                 
                 if (type == 0) { // Minimize
-                    drawList->AddLine(ImVec2(center.x - half, center.y), ImVec2(center.x + half, center.y), iconColor, 1.0f);
+                    drawList->AddLine(ImVec2(center.x - half, center.y), ImVec2(center.x + half, center.y), iconColor, 2.0f);
                 }
                 else if (type == 1) { // Maximize/Restore
                     bool isMaximized = isCustomMaximized || (SDL_GetWindowFlags(window.GetSDLWindow()) & SDL_WINDOW_MAXIMIZED);
@@ -690,19 +721,19 @@ int main(int argc, char** argv) {
                         // Restore icon (two overlapping squares)
                         float offset = 2.0f;
                         // Back square
-                        drawList->AddRect(ImVec2(center.x - half + offset, center.y - half - offset), ImVec2(center.x + half + offset, center.y + half - offset), iconColor, 1.0f);
+                        drawList->AddRect(ImVec2(center.x - half + offset, center.y - half - offset), ImVec2(center.x + half + offset, center.y + half - offset), iconColor, 0.0f, 0, 2.0f);
                         // Front square fill (to hide back line)
                         drawList->AddRectFilled(ImVec2(center.x - half - offset, center.y - half + offset), ImVec2(center.x + half - offset, center.y + half + offset), ImGui::GetColorU32(ImGuiCol_MenuBarBg)); 
                         // Front square border
-                        drawList->AddRect(ImVec2(center.x - half - offset, center.y - half + offset), ImVec2(center.x + half - offset, center.y + half + offset), iconColor, 1.0f);
+                        drawList->AddRect(ImVec2(center.x - half - offset, center.y - half + offset), ImVec2(center.x + half - offset, center.y + half + offset), iconColor, 0.0f, 0, 2.0f);
                     } else {
                         // Maximize icon (one square)
-                        drawList->AddRect(ImVec2(center.x - half, center.y - half), ImVec2(center.x + half, center.y + half), iconColor, 1.0f);
+                        drawList->AddRect(ImVec2(center.x - half, center.y - half), ImVec2(center.x + half, center.y + half), iconColor, 0.0f, 0, 2.0f);
                     }
                 }
                 else if (type == 2) { // Close (X)
-                    drawList->AddLine(ImVec2(center.x - half, center.y - half), ImVec2(center.x + half, center.y + half), iconColor, 1.0f);
-                    drawList->AddLine(ImVec2(center.x + half, center.y - half), ImVec2(center.x - half, center.y + half), iconColor, 1.0f);
+                    drawList->AddLine(ImVec2(center.x - half, center.y - half), ImVec2(center.x + half, center.y + half), iconColor, 2.0f);
+                    drawList->AddLine(ImVec2(center.x + half, center.y - half), ImVec2(center.x - half, center.y + half), iconColor, 2.0f);
                 }
 
                 return clicked;
@@ -738,7 +769,7 @@ int main(int argc, char** argv) {
 
             ImGui::EndMainMenuBar();
         }
-        ImGui::PopStyleVar();
+        ImGui::PopStyleVar(2);
 
         // Viewport Window
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
@@ -751,11 +782,59 @@ int main(int argc, char** argv) {
         const bool viewportHovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows);
         const bool viewportFocused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
 
-        // Avoid conflicts: don't let gizmo hotkeys fire while camera navigation is active.
-        const bool cameraNavActive = viewportFocused && viewportHovered && ImGui::IsMouseDown(ImGuiMouseButton_Right) && !ImGui::GetIO().WantTextInput;
+        // Calculate ViewCube bounds first (needed for camera nav conflict detection)
+        const float viewManipulateSize = 128.0f;
+        const float viewManipulatePad = 8.0f;
+        ImVec2 viewManipulatePos = ImVec2(
+            viewportTopLeft.x + viewportSize.x - viewManipulateSize - viewManipulatePad,
+            viewportTopLeft.y + viewManipulatePad
+        );
+        ImVec2 viewCubeMin = viewManipulatePos;
+        ImVec2 viewCubeMax = ImVec2(viewManipulatePos.x + viewManipulateSize, viewManipulatePos.y + viewManipulateSize);
+        const bool mouseOverViewCube = ImGui::IsMouseHoveringRect(viewCubeMin, viewCubeMax, false);
+
+        // Input ownership for the viewport.
+        // Prevents camera navigation, gizmos, and view cube manipulation from fighting over the same mouse drag.
+        enum class ViewportInputOwner {
+            None,
+            ViewCube,
+            Gizmo,
+            CameraNav
+        };
+        static ViewportInputOwner inputOwner = ViewportInputOwner::None;
+
+        const bool wantText = ImGui::GetIO().WantTextInput;
+        const bool lDown = ImGui::IsMouseDown(ImGuiMouseButton_Left);
+        const bool rDown = ImGui::IsMouseDown(ImGuiMouseButton_Right);
+        const bool lClicked = ImGui::IsMouseClicked(ImGuiMouseButton_Left);
+
+        // Acquire input ownership.
+        if (inputOwner == ViewportInputOwner::None) {
+            if (lClicked && mouseOverViewCube) {
+                inputOwner = ViewportInputOwner::ViewCube;
+            } else if ((lClicked || lDown) && ImGuizmo::IsOver()) {
+                inputOwner = ViewportInputOwner::Gizmo;
+            } else if (viewportFocused && viewportHovered && !mouseOverViewCube && rDown && !wantText) {
+                inputOwner = ViewportInputOwner::CameraNav;
+            }
+        }
+
+        // Release ownership.
+        if (inputOwner == ViewportInputOwner::ViewCube && !lDown) {
+            inputOwner = ViewportInputOwner::None;
+        } else if (inputOwner == ViewportInputOwner::Gizmo && !lDown && !ImGuizmo::IsUsing()) {
+            inputOwner = ViewportInputOwner::None;
+        } else if (inputOwner == ViewportInputOwner::CameraNav && !rDown) {
+            inputOwner = ViewportInputOwner::None;
+        }
+
+        // Camera navigation is exclusive.
+        const bool cameraNavActive = (inputOwner == ViewportInputOwner::CameraNav);
+        const bool allowGizmoThisFrame = (inputOwner == ViewportInputOwner::None || inputOwner == ViewportInputOwner::Gizmo);
+        const bool applyViewCubeThisFrame = (inputOwner == ViewportInputOwner::ViewCube);
 
         // Gizmo Shortcuts
-        if (!cameraNavActive && !ImGui::GetIO().WantTextInput && !ImGuizmo::IsUsing()) {
+        if (!cameraNavActive && !wantText && !ImGuizmo::IsUsing()) {
             if (ImGui::IsKeyPressed(ImGuiKey_W)) currentGizmoOperation = ImGuizmo::TRANSLATE;
             if (ImGui::IsKeyPressed(ImGuiKey_E)) currentGizmoOperation = ImGuizmo::ROTATE;
             if (ImGui::IsKeyPressed(ImGuiKey_R)) currentGizmoOperation = ImGuizmo::SCALE;
@@ -788,7 +867,7 @@ int main(int argc, char** argv) {
             if (ImGui::IsKeyDown(ImGuiKey_Q)) cameraPos -= glm::vec3(0, 1, 0) * speed;
             if (ImGui::IsKeyDown(ImGuiKey_E)) cameraPos += glm::vec3(0, 1, 0) * speed;
 
-            // Mouse Look
+            // Mouse Look (once captured, apply regardless of hover for stable navigation)
             ImVec2 delta = ImGui::GetIO().MouseDelta;
             cameraRot.y -= delta.x * 0.1f; // Invert X for intuitive look
             cameraRot.x -= delta.y * 0.1f; // Invert Y
@@ -871,27 +950,7 @@ int main(int argc, char** argv) {
             ImGuizmo::DrawGrid(glm::value_ptr(view), glm::value_ptr(projection), glm::value_ptr(identityMatrix), 100.f);
         }
 
-        // View Manipulate (View Cube)
-        const float viewManipulateSize = 128.0f;
-        const float viewManipulatePad = 8.0f;
-        ImVec2 viewManipulatePos = ImVec2(
-            viewportTopLeft.x + viewportSize.x - viewManipulateSize - viewManipulatePad,
-            viewportTopLeft.y + viewManipulatePad
-        );
-
-        // Track interaction with the view cube specifically (avoid reacting to the entity gizmo).
-        static bool viewCubeCapturing = false;
-        ImVec2 viewCubeMin = viewManipulatePos;
-        ImVec2 viewCubeMax = ImVec2(viewManipulatePos.x + viewManipulateSize, viewManipulatePos.y + viewManipulateSize);
-        bool viewCubeHovered = ImGui::IsMouseHoveringRect(viewCubeMin, viewCubeMax, false);
-        if (viewCubeHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
-            viewCubeCapturing = true;
-        }
-        bool applyViewCubeThisFrame = viewCubeCapturing;
-        if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
-            viewCubeCapturing = false;
-        }
-
+        // View Manipulate (View Cube) - position already calculated above for conflict detection
         glm::mat4 viewCopy = view; // Make a copy to pass to ViewManipulate
         ImGuizmo::ViewManipulate(glm::value_ptr(viewCopy), 5.0f, viewManipulatePos, ImVec2(viewManipulateSize, viewManipulateSize), 0x10101010);
 
@@ -972,7 +1031,7 @@ int main(int argc, char** argv) {
         }
 
         // Gizmos
-        if (selectedEntity != entt::null && scene.Registry().valid(selectedEntity) && scene.Registry().all_of<Genesis::Engine::Transform>(selectedEntity)) {
+        if (allowGizmoThisFrame && selectedEntity != entt::null && scene.Registry().valid(selectedEntity) && scene.Registry().all_of<Genesis::Engine::Transform>(selectedEntity)) {
             ImGuizmo::SetOrthographic(false);
             ImGuizmo::SetDrawlist();
 

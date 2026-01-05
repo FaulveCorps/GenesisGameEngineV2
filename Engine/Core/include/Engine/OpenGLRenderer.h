@@ -94,8 +94,18 @@ private:
     std::vector<PointLightData> m_pointLights;
 
     // Camera data
-    float m_view[16];
-    float m_projection[16];
+    float m_view[16] = {
+        1,0,0,0,
+        0,1,0,0,
+        0,0,1,0,
+        0,0,0,1
+    };
+    float m_projection[16] = {
+        1,0,0,0,
+        0,1,0,0,
+        0,0,1,0,
+        0,0,0,1
+    };
 
     // Post-processing params
     float m_exposure = 1.0f;
@@ -127,6 +137,7 @@ private:
     unsigned int m_gPosition = 0;
     unsigned int m_gNormal = 0;
     unsigned int m_gAlbedoSpec = 0;
+    unsigned int m_gDepthRBO = 0;
     std::shared_ptr<Shader> m_gBufferShader;
     std::shared_ptr<Shader> m_deferredLightingShader;
     
@@ -141,7 +152,12 @@ private:
     unsigned int m_shadowMapTexture = 0;
     std::shared_ptr<Shader> m_shadowShader;
     const unsigned int SHADOW_WIDTH = 2048, SHADOW_HEIGHT = 2048;
-    float m_lightSpaceMatrix[16]; // To pass to PBR shader
+    float m_lightSpaceMatrix[16] = {
+        1,0,0,0,
+        0,1,0,0,
+        0,0,1,0,
+        0,0,0,1
+    }; // To pass to PBR shader
 
     void InitShadowMap();
     void RenderShadowPass();

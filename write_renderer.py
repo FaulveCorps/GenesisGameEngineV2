@@ -1,4 +1,7 @@
+import argparse
 import os
+import shutil
+import sys
 
 content = r"""#include "engine/OpenGLRenderer.h"
 #include "engine/MathUtils.h"
@@ -1002,5 +1005,90 @@ void OpenGLRenderer::DrawTexture(Texture* tex, float x, float y, float w, float 
 } // namespace Genesis::Engine
 """
 
-with open(r"c:\Users\jpfau\Desktop\Project\GenesisGameEngine\Engine\Core\src\OpenGLRenderer.cpp", "w") as f:
-    f.write(content)
+def main() -> int:
+    parser = argparse.ArgumentParser(
+        description=(
+            "Generate the OpenGLRenderer implementation. By default this prints to stdout. "
+            "Use --output to write to a file (refuses to overwrite unless --force is set)."
+        )
+    )
+    default_out = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)),
+        "Engine",
+        "Core",
+        "src",
+        "OpenGLRenderer.cpp",
+    )
+    parser.add_argument(
+        "--output",
+        "-o",
+        default=None,
+        help=f"Write output to this file (default target would be: {default_out})",
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Allow overwriting an existing output file.",
+    )
+    parser.add_argument(
+        "--allow-outside-repo",
+        action="store_true",
+        help=(
+            "Allow writing to a path outside the repository root. "
+            "By default, writes are restricted to the repo tree to reduce foot-guns."
+        ),
+    )
+    parser.add_argument(
+        "--backup",
+        action="store_true",
+        help="When overwriting, save a .bak copy alongside the output.",
+    )
+    args = parser.parse_args()
+
+    repo_root = os.path.realpath(os.path.dirname(os.path.abspath(__file__)))
+
+    if args.output is None:
+        sys.stdout.write(content)
+        return 0
+
+    out_path = os.path.abspath(args.output)
+    out_path_real = os.path.realpath(out_path)
+
+    if not args.allow_outside_repo:
+        try:
+            common = os.path.commonpath([repo_root, out_path_real])
+        except ValueError:
+            common = ""
+        if common != repo_root:
+            sys.stderr.write(
+                "Refusing to write outside the repository root.\n"
+                f"  repo_root: {repo_root}\n"
+                f"  output:    {out_path_real}\n"
+                "Re-run with --allow-outside-repo if you really want this.\n"
+            )
+            return 2
+    out_dir = os.path.dirname(out_path)
+    if out_dir and not os.path.isdir(out_dir):
+        os.makedirs(out_dir, exist_ok=True)
+
+    if os.path.exists(out_path_real) and not args.force:
+        sys.stderr.write(
+            f"Refusing to overwrite existing file: {out_path_real}\n"
+            "Re-run with --force to overwrite.\n"
+        )
+        return 2
+
+    if os.path.exists(out_path_real) and args.force and args.backup:
+        backup_path = out_path_real + ".bak"
+        shutil.copy2(out_path_real, backup_path)
+        sys.stderr.write(f"Backed up existing file to: {backup_path}\n")
+
+    with open(out_path_real, "w", encoding="utf-8", newline="\n") as f:
+        f.write(content)
+
+    sys.stderr.write(f"Wrote: {out_path_real}\n")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -125,6 +125,49 @@ static bool ResolveGL(void** fnPtr, const char* name) {
     return true;
 }
 
+static bool RequireGL(void** fnPtr, const char* name) {
+    if (ResolveGL(fnPtr, name)) return true;
+    std::cerr << "OpenGLRenderer: missing required GL function: " << name << std::endl;
+    return false;
+}
+
+static void DeleteFramebuffer(unsigned int& fbo) {
+    if (fbo && pglDeleteFramebuffers) {
+        pglDeleteFramebuffers(1, &fbo);
+        fbo = 0;
+    }
+}
+
+static void DeleteFramebufferArray(unsigned int (&fbos)[2]) {
+    if (pglDeleteFramebuffers && (fbos[0] || fbos[1])) {
+        pglDeleteFramebuffers(2, fbos);
+        fbos[0] = 0;
+        fbos[1] = 0;
+    }
+}
+
+static void DeleteRenderbuffer(unsigned int& rbo) {
+    if (rbo && pglDeleteRenderbuffers) {
+        pglDeleteRenderbuffers(1, &rbo);
+        rbo = 0;
+    }
+}
+
+static void DeleteTexture(unsigned int& tex) {
+    if (tex && pglDeleteTextures) {
+        pglDeleteTextures(1, &tex);
+        tex = 0;
+    }
+}
+
+static void DeleteTextureArray(unsigned int (&textures)[2]) {
+    if (pglDeleteTextures && (textures[0] || textures[1])) {
+        pglDeleteTextures(2, textures);
+        textures[0] = 0;
+        textures[1] = 0;
+    }
+}
+
 static void CheckGLError(const char* label) {
     auto addr = (void*)SDL_GL_GetProcAddress("glGetError");
     if (addr) {
@@ -218,57 +261,65 @@ bool OpenGLRenderer::Init(SDL_Window* window, SDL_GLContext glContext) {
     }
 
     // Resolve core GL functions used
-    ResolveGL((void**)&pglViewport, "glViewport");
-    ResolveGL((void**)&pglClearColor, "glClearColor");
-    ResolveGL((void**)&pglEnable, "glEnable");
-    ResolveGL((void**)&pglClear, "glClear");
-    ResolveGL((void**)&pglDrawBuffer, "glDrawBuffer");
-    ResolveGL((void**)&pglBlendFunc, "glBlendFunc");
+    bool glOk = true;
+    glOk &= RequireGL((void**)&pglViewport, "glViewport");
+    glOk &= RequireGL((void**)&pglClearColor, "glClearColor");
+    glOk &= RequireGL((void**)&pglEnable, "glEnable");
+    glOk &= RequireGL((void**)&pglClear, "glClear");
+    glOk &= RequireGL((void**)&pglDrawBuffer, "glDrawBuffer");
+    glOk &= RequireGL((void**)&pglBlendFunc, "glBlendFunc");
 
     // Resolve Mesh/Shader functions
-    ResolveGL((void**)&pglGenVertexArrays, "glGenVertexArrays");
-    ResolveGL((void**)&pglBindVertexArray, "glBindVertexArray");
-    ResolveGL((void**)&pglGenBuffers, "glGenBuffers");
-    ResolveGL((void**)&pglBindBuffer, "glBindBuffer");
-    ResolveGL((void**)&pglBufferData, "glBufferData");
-    ResolveGL((void**)&pglEnableVertexAttribArray, "glEnableVertexAttribArray");
-    ResolveGL((void**)&pglVertexAttribPointer, "glVertexAttribPointer");
-    ResolveGL((void**)&pglDeleteVertexArrays, "glDeleteVertexArrays");
-    ResolveGL((void**)&pglDeleteBuffers, "glDeleteBuffers");
-    ResolveGL((void**)&pglDrawElements, "glDrawElements");
-    ResolveGL((void**)&pglUniform1f, "glUniform1f");
-    ResolveGL((void**)&pglUniform3f, "glUniform3f");
-    ResolveGL((void**)&pglUniform4f, "glUniform4f");
-    ResolveGL((void**)&pglUniformMatrix4fv, "glUniformMatrix4fv");
-    ResolveGL((void**)&pglGetUniformLocation, "glGetUniformLocation");
-    ResolveGL((void**)&pglUniform1i, "glUniform1i");
-    ResolveGL((void**)&pglActiveTexture, "glActiveTexture");
-    ResolveGL((void**)&pglBindTexture, "glBindTexture");
+    glOk &= RequireGL((void**)&pglGenVertexArrays, "glGenVertexArrays");
+    glOk &= RequireGL((void**)&pglBindVertexArray, "glBindVertexArray");
+    glOk &= RequireGL((void**)&pglGenBuffers, "glGenBuffers");
+    glOk &= RequireGL((void**)&pglBindBuffer, "glBindBuffer");
+    glOk &= RequireGL((void**)&pglBufferData, "glBufferData");
+    glOk &= RequireGL((void**)&pglEnableVertexAttribArray, "glEnableVertexAttribArray");
+    glOk &= RequireGL((void**)&pglVertexAttribPointer, "glVertexAttribPointer");
+    glOk &= RequireGL((void**)&pglDeleteVertexArrays, "glDeleteVertexArrays");
+    glOk &= RequireGL((void**)&pglDeleteBuffers, "glDeleteBuffers");
+    glOk &= RequireGL((void**)&pglDrawElements, "glDrawElements");
+    glOk &= RequireGL((void**)&pglUniform1f, "glUniform1f");
+    glOk &= RequireGL((void**)&pglUniform3f, "glUniform3f");
+    glOk &= RequireGL((void**)&pglUniform4f, "glUniform4f");
+    glOk &= RequireGL((void**)&pglUniformMatrix4fv, "glUniformMatrix4fv");
+    glOk &= RequireGL((void**)&pglGetUniformLocation, "glGetUniformLocation");
+    glOk &= RequireGL((void**)&pglUniform1i, "glUniform1i");
+    glOk &= RequireGL((void**)&pglActiveTexture, "glActiveTexture");
+    glOk &= RequireGL((void**)&pglBindTexture, "glBindTexture");
 
     // Resolve Framebuffer functions
-    ResolveGL((void**)&pglGenFramebuffers, "glGenFramebuffers");
-    ResolveGL((void**)&pglBindFramebuffer, "glBindFramebuffer");
-    ResolveGL((void**)&pglFramebufferTexture2D, "glFramebufferTexture2D");
-    ResolveGL((void**)&pglGenRenderbuffers, "glGenRenderbuffers");
-    ResolveGL((void**)&pglBindRenderbuffer, "glBindRenderbuffer");
-    ResolveGL((void**)&pglRenderbufferStorage, "glRenderbufferStorage");
-    ResolveGL((void**)&pglFramebufferRenderbuffer, "glFramebufferRenderbuffer");
-    ResolveGL((void**)&pglCheckFramebufferStatus, "glCheckFramebufferStatus");
-    ResolveGL((void**)&pglDeleteFramebuffers, "glDeleteFramebuffers");
-    ResolveGL((void**)&pglDeleteRenderbuffers, "glDeleteRenderbuffers");
-    ResolveGL((void**)&pglDrawBuffers, "glDrawBuffers");
+    glOk &= RequireGL((void**)&pglGenFramebuffers, "glGenFramebuffers");
+    glOk &= RequireGL((void**)&pglBindFramebuffer, "glBindFramebuffer");
+    glOk &= RequireGL((void**)&pglFramebufferTexture2D, "glFramebufferTexture2D");
+    glOk &= RequireGL((void**)&pglGenRenderbuffers, "glGenRenderbuffers");
+    glOk &= RequireGL((void**)&pglBindRenderbuffer, "glBindRenderbuffer");
+    glOk &= RequireGL((void**)&pglRenderbufferStorage, "glRenderbufferStorage");
+    glOk &= RequireGL((void**)&pglFramebufferRenderbuffer, "glFramebufferRenderbuffer");
+    glOk &= RequireGL((void**)&pglCheckFramebufferStatus, "glCheckFramebufferStatus");
+    glOk &= RequireGL((void**)&pglDeleteFramebuffers, "glDeleteFramebuffers");
+    glOk &= RequireGL((void**)&pglDeleteRenderbuffers, "glDeleteRenderbuffers");
+    glOk &= RequireGL((void**)&pglDrawBuffers, "glDrawBuffers");
+    // Optional
     ResolveGL((void**)&pglBlitFramebuffer, "glBlitFramebuffer");
 
-    ResolveGL((void**)&pglGenTextures, "glGenTextures");
-    ResolveGL((void**)&pglDeleteTextures, "glDeleteTextures");
-    ResolveGL((void**)&pglTexImage2D, "glTexImage2D");
-    ResolveGL((void**)&pglTexParameteri, "glTexParameteri");
-    ResolveGL((void**)&pglTexParameterfv, "glTexParameterfv");
-    ResolveGL((void**)&pglReadBuffer, "glReadBuffer");
-    ResolveGL((void**)&pglDrawArrays, "glDrawArrays");
-    ResolveGL((void**)&pglDisable, "glDisable");
+    glOk &= RequireGL((void**)&pglGenTextures, "glGenTextures");
+    glOk &= RequireGL((void**)&pglDeleteTextures, "glDeleteTextures");
+    glOk &= RequireGL((void**)&pglTexImage2D, "glTexImage2D");
+    glOk &= RequireGL((void**)&pglTexParameteri, "glTexParameteri");
+    glOk &= RequireGL((void**)&pglTexParameterfv, "glTexParameterfv");
+    glOk &= RequireGL((void**)&pglReadBuffer, "glReadBuffer");
+    glOk &= RequireGL((void**)&pglDrawArrays, "glDrawArrays");
+    glOk &= RequireGL((void**)&pglDisable, "glDisable");
+    // Optional (we have fallbacks)
     ResolveGL((void**)&pglBufferSubData, "glBufferSubData");
     ResolveGL((void**)&pglUniform2f, "glUniform2f");
+
+    if (!glOk) {
+        std::cerr << "OpenGLRenderer: init failed due to missing GL symbols" << std::endl;
+        return false;
+    }
 
     if (pglViewport) {
         int w, h;
@@ -355,6 +406,13 @@ bool OpenGLRenderer::Init(SDL_Window* window, SDL_GLContext glContext) {
 void OpenGLRenderer::InitGBuffer(int width, int height) {
     if (!pglGenFramebuffers) return;
 
+    // If reinitializing, clean up old resources first.
+    DeleteFramebuffer(m_gBuffer);
+    DeleteTexture(m_gPosition);
+    DeleteTexture(m_gNormal);
+    DeleteTexture(m_gAlbedoSpec);
+    DeleteRenderbuffer(m_gDepthRBO);
+
     pglGenFramebuffers(1, &m_gBuffer);
     pglBindFramebuffer(GL_FRAMEBUFFER, m_gBuffer);
 
@@ -386,11 +444,10 @@ void OpenGLRenderer::InitGBuffer(int width, int height) {
     pglDrawBuffers(3, attachments);
 
     // Create and attach depth buffer (renderbuffer)
-    unsigned int rboDepth;
-    pglGenRenderbuffers(1, &rboDepth);
-    pglBindRenderbuffer(GL_RENDERBUFFER, rboDepth);
+    pglGenRenderbuffers(1, &m_gDepthRBO);
+    pglBindRenderbuffer(GL_RENDERBUFFER, m_gDepthRBO);
     pglRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, width, height);
-    pglFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, rboDepth);
+    pglFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, m_gDepthRBO);
     
     if (pglCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
         std::cerr << "Framebuffer not complete!" << std::endl;
@@ -399,15 +456,26 @@ void OpenGLRenderer::InitGBuffer(int width, int height) {
 }
 
 void OpenGLRenderer::ResizeGBuffer(int width, int height) {
-    if (m_gBuffer && pglDeleteFramebuffers) pglDeleteFramebuffers(1, &m_gBuffer);
-    if (m_gPosition && pglDeleteTextures) pglDeleteTextures(1, &m_gPosition);
-    if (m_gNormal && pglDeleteTextures) pglDeleteTextures(1, &m_gNormal);
-    if (m_gAlbedoSpec && pglDeleteTextures) pglDeleteTextures(1, &m_gAlbedoSpec);
+    DeleteFramebuffer(m_gBuffer);
+    DeleteTexture(m_gPosition);
+    DeleteTexture(m_gNormal);
+    DeleteTexture(m_gAlbedoSpec);
+    DeleteRenderbuffer(m_gDepthRBO);
     InitGBuffer(width, height);
 }
 
 void OpenGLRenderer::InitPostProcessing(int width, int height) {
     if (!pglGenFramebuffers) return;
+
+    // If reinitializing, clean up old resources first.
+    DeleteFramebuffer(m_fbo);
+    DeleteTexture(m_screenTexture);
+    DeleteTexture(m_brightTexture);
+    DeleteRenderbuffer(m_rbo);
+    DeleteFramebufferArray(m_pingPongFBO);
+    DeleteTextureArray(m_pingPongTexture);
+    DeleteFramebuffer(m_finalFBO);
+    DeleteTexture(m_finalTexture);
     
     m_screenWidth = width;
     m_screenHeight = height;
@@ -464,52 +532,41 @@ void OpenGLRenderer::InitPostProcessing(int width, int height) {
              std::cerr << "PingPong Framebuffer not complete!" << std::endl;
     }
 
-    // Screen quad
-    float quadVertices[] = { 
-        // positions   // texCoords
-        -1.0f,  1.0f,  0.0f, 1.0f,
-        -1.0f, -1.0f,  0.0f, 0.0f,
-         1.0f, -1.0f,  1.0f, 0.0f,
+    // Screen quad (size-independent, create once)
+    if (!m_screenQuadVAO) {
+        float quadVertices[] = { 
+            // positions   // texCoords
+            -1.0f,  1.0f,  0.0f, 1.0f,
+            -1.0f, -1.0f,  0.0f, 0.0f,
+             1.0f, -1.0f,  1.0f, 0.0f,
 
-        -1.0f,  1.0f,  0.0f, 1.0f,
-         1.0f, -1.0f,  1.0f, 0.0f,
-         1.0f,  1.0f,  1.0f, 1.0f
-    };
-    pglGenVertexArrays(1, &m_screenQuadVAO);
-    pglGenBuffers(1, &m_screenQuadVBO);
-    pglBindVertexArray(m_screenQuadVAO);
-    pglBindBuffer(GL_ARRAY_BUFFER, m_screenQuadVBO);
-    pglBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), &quadVertices, GL_STATIC_DRAW);
-    pglEnableVertexAttribArray(0);
-    pglVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
-    pglEnableVertexAttribArray(1);
-    pglVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
-    pglBindVertexArray(0);
+            -1.0f,  1.0f,  0.0f, 1.0f,
+             1.0f, -1.0f,  1.0f, 0.0f,
+             1.0f,  1.0f,  1.0f, 1.0f
+        };
+        pglGenVertexArrays(1, &m_screenQuadVAO);
+        pglGenBuffers(1, &m_screenQuadVBO);
+        pglBindVertexArray(m_screenQuadVAO);
+        pglBindBuffer(GL_ARRAY_BUFFER, m_screenQuadVBO);
+        pglBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), &quadVertices, GL_STATIC_DRAW);
+        pglEnableVertexAttribArray(0);
+        pglVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
+        pglEnableVertexAttribArray(1);
+        pglVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
+        pglBindVertexArray(0);
+    }
 }
 
 void OpenGLRenderer::ResizePostProcessing(int width, int height) {
-    if (m_fbo && pglDeleteFramebuffers) pglDeleteFramebuffers(1, &m_fbo);
-    if (m_screenTexture && pglDeleteTextures) pglDeleteTextures(1, &m_screenTexture);
-    if (m_brightTexture && pglDeleteTextures) pglDeleteTextures(1, &m_brightTexture);
-    if (m_rbo && pglDeleteRenderbuffers) pglDeleteRenderbuffers(1, &m_rbo);
-    
-    if (m_pingPongFBO[0] && pglDeleteFramebuffers) pglDeleteFramebuffers(2, m_pingPongFBO);
-    if (m_pingPongTexture[0] && pglDeleteTextures) pglDeleteTextures(2, m_pingPongTexture);
-
-    if (m_finalFBO && pglDeleteFramebuffers) {
-        pglDeleteFramebuffers(1, &m_finalFBO);
-        m_finalFBO = 0;
-    }
-    if (m_finalTexture && pglDeleteTextures) {
-        pglDeleteTextures(1, &m_finalTexture);
-        m_finalTexture = 0;
-    }
-
     InitPostProcessing(width, height);
 }
 
 void OpenGLRenderer::InitShadowMap() {
     if (!pglGenFramebuffers) return;
+
+    // If reinitializing, clean up old resources first.
+    DeleteFramebuffer(m_shadowMapFBO);
+    DeleteTexture(m_shadowMapTexture);
 
     pglGenFramebuffers(1, &m_shadowMapFBO);
     
@@ -829,16 +886,35 @@ void OpenGLRenderer::Shutdown() {
             SDL_GL_MakeCurrent(m_window, m_context);
         }
     }
-    if (m_fbo && pglDeleteFramebuffers) pglDeleteFramebuffers(1, &m_fbo);
-    if (m_rbo && pglDeleteRenderbuffers) pglDeleteRenderbuffers(1, &m_rbo);
-    if (m_gBuffer && pglDeleteFramebuffers) pglDeleteFramebuffers(1, &m_gBuffer);
-    if (m_screenQuadVAO && pglDeleteVertexArrays) pglDeleteVertexArrays(1, &m_screenQuadVAO);
-    if (m_screenQuadVBO && pglDeleteBuffers) pglDeleteBuffers(1, &m_screenQuadVBO);
-    if (m_spriteVBO && pglDeleteBuffers) pglDeleteBuffers(1, &m_spriteVBO);
-    if (m_spriteEBO && pglDeleteBuffers) pglDeleteBuffers(1, &m_spriteEBO);
-    if (m_spriteVAO && pglDeleteVertexArrays) pglDeleteVertexArrays(1, &m_spriteVAO);
-    if (m_finalFBO && pglDeleteFramebuffers) pglDeleteFramebuffers(1, &m_finalFBO);
-    // if (m_finalTexture && pglDeleteTextures) pglDeleteTextures(1, &m_finalTexture); // Need to resolve pglDeleteTextures
+
+    // Post-processing / deferred
+    DeleteFramebuffer(m_fbo);
+    DeleteTexture(m_screenTexture);
+    DeleteTexture(m_brightTexture);
+    DeleteRenderbuffer(m_rbo);
+    DeleteFramebufferArray(m_pingPongFBO);
+    DeleteTextureArray(m_pingPongTexture);
+    DeleteFramebuffer(m_finalFBO);
+    DeleteTexture(m_finalTexture);
+
+    // G-buffer
+    DeleteFramebuffer(m_gBuffer);
+    DeleteTexture(m_gPosition);
+    DeleteTexture(m_gNormal);
+    DeleteTexture(m_gAlbedoSpec);
+    DeleteRenderbuffer(m_gDepthRBO);
+
+    // Shadow map
+    DeleteFramebuffer(m_shadowMapFBO);
+    DeleteTexture(m_shadowMapTexture);
+
+    // Geometry buffers
+    if (m_screenQuadVAO && pglDeleteVertexArrays) { pglDeleteVertexArrays(1, &m_screenQuadVAO); m_screenQuadVAO = 0; }
+    if (m_screenQuadVBO && pglDeleteBuffers) { pglDeleteBuffers(1, &m_screenQuadVBO); m_screenQuadVBO = 0; }
+    if (m_spriteVBO && pglDeleteBuffers) { pglDeleteBuffers(1, &m_spriteVBO); m_spriteVBO = 0; }
+    if (m_spriteEBO && pglDeleteBuffers) { pglDeleteBuffers(1, &m_spriteEBO); m_spriteEBO = 0; }
+    if (m_spriteVAO && pglDeleteVertexArrays) { pglDeleteVertexArrays(1, &m_spriteVAO); m_spriteVAO = 0; }
+
     m_window = nullptr;
     m_context = nullptr;
 }
@@ -870,7 +946,9 @@ void OpenGLRenderer::DestroyTexture(const IGraphicsAPI::TextureHandle& h) {
         if (SDL_GL_MakeCurrent(m_window, m_context) != 0) return;
     }
     unsigned int id = static_cast<unsigned int>(h.id);
-    // pglDeleteTextures(1, &id); 
+    if (pglDeleteTextures) {
+        pglDeleteTextures(1, &id);
+    }
 }
 
 MeshHandle OpenGLRenderer::CreateMesh(const MeshDesc& desc) {
@@ -1007,25 +1085,15 @@ void OpenGLRenderer::ExecuteDraw(const DrawCommand& cmd, Shader* overrideShader)
     int locModel = pglGetUniformLocation(shader->GetID(), "uModel");
     if (locModel >= 0) pglUniformMatrix4fv(locModel, 1, GL_FALSE, cmd.transform);
 
-    // Set ViewProjection (we need a camera!)
-    // For now, let's assume a static camera or identity if not provided.
-    // Wait, the DrawCommand doesn't have camera info. The Renderer should have it.
-    // But we haven't added SetCamera to the IGraphicsAPI yet?
-    // Let's check IGraphics.h... 
-    // The Scene class usually handles the camera and passes VP matrix?
-    // Actually, in the current `Scene::Render`, it calls `renderer->DrawMesh`.
-    // We need to pass the ViewProjection matrix to the renderer somewhere.
-    // For now, let's just use identity to get it compiling.
-    float vp[16];
-    std::memset(vp, 0, sizeof(float)*16);
-    vp[0] = vp[5] = vp[10] = vp[15] = 1.0f;
-    
-    // In a real engine, we'd have a SetCamera(view, proj) method.
-    // Let's assume we have one or just hack it for now.
-    // The linker error is the priority.
+    // Set ViewProjection
+    Matrix4 view;
+    Matrix4 projection;
+    std::memcpy(view.m, m_view, sizeof(m_view));
+    std::memcpy(projection.m, m_projection, sizeof(m_projection));
+    Matrix4 vp = projection * view;
 
     int locVP = pglGetUniformLocation(shader->GetID(), "uViewProjection");
-    if (locVP >= 0) pglUniformMatrix4fv(locVP, 1, GL_FALSE, vp);
+    if (locVP >= 0) pglUniformMatrix4fv(locVP, 1, GL_FALSE, vp.m);
 
     // Bind Mesh
     pglBindVertexArray(m.vao);
