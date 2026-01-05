@@ -129,7 +129,8 @@ endif()
 
 # Collect runtime libraries (platform-specific names) that should be copied into the test output directory
 set(TEST_RUNTIME_LIBS
-    "${VCPKG_INSTALLED}/bin/SDL2.dll"
+  # Prefer SDL3. Keep SDL2 as well if present (some local setups still have it installed).
+  "${VCPKG_INSTALLED}/bin/SDL3.dll"
     "${VCPKG_INSTALLED}/bin/assimp-vc143-mt.dll"
     "${VCPKG_INSTALLED}/bin/draco.dll"
     "${VCPKG_INSTALLED}/bin/kubazip.dll"
@@ -138,6 +139,10 @@ set(TEST_RUNTIME_LIBS
     "${VCPKG_INSTALLED}/bin/pugixml.dll"
     "${VCPKG_INSTALLED}/bin/zlib1.dll"
 )
+
+if (EXISTS "${VCPKG_INSTALLED}/bin/SDL2.dll")
+  list(APPEND TEST_RUNTIME_LIBS "${VCPKG_INSTALLED}/bin/SDL2.dll")
+endif()
 
 if (EXISTS "${VCPKG_INSTALLED}/bin/webgpu_dawn.dll")
   list(APPEND TEST_RUNTIME_LIBS "${VCPKG_INSTALLED}/bin/webgpu_dawn.dll")

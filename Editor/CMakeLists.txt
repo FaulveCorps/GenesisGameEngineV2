@@ -22,7 +22,8 @@ if (WIN32)
     endif()
 
     set(EDITOR_RUNTIME_DLLS
-        "${VCPKG_INSTALLED}/bin/SDL2.dll"
+      # Prefer SDL3. Keep SDL2 as well if present (some local setups still have it installed).
+      "${VCPKG_INSTALLED}/bin/SDL3.dll"
         "${VCPKG_INSTALLED}/bin/assimp-vc143-mt.dll"
         "${VCPKG_INSTALLED}/bin/draco.dll"
         "${VCPKG_INSTALLED}/bin/kubazip.dll"
@@ -31,6 +32,10 @@ if (WIN32)
         "${VCPKG_INSTALLED}/bin/pugixml.dll"
         "${VCPKG_INSTALLED}/bin/zlib1.dll"
     )
+
+    if (EXISTS "${VCPKG_INSTALLED}/bin/SDL2.dll")
+      list(APPEND EDITOR_RUNTIME_DLLS "${VCPKG_INSTALLED}/bin/SDL2.dll")
+    endif()
 
     if (EXISTS "${VCPKG_INSTALLED}/bin/webgpu_dawn.dll")
       list(APPEND EDITOR_RUNTIME_DLLS "${VCPKG_INSTALLED}/bin/webgpu_dawn.dll")
@@ -82,3 +87,16 @@ if (WIN32)
         COMMENT "Copying SamplePlugin.dll to GenesisEditor output directory"
     )
 endif()
+
+  # CTest integration: headless regression self-test for the unsaved-changes quit/close prompt.
+  # NOTE: Use $<TARGET_FILE_DIR:GenesisEditor> as working directory so copied runtime DLLs are found.
+  include(CTest)
+  if (BUILD_TESTING AND WIN32)
+    add_test(
+      NAME GenesisEditor_QuitPromptSelftest
+      COMMAND $<TARGET_FILE:GenesisEditor> --quit-prompt-selftest
+    )
+    set_tests_properties(GenesisEditor_QuitPromptSelftest PROPERTIES
+      WORKING_DIRECTORY $<TARGET_FILE_DIR:GenesisEditor>
+    )
+  endif()

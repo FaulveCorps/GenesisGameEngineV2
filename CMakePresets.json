@@ -102,6 +102,7 @@
       "displayName": "Run Tests (Debug)",
       "description": "Run unit tests from Debug build",
       "configurePreset": "default",
+      "configuration": "Debug",
       "output": {
         "outputOnFailure": true
       },

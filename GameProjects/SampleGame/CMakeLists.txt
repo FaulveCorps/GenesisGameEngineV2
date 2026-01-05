@@ -21,8 +21,9 @@ if (WIN32)
         set(VCPKG_INSTALLED "${CMAKE_SOURCE_DIR}/vcpkg/installed/x64-windows" CACHE PATH "vcpkg installed directory")
     endif()
 
-    set(SAMPLEGAME_RUNTIME_DLLS
-          "${VCPKG_INSTALLED}/bin/SDL2.dll"
+        set(SAMPLEGAME_RUNTIME_DLLS
+                            # Prefer SDL3. Keep SDL2 as well if present (some local setups still have it installed).
+                            "${VCPKG_INSTALLED}/bin/SDL3.dll"
         "${VCPKG_INSTALLED}/bin/assimp-vc143-mt.dll"
         "${VCPKG_INSTALLED}/bin/draco.dll"
         "${VCPKG_INSTALLED}/bin/kubazip.dll"
@@ -31,6 +32,10 @@ if (WIN32)
         "${VCPKG_INSTALLED}/bin/pugixml.dll"
         "${VCPKG_INSTALLED}/bin/zlib1.dll"
     )
+
+        if (EXISTS "${VCPKG_INSTALLED}/bin/SDL2.dll")
+            list(APPEND SAMPLEGAME_RUNTIME_DLLS "${VCPKG_INSTALLED}/bin/SDL2.dll")
+        endif()
 
     if (EXISTS "${VCPKG_INSTALLED}/bin/webgpu_dawn.dll")
       list(APPEND SAMPLEGAME_RUNTIME_DLLS "${VCPKG_INSTALLED}/bin/webgpu_dawn.dll")

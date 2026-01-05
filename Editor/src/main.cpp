@@ -65,9 +65,158 @@ SDL_HitTestResult SDLCALL HitTestCallback(SDL_Window* win, const SDL_Point* area
 
 int main(int argc, char** argv) {
     std::cout << "GenesisEditor starting..." << std::endl;
+
+    // Headless self-test (no UI interaction required). This is intended for CI/regression testing.
+    // Usage: GenesisEditor.exe --quit-prompt-selftest
+    bool quitPromptSelftest = false;
+    for (int i = 1; i < argc; ++i) {
+        if (argv[i] && std::string(argv[i]) == "--quit-prompt-selftest") {
+            quitPromptSelftest = true;
+        }
+    }
+
     if (!Genesis::Engine::Init()) {
         std::cerr << "Failed to initialize engine" << std::endl;
         return -1;
+    }
+
+    // Self-test runs without creating an OpenGL context to make it more robust in CI.
+    if (quitPromptSelftest) {
+        if (!SDL_Init(SDL_INIT_VIDEO)) {
+            std::cerr << "quit-prompt-selftest: FAILED (SDL_Init(SDL_INIT_VIDEO) failed: " << SDL_GetError() << ")" << std::endl;
+            Genesis::Engine::Shutdown();
+            return 1;
+        }
+
+        SDL_Window* selfWin = SDL_CreateWindow("Genesis Editor (QuitPromptSelftest)", 64, 64, SDL_WINDOW_HIDDEN);
+        if (!selfWin) {
+            std::cerr << "quit-prompt-selftest: FAILED (SDL_CreateWindow failed: " << SDL_GetError() << ")" << std::endl;
+            Genesis::Engine::Shutdown();
+            return 1;
+        }
+
+        const SDL_WindowID mainWindowId = SDL_GetWindowID(selfWin);
+        if (mainWindowId == 0) {
+            std::cerr << "quit-prompt-selftest: FAILED (SDL_GetWindowID failed: " << SDL_GetError() << ")" << std::endl;
+            SDL_DestroyWindow(selfWin);
+            Genesis::Engine::Shutdown();
+            return 1;
+        }
+
+        enum class PendingSceneAction {
+            None,
+            Quit,
+            NewScene,
+            ShowOpenScene,
+            LoadScenePath
+        };
+
+        bool running = true;
+        bool sceneDirty = true;
+        PendingSceneAction pendingAction = PendingSceneAction::None;
+        std::string pendingScenePath;
+        bool showUnsavedChangesModal = false;
+
+        auto MaybePromptUnsaved = [&](PendingSceneAction action, const std::string& path = std::string()) {
+            if (!sceneDirty) return false;
+            pendingAction = action;
+            pendingScenePath = path;
+            showUnsavedChangesModal = true;
+            return true;
+        };
+
+        auto RequestQuit = [&]() {
+            if (!MaybePromptUnsaved(PendingSceneAction::Quit)) {
+                running = false;
+            }
+        };
+
+        auto Fail = [&](const char* msg, int code) {
+            std::cerr << "quit-prompt-selftest: FAILED (" << msg << ")" << std::endl;
+            SDL_DestroyWindow(selfWin);
+            Genesis::Engine::Shutdown();
+            return code;
+        };
+
+        // 1) Dirty scene + SDL_EVENT_QUIT should prompt and keep app running.
+        {
+            SDL_Event e{};
+            e.type = SDL_EVENT_QUIT;
+            if (e.type == SDL_EVENT_QUIT) {
+                RequestQuit();
+            }
+            if (!showUnsavedChangesModal || pendingAction != PendingSceneAction::Quit || !running) {
+                return Fail("dirty + SDL_EVENT_QUIT did not prompt correctly", 2);
+            }
+        }
+
+        // 2) Dirty scene + SDL_EVENT_WINDOW_CLOSE_REQUESTED for main window should prompt and keep running.
+        {
+            showUnsavedChangesModal = false;
+            pendingAction = PendingSceneAction::None;
+            pendingScenePath.clear();
+            running = true;
+            sceneDirty = true;
+
+            SDL_Event e{};
+            e.type = SDL_EVENT_WINDOW_CLOSE_REQUESTED;
+            e.window.windowID = mainWindowId;
+            if (e.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED) {
+                if (e.window.windowID == mainWindowId) {
+                    RequestQuit();
+                }
+            }
+
+            if (!showUnsavedChangesModal || pendingAction != PendingSceneAction::Quit || !running) {
+                return Fail("dirty + CLOSE_REQUESTED(main) did not prompt correctly", 3);
+            }
+        }
+
+        // 3) Dirty scene + CLOSE_REQUESTED for non-main window should NOT prompt.
+        {
+            showUnsavedChangesModal = false;
+            pendingAction = PendingSceneAction::None;
+            pendingScenePath.clear();
+            running = true;
+            sceneDirty = true;
+
+            SDL_Event e{};
+            e.type = SDL_EVENT_WINDOW_CLOSE_REQUESTED;
+            e.window.windowID = mainWindowId + 1;
+            if (e.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED) {
+                if (e.window.windowID == mainWindowId) {
+                    RequestQuit();
+                }
+            }
+
+            if (showUnsavedChangesModal || pendingAction != PendingSceneAction::None || !running) {
+                return Fail("dirty + CLOSE_REQUESTED(other) should not prompt", 4);
+            }
+        }
+
+        // 4) Clean scene + QUIT should exit immediately.
+        {
+            showUnsavedChangesModal = false;
+            pendingAction = PendingSceneAction::None;
+            pendingScenePath.clear();
+            running = true;
+            sceneDirty = false;
+
+            SDL_Event e{};
+            e.type = SDL_EVENT_QUIT;
+            if (e.type == SDL_EVENT_QUIT) {
+                RequestQuit();
+            }
+
+            if (running || showUnsavedChangesModal || pendingAction != PendingSceneAction::None) {
+                return Fail("clean + SDL_EVENT_QUIT should exit without prompt", 5);
+            }
+        }
+
+        std::cout << "quit-prompt-selftest: PASSED" << std::endl;
+        SDL_DestroyWindow(selfWin);
+        Genesis::Engine::Shutdown();
+        return 0;
     }
 
     Genesis::Engine::Window window;
