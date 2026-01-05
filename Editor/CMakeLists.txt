@@ -91,7 +91,7 @@ endif()
   # CTest integration: headless regression self-test for the unsaved-changes quit/close prompt.
   # NOTE: Use $<TARGET_FILE_DIR:GenesisEditor> as working directory so copied runtime DLLs are found.
   include(CTest)
-  if (BUILD_TESTING AND WIN32)
+  if (BUILD_TESTING)
     add_test(
       NAME GenesisEditor_QuitPromptSelftest
       COMMAND $<TARGET_FILE:GenesisEditor> --quit-prompt-selftest

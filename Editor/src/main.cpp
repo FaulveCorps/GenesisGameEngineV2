@@ -75,33 +75,12 @@ int main(int argc, char** argv) {
         }
     }
 
-    if (!Genesis::Engine::Init()) {
-        std::cerr << "Failed to initialize engine" << std::endl;
-        return -1;
-    }
-
-    // Self-test runs without creating an OpenGL context to make it more robust in CI.
+    // Run the self-test *before* engine init/window creation so it works in headless CI environments.
+    // This test validates only the editor's unsaved-changes prompt state machine and event routing.
     if (quitPromptSelftest) {
-        if (!SDL_Init(SDL_INIT_VIDEO)) {
-            std::cerr << "quit-prompt-selftest: FAILED (SDL_Init(SDL_INIT_VIDEO) failed: " << SDL_GetError() << ")" << std::endl;
-            Genesis::Engine::Shutdown();
-            return 1;
-        }
-
-        SDL_Window* selfWin = SDL_CreateWindow("Genesis Editor (QuitPromptSelftest)", 64, 64, SDL_WINDOW_HIDDEN);
-        if (!selfWin) {
-            std::cerr << "quit-prompt-selftest: FAILED (SDL_CreateWindow failed: " << SDL_GetError() << ")" << std::endl;
-            Genesis::Engine::Shutdown();
-            return 1;
-        }
-
-        const SDL_WindowID mainWindowId = SDL_GetWindowID(selfWin);
-        if (mainWindowId == 0) {
-            std::cerr << "quit-prompt-selftest: FAILED (SDL_GetWindowID failed: " << SDL_GetError() << ")" << std::endl;
-            SDL_DestroyWindow(selfWin);
-            Genesis::Engine::Shutdown();
-            return 1;
-        }
+        // Use a fixed ID to represent the main window. We don't need to create a real SDL window
+        // because the test simulates SDL events directly.
+        const SDL_WindowID mainWindowId = (SDL_WindowID)1;
 
         enum class PendingSceneAction {
             None,
@@ -133,8 +112,6 @@ int main(int argc, char** argv) {
 
         auto Fail = [&](const char* msg, int code) {
             std::cerr << "quit-prompt-selftest: FAILED (" << msg << ")" << std::endl;
-            SDL_DestroyWindow(selfWin);
-            Genesis::Engine::Shutdown();
             return code;
         };
 
@@ -182,7 +159,7 @@ int main(int argc, char** argv) {
 
             SDL_Event e{};
             e.type = SDL_EVENT_WINDOW_CLOSE_REQUESTED;
-            e.window.windowID = mainWindowId + 1;
+            e.window.windowID = (SDL_WindowID)(mainWindowId + 1);
             if (e.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED) {
                 if (e.window.windowID == mainWindowId) {
                     RequestQuit();
@@ -213,10 +190,35 @@ int main(int argc, char** argv) {
             }
         }
 
+        // 5) Clean scene + CLOSE_REQUESTED(main) should exit immediately.
+        {
+            showUnsavedChangesModal = false;
+            pendingAction = PendingSceneAction::None;
+            pendingScenePath.clear();
+            running = true;
+            sceneDirty = false;
+
+            SDL_Event e{};
+            e.type = SDL_EVENT_WINDOW_CLOSE_REQUESTED;
+            e.window.windowID = mainWindowId;
+            if (e.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED) {
+                if (e.window.windowID == mainWindowId) {
+                    RequestQuit();
+                }
+            }
+
+            if (running || showUnsavedChangesModal || pendingAction != PendingSceneAction::None) {
+                return Fail("clean + CLOSE_REQUESTED(main) should exit without prompt", 6);
+            }
+        }
+
         std::cout << "quit-prompt-selftest: PASSED" << std::endl;
-        SDL_DestroyWindow(selfWin);
-        Genesis::Engine::Shutdown();
         return 0;
+    }
+
+    if (!Genesis::Engine::Init()) {
+        std::cerr << "Failed to initialize engine" << std::endl;
+        return -1;
     }
 
     Genesis::Engine::Window window;

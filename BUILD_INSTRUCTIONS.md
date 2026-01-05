@@ -78,6 +78,8 @@ The editor includes a headless self-test mode to validate the “unsaved changes
 
 This self-test is also registered as a CTest named `GenesisEditor_QuitPromptSelftest`, so it will run automatically when you run `ctest`.
 
+Because it runs before engine/window initialization and does not create any OS windows, it is safe to run in headless CI.
+
 ```powershell
 cd build-vs\Editor\Debug
 ./GenesisEditor.exe --quit-prompt-selftest
