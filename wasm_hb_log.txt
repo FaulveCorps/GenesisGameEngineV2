@@ -2983,3 +2983,149 @@ DumpCallbacksSnapshot: context=CallExported - callsite snapshot: sleep_mod2:run 
 DumpCallbacksSnapshot: key=env:test_sleep ptr=000001F4BC3533D0
 DumpCallbacksSnapshot: key=env:test_sleep memory preview:88 DA CD 2A F7 7F 00 00 01 00 00 00 00 00 00 00 50 ED 67 BC F4 01 00 00 00 00 10 00 00 00 00 00 20 CE 3E BC F4 01 00 00 10 CE 3E BC F4 01 00 00 48 8A 5C BC F4 01 00 00 32 00 00 00 00 00 00 00
 WriteMiniDumpForException: wrote dump Tools\external\procdump\dumps\token_crash_20260105_180715.dmp context: CallExported_m3_CallArgv_failed_withctx
+host_trampoline_raw: exec_limit=5000 elapsed_ms=0
+host_trampoline_raw: elapsed_ms=0
+host_trampoline_raw: exec_limit=5000 elapsed_ms=0
+host_trampoline_raw: elapsed_ms=0
+RegisterVoidString: holder=000001A23FD439C0 module=000001A2457B5EC0 key=env:host_log runtime=000001A23FD710A0
+RegisterVoidString: keyPtrAddr=000001A23F5FB250
+trampoline_v: about to call callback with s_preview='hello (len=5)'
+trampoline_v: exec_limit=1000 elapsed_ms=0
+trampoline_v: callback returned
+trampoline_v: about to call m3ApiSuccess()
+Token::~Token: entering ns=env name=host_log sig=v(ii) module=000001A2457B5EC0 thread=6020
+ScopedVectoredDump: handler=000001A23FC2FF90
+Token::~Token: g_callbacks addr=000001A233FECBA0 g_callback_keys addr=000001A233FECB50 g_import_userdata addr=000001A233FECA60
+Token::~Token: sizes: g_callbacks=2 g_callback_keys=2 g_import_userdata=2
+Token::~Token: removing callback immediately for key='env:host_log'
+Token::~Token: immediate unregister succeeded for key='env:host_log'
+ScopedVectoredDump: removed handler=000001A23FC2FF90
+RegisterVoidString: holder=000001A23FD44500 module=000001A2457B42C0 key=env:host_log runtime=000001A23FD710A0
+RegisterVoidString: keyPtrAddr=000001A23F5FB250
+Token::~Token: entering ns=env name=host_log sig=v(ii) module=000001A2457B42C0 thread=6020
+ScopedVectoredDump: handler=000001A23FC2F6F0
+Token::~Token: g_callbacks addr=000001A233FECBA0 g_callback_keys addr=000001A233FECB50 g_import_userdata addr=000001A233FECA60
+Token::~Token: sizes: g_callbacks=2 g_callback_keys=2 g_import_userdata=2
+Token::~Token: removing callback immediately for key='env:host_log'
+Token::~Token: immediate unregister succeeded for key='env:host_log'
+ScopedVectoredDump: removed handler=000001A23FC2F6F0
+RegisterVoidString: holder=000001A23FD44B40 module=000001A2457B5A60 key=env:host_log runtime=000001A23FD710A0
+RegisterVoidString: keyPtrAddr=000001A23F5FB250
+Token::~Token: entering ns=env name=host_log sig=v(ii) module=000001A2457B5A60 thread=6020
+ScopedVectoredDump: handler=000001A23FC2F630
+Token::~Token: g_callbacks addr=000001A233FECBA0 g_callback_keys addr=000001A233FECB50 g_import_userdata addr=000001A233FECA60
+Token::~Token: sizes: g_callbacks=2 g_callback_keys=2 g_import_userdata=2
+Token::~Token: removing callback immediately for key='env:host_log'
+Token::~Token: immediate unregister succeeded for key='env:host_log'
+ScopedVectoredDump: removed handler=000001A23FC2F630
+host_trampoline_raw: exec_limit=50 elapsed_ms=201
+host_trampoline_raw: host callback execution time exceeded; trapping
+Token::~Token: entering ns=env name=test_ping sig=v() module=000001A2457B5980 thread=6020
+ScopedVectoredDump: handler=000001A23FC2FB70
+Token::~Token: g_callbacks addr=000001A233FECBA0 g_callback_keys addr=000001A233FECB50 g_import_userdata addr=000001A233FECA60
+Token::~Token: sizes: g_callbacks=2 g_callback_keys=2 g_import_userdata=2
+Token::~Token: removing callback immediately for key='env:test_ping'
+Token::~Token: immediate unregister succeeded for key='env:test_ping'
+ScopedVectoredDump: removed handler=000001A23FC2FB70
+Token::~Token: entering ns=env name=host_log sig=v(ii) module=000001A2457B4C60 thread=6020
+ScopedVectoredDump: handler=000001A23FC30140
+Token::~Token: g_callbacks addr=000001A233FECBA0 g_callback_keys addr=000001A233FECB50 g_import_userdata addr=000001A233FECA60
+Token::~Token: sizes: g_callbacks=1 g_callback_keys=2 g_import_userdata=1
+Token::~Token: removing callback immediately for key='env:host_log'
+Token::~Token: immediate unregister succeeded for key='env:host_log'
+ScopedVectoredDump: removed handler=000001A23FC30140
+host_trampoline_raw: exec_limit=5000 elapsed_ms=0
+host_trampoline_raw: elapsed_ms=0
+host_trampoline_raw: exec_limit=5000 elapsed_ms=0
+host_trampoline_raw: elapsed_ms=0
+Token::~Token: entering ns=env name=test_ping sig=v() module=000001A2457B50C0 thread=6020
+ScopedVectoredDump: handler=000001A23FC2FC60
+Token::~Token: g_callbacks addr=000001A233FECBA0 g_callback_keys addr=000001A233FECB50 g_import_userdata addr=000001A233FECA60
+Token::~Token: sizes: g_callbacks=1 g_callback_keys=2 g_import_userdata=1
+Token::~Token: removing callback immediately for key='env:test_ping'
+Token::~Token: immediate unregister succeeded for key='env:test_ping'
+ScopedVectoredDump: removed handler=000001A23FC2FC60
+host_trampoline_raw: exec_limit=5000 elapsed_ms=3000
+host_trampoline_raw: elapsed_ms=3000
+Token::~Token: entering ns=env name=test_sleep sig=v() module=000001A2457B5EC0 thread=6020
+ScopedVectoredDump: handler=000001A23FC2F900
+Token::~Token: g_callbacks addr=000001A233FECBA0 g_callback_keys addr=000001A233FECB50 g_import_userdata addr=000001A233FECA60
+Token::~Token: sizes: g_callbacks=1 g_callback_keys=3 g_import_userdata=1
+Token::~Token: removing callback immediately for key='env:test_sleep'
+Token::~Token: immediate unregister succeeded for key='env:test_sleep'
+ScopedVectoredDump: removed handler=000001A23FC2F900
+host_trampoline_raw: exec_limit=50 elapsed_ms=3007
+host_trampoline_raw: host callback execution time exceeded; trapping
+host_trampoline_raw: exec_limit=5000 elapsed_ms=0
+host_trampoline_raw: elapsed_ms=0
+host_trampoline_raw: exec_limit=5000 elapsed_ms=0
+host_trampoline_raw: elapsed_ms=0
+RegisterVoidString: holder=00000220F5E87BC0 module=00000220F5E80280 key=env:host_log runtime=00000220F650BDD0
+RegisterVoidString: keyPtrAddr=00000220F5EE7E40
+trampoline_v: about to call callback with s_preview='hello (len=5)'
+trampoline_v: exec_limit=1000 elapsed_ms=0
+trampoline_v: callback returned
+trampoline_v: about to call m3ApiSuccess()
+Token::~Token: entering ns=env name=host_log sig=v(ii) module=00000220F5E80280 thread=10308
+ScopedVectoredDump: handler=00000220F59B6990
+Token::~Token: g_callbacks addr=00000220EA66F570 g_callback_keys addr=00000220EA6524F0 g_import_userdata addr=00000220EA699B20
+Token::~Token: sizes: g_callbacks=2 g_callback_keys=2 g_import_userdata=2
+Token::~Token: removing callback immediately for key='env:host_log'
+Token::~Token: immediate unregister succeeded for key='env:host_log'
+ScopedVectoredDump: removed handler=00000220F59B6990
+RegisterVoidString: holder=00000220F5E88480 module=00000220F5E7F640 key=env:host_log runtime=00000220F650BDD0
+RegisterVoidString: keyPtrAddr=00000220F5EE7E40
+Token::~Token: entering ns=env name=host_log sig=v(ii) module=00000220F5E7F640 thread=10308
+ScopedVectoredDump: handler=00000220F59B6930
+Token::~Token: g_callbacks addr=00000220EA66F570 g_callback_keys addr=00000220EA6524F0 g_import_userdata addr=00000220EA699B20
+Token::~Token: sizes: g_callbacks=2 g_callback_keys=2 g_import_userdata=2
+Token::~Token: removing callback immediately for key='env:host_log'
+Token::~Token: immediate unregister succeeded for key='env:host_log'
+ScopedVectoredDump: removed handler=00000220F59B6930
+RegisterVoidString: holder=00000220F5E87620 module=00000220F5E801A0 key=env:host_log runtime=00000220F650BDD0
+RegisterVoidString: keyPtrAddr=00000220F5EE7E40
+Token::~Token: entering ns=env name=host_log sig=v(ii) module=00000220F5E801A0 thread=10308
+ScopedVectoredDump: handler=00000220F59B5F70
+Token::~Token: g_callbacks addr=00000220EA66F570 g_callback_keys addr=00000220EA6524F0 g_import_userdata addr=00000220EA699B20
+Token::~Token: sizes: g_callbacks=2 g_callback_keys=2 g_import_userdata=2
+Token::~Token: removing callback immediately for key='env:host_log'
+Token::~Token: immediate unregister succeeded for key='env:host_log'
+ScopedVectoredDump: removed handler=00000220F59B5F70
+host_trampoline_raw: exec_limit=50 elapsed_ms=208
+host_trampoline_raw: host callback execution time exceeded; trapping
+Token::~Token: entering ns=env name=test_ping sig=v() module=00000220F5E7FF00 thread=10308
+ScopedVectoredDump: handler=00000220F59B6390
+Token::~Token: g_callbacks addr=00000220EA66F570 g_callback_keys addr=00000220EA6524F0 g_import_userdata addr=00000220EA699B20
+Token::~Token: sizes: g_callbacks=2 g_callback_keys=2 g_import_userdata=2
+Token::~Token: removing callback immediately for key='env:test_ping'
+Token::~Token: immediate unregister succeeded for key='env:test_ping'
+ScopedVectoredDump: removed handler=00000220F59B6390
+Token::~Token: entering ns=env name=host_log sig=v(ii) module=00000220F5E80280 thread=10308
+ScopedVectoredDump: handler=00000220F59B6270
+Token::~Token: g_callbacks addr=00000220EA66F570 g_callback_keys addr=00000220EA6524F0 g_import_userdata addr=00000220EA699B20
+Token::~Token: sizes: g_callbacks=1 g_callback_keys=2 g_import_userdata=1
+Token::~Token: removing callback immediately for key='env:host_log'
+Token::~Token: immediate unregister succeeded for key='env:host_log'
+ScopedVectoredDump: removed handler=00000220F59B6270
+host_trampoline_raw: exec_limit=5000 elapsed_ms=0
+host_trampoline_raw: elapsed_ms=0
+host_trampoline_raw: exec_limit=5000 elapsed_ms=0
+host_trampoline_raw: elapsed_ms=0
+Token::~Token: entering ns=env name=test_ping sig=v() module=00000220F5E7F020 thread=10308
+ScopedVectoredDump: handler=00000220F59B6990
+Token::~Token: g_callbacks addr=00000220EA66F570 g_callback_keys addr=00000220EA6524F0 g_import_userdata addr=00000220EA699B20
+Token::~Token: sizes: g_callbacks=1 g_callback_keys=2 g_import_userdata=1
+Token::~Token: removing callback immediately for key='env:test_ping'
+Token::~Token: immediate unregister succeeded for key='env:test_ping'
+ScopedVectoredDump: removed handler=00000220F59B6990
+host_trampoline_raw: exec_limit=5000 elapsed_ms=3048
+host_trampoline_raw: elapsed_ms=3048
+Token::~Token: entering ns=env name=test_sleep sig=v() module=00000220F5E7F640 thread=10308
+ScopedVectoredDump: handler=00000220F59B6870
+Token::~Token: g_callbacks addr=00000220EA66F570 g_callback_keys addr=00000220EA6524F0 g_import_userdata addr=00000220EA699B20
+Token::~Token: sizes: g_callbacks=1 g_callback_keys=3 g_import_userdata=1
+Token::~Token: removing callback immediately for key='env:test_sleep'
+Token::~Token: immediate unregister succeeded for key='env:test_sleep'
+ScopedVectoredDump: removed handler=00000220F59B6870
+host_trampoline_raw: exec_limit=50 elapsed_ms=3000
+host_trampoline_raw: host callback execution time exceeded; trapping

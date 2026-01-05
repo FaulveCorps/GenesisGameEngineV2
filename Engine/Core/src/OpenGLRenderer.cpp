@@ -235,6 +235,7 @@ static std::string ReadFile(const std::string& path) {
 #define GL_DEPTH24_STENCIL8  0x88F0
 #define GL_FRAMEBUFFER_COMPLETE 0x8CD5
 #define GL_NONE              0
+#define GL_BACK              0x0405
 #define GL_DEPTH_BUFFER_BIT  0x00000100
 #define GL_COLOR_BUFFER_BIT  0x00004000
 #define GL_TRIANGLES         0x0004
@@ -584,7 +585,13 @@ void OpenGLRenderer::InitShadowMap() {
     pglFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, m_shadowMapTexture, 0);
     pglDrawBuffer(GL_NONE);
     pglReadBuffer(GL_NONE);
+
+    // Restore default framebuffer state so later rendering/readback works.
+    // (glDrawBuffer/glReadBuffer are context state; leaving them as GL_NONE can
+    // cause subsequent default-FB rendering to silently discard color writes.)
     pglBindFramebuffer(GL_FRAMEBUFFER, 0);
+    pglDrawBuffer(GL_BACK);
+    pglReadBuffer(GL_BACK);
 
     // Load shadow shader
     m_shadowShader = Shader::CreateFromFile("Assets/shaders/shadow.vert", "Assets/shaders/shadow.frag");
@@ -672,7 +679,7 @@ void OpenGLRenderer::BeginFrame() {
     }
 
     // Clear default framebuffer just in case
-    pglBindFramebuffer(GL_FRAMEBUFFER, 0);
+    BindDefaultFramebuffer();
     pglViewport(0, 0, w, h);
     pglClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 }
@@ -850,7 +857,7 @@ void OpenGLRenderer::EndFrame() {
     // 6. Draw 2D Sprites / UI (Overlay)
     if (!m_textureDrawQueue.empty()) {
         // Ensure we are drawing to the default framebuffer
-        pglBindFramebuffer(GL_FRAMEBUFFER, 0);
+        BindDefaultFramebuffer();
         
         // Reset viewport to window size for 2D sprites
         int w, h; SDL_GetWindowSize(m_window, &w, &h);
@@ -1214,9 +1221,12 @@ void OpenGLRenderer::SetViewProjection(const float* view, const float* projectio
 }
 
 void OpenGLRenderer::BindDefaultFramebuffer() {
-    if (pglBindFramebuffer) {
-        pglBindFramebuffer(GL_FRAMEBUFFER, 0);
-    }
+    if (pglBindFramebuffer) pglBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+    // Ensure default framebuffer color writes/readback are enabled.
+    // Shadow-map setup uses GL_NONE for draw/read buffers.
+    if (pglDrawBuffer) pglDrawBuffer(GL_BACK);
+    if (pglReadBuffer) pglReadBuffer(GL_BACK);
 }
 
 void OpenGLRenderer::Clear(float r, float g, float b, float a) {
