@@ -68,6 +68,11 @@ bool SceneLoader::LoadScene(Scene& scene, const std::string& filePath) {
             }
             scene.Registry().emplace<LightComponent>(currentEntity, l);
         }
+        else if (token == "SCRIPT" && currentEntity != entt::null) {
+            std::string path;
+            ss >> path;
+            scene.Registry().emplace<ScriptComponent>(currentEntity, ScriptComponent{path, false});
+        }
     }
     
     std::cout << "SceneLoader: Loaded scene from " << filePath << std::endl;
@@ -130,6 +135,13 @@ bool SceneLoader::SaveScene(const Scene& scene, const std::string& filePath) {
                     file << " " << l.range;
                 }
                 file << "\n";
+            }
+
+            if (reg.any_of<ScriptComponent>(entity)) {
+                const auto& sc = reg.get<ScriptComponent>(entity);
+                if (!sc.scriptPath.empty()) {
+                    file << "SCRIPT " << sc.scriptPath << "\n";
+                }
             }
 
             file << "\n";

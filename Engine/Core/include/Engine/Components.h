@@ -39,4 +39,9 @@ struct LightComponent {
     float range = 10.0f; 
 };
 
+struct ScriptComponent {
+    std::string scriptPath;
+    bool initialized = false;
+};
+
 } // namespace Genesis::Engine

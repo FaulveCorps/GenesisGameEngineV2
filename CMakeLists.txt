@@ -43,6 +43,7 @@ add_subdirectory(Editor)
 add_subdirectory(Tools)
 add_subdirectory(Plugins/SamplePlugin)
 add_subdirectory(tests)
+add_subdirectory(Runtime)
 
 # ============================================================================
 # Installation and Packaging

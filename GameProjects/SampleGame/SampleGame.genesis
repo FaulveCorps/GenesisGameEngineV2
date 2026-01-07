@@ -1,0 +1,7 @@
+{
+  "Project": {
+    "Name": "SampleGame",
+    "AssetDirectory": "../../Assets",
+    "StartScene": "scenes/Main.scene"
+  }
+}

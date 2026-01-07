@@ -14,8 +14,11 @@ public:
     const entt::registry& Registry() const { return m_registry; }
     void Clear() { m_registry.clear(); }
 
-    void Update(double dt);
+    void Update(double dt, bool simulate = true);
     void Render(class IGraphicsAPI* renderer);
+
+    entt::entity PickEntity(int x, int y) { return entt::null; }
+    void OnViewportResize(int w, int h) {}
 
 private:
     entt::registry m_registry;

@@ -47,6 +47,15 @@ find_package(glm CONFIG REQUIRED)
 find_path(ASSIMP_INCLUDE_DIR assimp/scene.h PATHS "${VCPKG_INSTALLED}/include" NO_DEFAULT_PATH REQUIRED)
 find_library(ASSIMP_LIBRARY NAMES assimp-vc143-mt PATHS "${VCPKG_INSTALLED}/lib" NO_DEFAULT_PATH REQUIRED)
 
+# RapidJSON - header only
+find_path(RAPIDJSON_INCLUDE_DIR NAMES rapidjson/document.h PATHS "${VCPKG_INSTALLED}/include" NO_DEFAULT_PATH)
+if (RAPIDJSON_INCLUDE_DIR)
+  message(STATUS "RapidJSON found: ${RAPIDJSON_INCLUDE_DIR}")
+  include_directories(${RAPIDJSON_INCLUDE_DIR})
+else()
+  message(WARNING "RapidJSON not found in ${VCPKG_INSTALLED}/include - Project loading/saving may fail")
+endif()
+
 include(FetchContent)
 FetchContent_Declare(
   entt
@@ -117,6 +126,8 @@ add_library(EngineCore STATIC
     src/SceneLoader.cpp
     src/AnimationSystem.cpp
     src/UISystem.cpp
+    src/ScriptSystem.cpp
+    src/Project.cpp
     ${imgui_SOURCE_DIR}/imgui.cpp
     ${imgui_SOURCE_DIR}/imgui_draw.cpp
     ${imgui_SOURCE_DIR}/imgui_tables.cpp

@@ -45,6 +45,10 @@ public:
         lua_setfield(L, -2, "register_contact_end");
         lua_setglobal(L, "engine");
 
+        // Registry table to hold Entity -> Script Instance mappings
+        lua_newtable(L);
+        m_entityRegistryRef = luaL_ref(L, LUA_REGISTRYINDEX);
+
         std::cout << "LuaScripting: Init\n";
         return true;
     }
@@ -54,10 +58,12 @@ public:
             // release any refs
             if (m_contactBeginRef != LUA_REFNIL) luaL_unref(L, LUA_REGISTRYINDEX, m_contactBeginRef);
             if (m_contactEndRef != LUA_REFNIL) luaL_unref(L, LUA_REGISTRYINDEX, m_contactEndRef);
+            if (m_entityRegistryRef != LUA_REFNIL) luaL_unref(L, LUA_REGISTRYINDEX, m_entityRegistryRef);
             lua_close(L);
             L = nullptr;
             m_contactBeginRef = LUA_REFNIL;
             m_contactEndRef = LUA_REFNIL;
+            m_entityRegistryRef = LUA_REFNIL;
         }
         std::cout << "LuaScripting: Shutdown\n";
     }
@@ -85,10 +91,84 @@ public:
         return true;
     }
 
+    void OnEntityScriptCreate(uint32_t entityId, const std::string& scriptPath) override {
+        if (!L) return;
+
+        // Load the script file
+        if (luaL_loadfile(L, scriptPath.c_str()) != LUA_OK) {
+            std::cerr << "Failed to load script: " << scriptPath << "\n" << lua_tostring(L, -1) << std::endl;
+            lua_pop(L, 1);
+            return;
+        }
+
+        // Execute it to get the class/table return value
+        if (lua_pcall(L, 0, 1, 0) != LUA_OK) {
+             std::cerr << "Failed to execute script: " << scriptPath << "\n" << lua_tostring(L, -1) << std::endl;
+             lua_pop(L, 1);
+             return;
+        }
+
+        // Top of stack is now the script table (assuming the script returns a table)
+        if (!lua_istable(L, -1)) {
+            std::cerr << "Script " << scriptPath << " did not return a table." << std::endl;
+            lua_pop(L, 1);
+            return;
+        }
+
+        // Store it in the registry keyed by EntityID
+        lua_rawgeti(L, LUA_REGISTRYINDEX, m_entityRegistryRef);
+        lua_pushvalue(L, -2); // Copy the script table
+        lua_rawseti(L, -2, entityId); // registry[entityId] = scriptTable
+        lua_pop(L, 1); // pop registry
+
+        // Inject self.id
+        lua_pushinteger(L, entityId);
+        lua_setfield(L, -2, "id");
+
+        // Call OnCreate if it exists
+        lua_getfield(L, -1, "OnCreate");
+        if (lua_isfunction(L, -1)) {
+            lua_pushvalue(L, -2); // self
+            if (lua_pcall(L, 1, 0, 0) != LUA_OK) {
+                std::cerr << "Error calling OnCreate: " << lua_tostring(L, -1) << std::endl;
+                lua_pop(L, 1);
+            }
+        } else {
+            lua_pop(L, 1);
+        }
+
+        lua_pop(L, 1); // pop script table
+    }
+
+    void OnEntityScriptUpdate(uint32_t entityId, double dt) override {
+        if (!L) return;
+
+        // Get script table from registry
+        lua_rawgeti(L, LUA_REGISTRYINDEX, m_entityRegistryRef);
+        lua_rawgeti(L, -1, entityId);
+        
+        if (lua_istable(L, -1)) {
+            lua_getfield(L, -1, "OnUpdate");
+            if (lua_isfunction(L, -1)) {
+                lua_pushvalue(L, -2); // self
+                lua_pushnumber(L, dt);
+                if (lua_pcall(L, 2, 0, 0) != LUA_OK) {
+                    std::cerr << "Error calling OnUpdate: " << lua_tostring(L, -1) << std::endl;
+                    lua_pop(L, 1);
+                }
+            } else {
+                lua_pop(L, 1);
+            }
+        }
+        
+        lua_pop(L, 2); // pop script table and registry
+    }
+
 private:
     lua_State* L;
     int m_contactBeginRef;
     int m_contactEndRef;
+    int m_entityRegistryRef;
 
     static int Lua_CreatePhysicsBackend(lua_State* L) {
         LuaScripting* self = reinterpret_cast<LuaScripting*>(lua_touserdata(L, lua_upvalueindex(1)));

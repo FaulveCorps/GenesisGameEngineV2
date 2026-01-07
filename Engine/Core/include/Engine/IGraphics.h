@@ -31,6 +31,7 @@ public:
     virtual void BeginFrame() = 0;
     virtual void EndFrame() = 0;
     virtual void Present() {} // Optional explicit present, if EndFrame doesn't swap
+    virtual void Clear() {} // Clear the default framebuffer
     virtual void Shutdown() = 0;
 
     // Optional (default no-op) resource APIs for runtime switching

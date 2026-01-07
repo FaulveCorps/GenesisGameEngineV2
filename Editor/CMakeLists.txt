@@ -3,11 +3,15 @@ project(GenesisEditor LANGUAGES CXX)
 
 add_executable(GenesisEditor
     src/main.cpp
+    src/EditorLayer.cpp
+    src/Panels/InspectorPanel.cpp
+    src/Panels/SceneHierarchyPanel.cpp
+    src/Panels/ContentBrowserPanel.cpp
 )
 
-target_link_libraries(GenesisEditor PRIVATE EngineCore)
-
 target_compile_features(GenesisEditor PUBLIC cxx_std_17)
+
+target_link_libraries(GenesisEditor PRIVATE EngineCore)
 
 # Copy assets to the target build folder
 add_custom_command(TARGET GenesisEditor POST_BUILD
@@ -97,6 +101,14 @@ endif()
       COMMAND $<TARGET_FILE:GenesisEditor> --quit-prompt-selftest
     )
     set_tests_properties(GenesisEditor_QuitPromptSelftest PROPERTIES
+      WORKING_DIRECTORY $<TARGET_FILE_DIR:GenesisEditor>
+    )
+
+    add_test(
+      NAME GenesisEditor_TransformMathSelftest
+      COMMAND $<TARGET_FILE:GenesisEditor> --transform-math-selftest
+    )
+    set_tests_properties(GenesisEditor_TransformMathSelftest PROPERTIES
       WORKING_DIRECTORY $<TARGET_FILE_DIR:GenesisEditor>
     )
   endif()

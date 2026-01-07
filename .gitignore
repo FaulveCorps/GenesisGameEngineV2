@@ -55,6 +55,10 @@ Thumbs.db
 .idea/
 *.code-workspace
 
+# ImGui user layout/state (should never be committed)
+imgui.ini
+imgui.ini.*
+
 # vcpkg binary cache and top-level helper artifacts (keep vcpkg.exe if present)
 .vcpkg_binary_cache
 /vcpkg/

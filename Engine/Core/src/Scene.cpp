@@ -4,13 +4,15 @@
 #include "engine/MathUtils.h"
 #include "engine/Animation.h"
 #include "engine/UI.h"
+#include "engine/ScriptSystem.h"
 #include <iostream>
 
 namespace Genesis::Engine {
 
-void Scene::Update(double dt) {
+void Scene::Update(double dt, bool simulate) {
     AnimationSystem::Update(*this, dt);
     UISystem::Update(*this, dt);
+    ScriptSystem::Update(*this, dt, simulate);
 }
 
 void Scene::Render(IGraphicsAPI* renderer) {

@@ -1,0 +1,48 @@
+SubsystemRegistry: registered 'Audio/null'
+SubsystemRegistry: registered 'Shader/null'
+SubsystemRegistry: registered 'Shader/opengl'
+SubsystemRegistry: registered 'Audio/miniaudio'
+SubsystemRegistry: registered 'Physics/null'
+SubsystemRegistry: registered 'Input/null'
+SubsystemRegistry: registered 'Input/sdl'
+SubsystemRegistry: registered 'Network/null'
+SubsystemRegistry: registered 'Save/null'
+SubsystemRegistry: registered 'Save/file'
+SubsystemRegistry: registered 'Scripting/null'
+SubsystemRegistry: registered 'Scripting/lua'
+SubsystemRegistry: registered 'Audio/null'
+SubsystemRegistry: registered 'Shader/null'
+SubsystemRegistry: registered 'Audio/miniaudio'
+SubsystemRegistry: registered 'Shader/opengl'
+SubsystemRegistry: registered 'Physics/null'
+SubsystemRegistry: registered 'Input/null'
+SubsystemRegistry: registered 'Input/sdl'
+SubsystemRegistry: registered 'Network/null'
+SubsystemRegistry: registered 'Save/null'
+SubsystemRegistry: registered 'Save/file'
+SubsystemRegistry: registered 'Scripting/null'
+SubsystemRegistry: registered 'Scripting/lua'
+SubsystemManager: created instance Shader/null
+CreateShaderSubsystem: created shader subsystem 'null'
+NullAudio: Init
+SubsystemManager: created instance Audio/null
+CreateAudioSubsystem: created audio subsystem 'null'
+NullPhysics: Init
+SubsystemManager: created instance Physics/null
+CreatePhysicsSubsystem: created physics subsystem 'null'
+NullInput: Init
+SubsystemManager: created instance Input/null
+CreateInputSubsystem: created input subsystem 'null'
+NullNetwork: Init
+SubsystemManager: created instance Network/null
+CreateNetworkSubsystem: created network subsystem 'null'
+NullSave: Init
+SubsystemManager: created instance Save/null
+CreateSaveSubsystem: created save subsystem 'null'
+NullScripting: Init
+SubsystemManager: created instance Scripting/null
+CreateScriptingSubsystem: created scripting subsystem 'null'
+Genesis Engine initialized (config='')
+Loading project: "c:\\Users\\jpfau\\Desktop\\Project\\GenesisGameEngine\\GameProjects\\SampleGame\\SampleGame.genesis"
+Changed Working Directory to: "c:\\Users\\jpfau\\Desktop\\Project\\GenesisGameEngine\\GameProjects\\SampleGame\\../.."
+Initializing SDL with VIDEO subsystem...
