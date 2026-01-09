@@ -27,6 +27,7 @@
 #include <glm/gtc/type_ptr.hpp>
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/matrix_decompose.hpp>
+#include <glm/gtx/euler_angles.hpp>
 
 #include "imgui_internal.h"
 
@@ -1064,35 +1065,77 @@ int main(int argc, char** argv) {
             ImGuizmo::SetRect(viewportTopLeft.x, viewportTopLeft.y, viewportSize.x, viewportSize.y);
 
             auto& tc = scene.Registry().get<Genesis::Engine::Transform>(selectedEntity);
-            glm::mat4 transform = glm::mat4(1.0f);
-            transform = glm::translate(transform, glm::vec3(tc.x, tc.y, tc.z));
-            // Transform rotation is stored in radians.
-            transform = glm::rotate(transform, tc.rx, glm::vec3(1, 0, 0));
-            transform = glm::rotate(transform, tc.ry, glm::vec3(0, 1, 0));
-            transform = glm::rotate(transform, tc.rz, glm::vec3(0, 0, 1));
-            transform = glm::scale(transform, glm::vec3(tc.sx, tc.sy, tc.sz));
+            auto ComposeEngineTRS = [&](const Genesis::Engine::Transform& t) {
+                // Must match Engine/Core/src/Scene.cpp: rot = rotZ * rotY * rotX; transform = T * rot * S
+                glm::mat4 transMat = glm::translate(glm::mat4(1.0f), glm::vec3(t.x, t.y, t.z));
+                glm::mat4 rotX = glm::rotate(glm::mat4(1.0f), t.rx, glm::vec3(1, 0, 0));
+                glm::mat4 rotY = glm::rotate(glm::mat4(1.0f), t.ry, glm::vec3(0, 1, 0));
+                glm::mat4 rotZ = glm::rotate(glm::mat4(1.0f), t.rz, glm::vec3(0, 0, 1));
+                glm::mat4 rot = rotZ * rotY * rotX;
+                glm::mat4 scaleMat = glm::scale(glm::mat4(1.0f), glm::vec3(t.sx, t.sy, t.sz));
+                return transMat * rot * scaleMat;
+            };
+
+            auto DecomposeEngineTRS = [&](const glm::mat4& m, Genesis::Engine::Transform& out) {
+                glm::vec3 scale;
+                glm::quat rotation;
+                glm::vec3 translation;
+                glm::vec3 skew;
+                glm::vec4 perspective;
+                if (!glm::decompose(m, scale, rotation, translation, skew, perspective)) {
+                    return;
+                }
+
+                out.x = translation.x;
+                out.y = translation.y;
+                out.z = translation.z;
+
+                out.sx = scale.x;
+                out.sy = scale.y;
+                out.sz = scale.z;
+
+                // Extract Euler for the engine's ZYX convention: R = Rz * Ry * Rx
+                rotation = glm::normalize(rotation);
+                const glm::mat4 R = glm::mat4_cast(rotation);
+                float z = 0.0f, y = 0.0f, x = 0.0f;
+                glm::extractEulerAngleZYX(R, z, y, x);
+                out.rx = x;
+                out.ry = y;
+                out.rz = z;
+            };
+
+            // Keep a stable matrix during manipulation to avoid feedback jitter from differing Euler conventions.
+            static entt::entity gizmoEntity = entt::null;
+            static glm::mat4 gizmoMatrix = glm::mat4(1.0f);
+            static bool gizmoWasUsing = false;
+            const bool gizmoUsingNow = ImGuizmo::IsUsing();
+
+            if (gizmoEntity != selectedEntity || (!gizmoUsingNow && !gizmoWasUsing)) {
+                gizmoEntity = selectedEntity;
+                gizmoMatrix = ComposeEngineTRS(tc);
+            }
 
             const bool gizmoInteractive = allowGizmoInteractionThisFrame && !wantText;
             ImGuizmo::Enable(gizmoInteractive);
 
-            glm::mat4 manipulated = transform;
+            glm::mat4 manipulated = gizmoMatrix;
             ImGuizmo::Manipulate(glm::value_ptr(view), glm::value_ptr(projection), currentGizmoOperation, currentGizmoMode, glm::value_ptr(manipulated));
 
             // Restore global state for any later ImGuizmo calls.
             ImGuizmo::Enable(true);
 
-            if (gizmoInteractive && ImGuizmo::IsUsing()) {
-                float matrixTranslation[3], matrixRotation[3], matrixScale[3];
-                ImGuizmo::DecomposeMatrixToComponents(glm::value_ptr(manipulated), matrixTranslation, matrixRotation, matrixScale);
-                
-                tc.x = matrixTranslation[0]; tc.y = matrixTranslation[1]; tc.z = matrixTranslation[2];
-                // ImGuizmo gives rotation in degrees; store radians to match engine.
-                tc.rx = glm::radians(matrixRotation[0]);
-                tc.ry = glm::radians(matrixRotation[1]);
-                tc.rz = glm::radians(matrixRotation[2]);
-                tc.sx = matrixScale[0]; tc.sy = matrixScale[1]; tc.sz = matrixScale[2];
+            const bool usingThisFrame = gizmoInteractive && ImGuizmo::IsUsing();
+            if (usingThisFrame) {
+                gizmoMatrix = manipulated;
+                DecomposeEngineTRS(gizmoMatrix, tc);
                 sceneDirty = true;
+            } else {
+                // Not using: keep gizmo matrix in sync with component so it stays aligned to the rendered model.
+                // (If you don't do this, the gizmo can drift after other systems edit tc.)
+                gizmoMatrix = ComposeEngineTRS(tc);
             }
+
+            gizmoWasUsing = usingThisFrame;
         }
 
         ImGui::End();
