@@ -288,7 +288,9 @@ int main(int argc, char** argv) {
     glm::vec3 cameraPos = glm::vec3(0.0f, 2.0f, 5.0f);
     glm::vec3 cameraRot = glm::vec3(-20.0f, 0.0f, 0.0f); // Pitch, Yaw, Roll
     ImGuizmo::OPERATION currentGizmoOperation = ImGuizmo::TRANSLATE;
-    ImGuizmo::MODE currentGizmoMode = ImGuizmo::LOCAL;
+    // Fixed world-aligned gizmo by default (modern editor behavior).
+    // Note: we still force SCALE to LOCAL at draw time to avoid TRS shear artifacts.
+    ImGuizmo::MODE currentGizmoMode = ImGuizmo::WORLD;
 
     // View Cube (smooth camera transition)
     bool viewCubeAnimating = false;
@@ -1118,8 +1120,19 @@ int main(int argc, char** argv) {
             const bool gizmoInteractive = allowGizmoInteractionThisFrame && !wantText;
             ImGuizmo::Enable(gizmoInteractive);
 
+            // Keep gizmo orientation fixed in world space (not dependent on object rotation)
+            // for translate/rotate. Scaling in world space can introduce shear, which our
+            // TRS-only Transform cannot represent cleanly, so we keep SCALE local.
+            const ImGuizmo::MODE gizmoModeThisFrame =
+                (currentGizmoOperation == ImGuizmo::SCALE || currentGizmoOperation == ImGuizmo::SCALEU)
+                    ? ImGuizmo::LOCAL
+                    : ImGuizmo::WORLD;
+
+            // Prevent axis direction flipping for a stable, fixed gizmo.
+            ImGuizmo::AllowAxisFlip(false);
+
             glm::mat4 manipulated = gizmoMatrix;
-            ImGuizmo::Manipulate(glm::value_ptr(view), glm::value_ptr(projection), currentGizmoOperation, currentGizmoMode, glm::value_ptr(manipulated));
+            ImGuizmo::Manipulate(glm::value_ptr(view), glm::value_ptr(projection), currentGizmoOperation, gizmoModeThisFrame, glm::value_ptr(manipulated));
 
             // Restore global state for any later ImGuizmo calls.
             ImGuizmo::Enable(true);
