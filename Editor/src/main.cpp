@@ -476,6 +476,8 @@ int main(int argc, char** argv) {
         if (dt > 0.1) dt = 0.1;
 
         // Smooth camera animation toward view-cube target.
+        // Removed: ImGuizmo handles interpolation internally for clicks, and dragging should be immediate.
+        /*
         if (viewCubeAnimating) {
             viewCubeAnimTime += (float)dt;
             float t = viewCubeAnimDuration > 0.0f ? (viewCubeAnimTime / viewCubeAnimDuration) : 1.0f;
@@ -493,6 +495,7 @@ int main(int argc, char** argv) {
             cameraRot.y = euler.y;
             cameraRot.z = euler.z;
         }
+        */
 
         profiler.BeginFrame();
 
@@ -774,9 +777,9 @@ int main(int argc, char** argv) {
         // Viewport Window
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
         ImGui::Begin("Viewport");
-        ImVec2 viewportWindowPos = ImGui::GetWindowPos();
-        ImVec2 viewportContentMin = ImGui::GetWindowContentRegionMin();
-        ImVec2 viewportTopLeft = ImVec2(viewportWindowPos.x + viewportContentMin.x, viewportWindowPos.y + viewportContentMin.y);
+        // Use cursor screen position as the authoritative top-left for the viewport image.
+        // This avoids subtle misalignment with docking/tab bars and matches where the Image() is actually drawn.
+        ImVec2 viewportTopLeft = ImGui::GetCursorScreenPos();
         ImVec2 viewportSize = ImGui::GetContentRegionAvail();
 
         const bool viewportHovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows);
@@ -830,7 +833,7 @@ int main(int argc, char** argv) {
 
         // Camera navigation is exclusive.
         const bool cameraNavActive = (inputOwner == ViewportInputOwner::CameraNav);
-        const bool allowGizmoThisFrame = (inputOwner == ViewportInputOwner::None || inputOwner == ViewportInputOwner::Gizmo);
+        const bool allowGizmoInteractionThisFrame = (inputOwner == ViewportInputOwner::None || inputOwner == ViewportInputOwner::Gizmo);
         const bool applyViewCubeThisFrame = (inputOwner == ViewportInputOwner::ViewCube);
 
         // Gizmo Shortcuts
@@ -858,7 +861,13 @@ int main(int argc, char** argv) {
             forward.z = -cos(glm::radians(cameraRot.y)) * cos(glm::radians(cameraRot.x));
             forward = glm::normalize(forward);
 
-            glm::vec3 right = glm::normalize(glm::cross(forward, glm::vec3(0, 1, 0)));
+            // Robust right vector even when looking nearly straight up/down.
+            // (Cross with world-up becomes degenerate at |dot(forward, up)| ~= 1.)
+            glm::vec3 refUp(0.0f, 1.0f, 0.0f);
+            if (fabsf(glm::dot(forward, refUp)) > 0.99f) {
+                refUp = glm::vec3(0.0f, 0.0f, 1.0f);
+            }
+            glm::vec3 right = glm::normalize(glm::cross(forward, refUp));
 
             if (ImGui::IsKeyDown(ImGuiKey_W)) cameraPos += forward * speed;
             if (ImGui::IsKeyDown(ImGuiKey_S)) cameraPos -= forward * speed;
@@ -1005,33 +1014,50 @@ int main(int argc, char** argv) {
             return false;
         };
 
-        // Smoothly move camera when the user is interacting with the view cube (and it actually changed the view).
-        if (applyViewCubeThisFrame && MatDifferent(viewCopy, view)) {
-            // Target camera from the view matrix ImGuizmo produced.
-            glm::mat4 inverseTargetView = glm::inverse(viewCopy);
+        // Apply view-cube camera changes while ImGuizmo is animating.
+        // We intentionally convert to yaw/pitch and force roll=0 to avoid the camera ending up upside-down.
+        auto ApplyViewMatrixToCamera = [&](const glm::mat4& targetView) {
+            glm::mat4 inv = glm::inverse(targetView);
             glm::vec3 scale;
             glm::quat rotation;
             glm::vec3 translation;
             glm::vec3 skew;
             glm::vec4 perspective;
-            glm::decompose(inverseTargetView, scale, rotation, translation, skew, perspective);
+            glm::decompose(inv, scale, rotation, translation, skew, perspective);
 
-            // Start point = current camera transform (in the same space as the target)
-            glm::mat4 inverseCurrentView = glm::inverse(view);
-            glm::quat curRot;
-            glm::vec3 curTrans;
-            glm::decompose(inverseCurrentView, scale, curRot, curTrans, skew, perspective);
+            cameraPos = translation;
 
-            viewCubeStartPos = curTrans;
-            viewCubeStartRot = curRot;
-            viewCubeTargetPos = translation;
-            viewCubeTargetRot = rotation;
-            viewCubeAnimTime = 0.0f;
-            viewCubeAnimating = true;
+            glm::vec3 forward = rotation * glm::vec3(0.0f, 0.0f, -1.0f);
+            if (glm::dot(forward, forward) < 1e-8f) {
+                return;
+            }
+            forward = glm::normalize(forward);
+
+            // Our navigation forward convention uses: forward.y = -sin(pitch).
+            const float clampedY = glm::clamp(forward.y, -1.0f, 1.0f);
+            float pitchRad = -asinf(clampedY);
+
+            // For near-vertical views, yaw becomes underdetermined. Pick a stable yaw that
+            // matches common editor behavior (top/bottom aligned; avoids "upside-down" feel).
+            float yawRad = 0.0f;
+            if (fabsf(forward.y) <= 0.999f) {
+                yawRad = atan2f(forward.x, -forward.z);
+            }
+
+            cameraRot.x = glm::degrees(pitchRad);
+            cameraRot.y = glm::degrees(yawRad);
+            cameraRot.z = 0.0f;
+        };
+
+        const bool viewCubeDrivingCamera = ImGuizmo::IsUsingViewManipulate();
+        if ((viewCubeDrivingCamera || applyViewCubeThisFrame) && MatDifferent(viewCopy, view)) {
+            ApplyViewMatrixToCamera(viewCopy);
         }
 
         // Gizmos
-        if (allowGizmoThisFrame && selectedEntity != entt::null && scene.Registry().valid(selectedEntity) && scene.Registry().all_of<Genesis::Engine::Transform>(selectedEntity)) {
+        // Always draw the gizmo (so it doesn't disappear while navigating / snapping the camera),
+        // but only allow interaction when the gizmo owns input.
+        if (selectedEntity != entt::null && scene.Registry().valid(selectedEntity) && scene.Registry().all_of<Genesis::Engine::Transform>(selectedEntity)) {
             ImGuizmo::SetOrthographic(false);
             ImGuizmo::SetDrawlist();
 
@@ -1046,11 +1072,18 @@ int main(int argc, char** argv) {
             transform = glm::rotate(transform, tc.rz, glm::vec3(0, 0, 1));
             transform = glm::scale(transform, glm::vec3(tc.sx, tc.sy, tc.sz));
 
-            ImGuizmo::Manipulate(glm::value_ptr(view), glm::value_ptr(projection), currentGizmoOperation, currentGizmoMode, glm::value_ptr(transform));
+            const bool gizmoInteractive = allowGizmoInteractionThisFrame && !wantText;
+            ImGuizmo::Enable(gizmoInteractive);
 
-            if (ImGuizmo::IsUsing()) {
+            glm::mat4 manipulated = transform;
+            ImGuizmo::Manipulate(glm::value_ptr(view), glm::value_ptr(projection), currentGizmoOperation, currentGizmoMode, glm::value_ptr(manipulated));
+
+            // Restore global state for any later ImGuizmo calls.
+            ImGuizmo::Enable(true);
+
+            if (gizmoInteractive && ImGuizmo::IsUsing()) {
                 float matrixTranslation[3], matrixRotation[3], matrixScale[3];
-                ImGuizmo::DecomposeMatrixToComponents(glm::value_ptr(transform), matrixTranslation, matrixRotation, matrixScale);
+                ImGuizmo::DecomposeMatrixToComponents(glm::value_ptr(manipulated), matrixTranslation, matrixRotation, matrixScale);
                 
                 tc.x = matrixTranslation[0]; tc.y = matrixTranslation[1]; tc.z = matrixTranslation[2];
                 // ImGuizmo gives rotation in degrees; store radians to match engine.
