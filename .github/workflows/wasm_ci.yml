@@ -30,7 +30,12 @@ jobs:
         run: choco install -y ninja
 
       - name: Configure (CMake preset)
-        run: cmake --preset default
+        if: runner.os == 'Linux'
+        run: cmake --preset linux-ninja
+
+      - name: Configure (CMake preset)
+        if: runner.os == 'Windows'
+        run: cmake --preset windows-ninja-ci
 
       - name: Build UnitTests
         run: cmake --build Build --config Debug --target UnitTests -j 2

@@ -29,6 +29,20 @@
       "binaryDir": "${sourceDir}/build-ninja-release"
     },
     {
+      "name": "linux-ninja",
+      "displayName": "Linux Ninja (Multi-Config)",
+      "description": "Ninja Multi-Config for Linux CI and development",
+      "generator": "Ninja Multi-Config",
+      "binaryDir": "${sourceDir}/Build"
+    },
+    {
+      "name": "windows-ninja-ci",
+      "displayName": "Windows Ninja CI (Multi-Config)",
+      "description": "Ninja Multi-Config for Windows CI",
+      "generator": "Ninja Multi-Config",
+      "binaryDir": "${sourceDir}/Build"
+    },
+    {
       "name": "default",
       "displayName": "Default (Visual Studio 2022)",
       "description": "Alias for vs2022 preset (Ninja not detected)",
