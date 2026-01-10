@@ -105,8 +105,16 @@ std::unique_ptr<IGraphicsAPI> GraphicsFactory::CreateRenderer(SDL_Window* window
 #endif
         } else if (name == "opengl" || name == "gl") {
             std::cout << "GraphicsFactory: creating OpenGLRenderer and calling Init" << std::endl;
+            bool enabled = false;
+#ifdef GENESIS_ENABLE_OPENGL
+            enabled = true;
+#endif
             const char* _env_enable_gl = std::getenv("GENESIS_ENABLE_OPENGL");
-            if (!(_env_enable_gl && std::strcmp(_env_enable_gl, "1") == 0)) {
+            if (_env_enable_gl && std::strcmp(_env_enable_gl, "1") == 0) {
+                enabled = true;
+            }
+
+            if (!enabled) {
                 std::cout << "GraphicsFactory: explicit OpenGL request skipped (GENESIS_ENABLE_OPENGL not set)" << std::endl;
                 continue;
             }

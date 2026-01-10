@@ -1,6 +1,5 @@
 #include "engine/VulkanRenderer.h"
 #include <SDL_vulkan.h>
-#include <SDL_syswm.h>
 #include <iostream>
 #include <vector>
 #include <algorithm>
@@ -9,6 +8,7 @@
 #include <cstring>
 #include <cctype>
 #ifdef _WIN32
+#include <Windows.h>
 #include <vulkan/vulkan_win32.h>
 #endif
 namespace Genesis::Engine {
@@ -17,32 +17,57 @@ bool VulkanRenderer::Init(SDL_Window* window, SDL_GLContext /*glContext*/) {
     m_window = window;
 
     // Try to load Vulkan loader via SDL (optional); fall back to platform Win32 surface if SDL does not expose Vulkan
-    bool sdlVulkan = (SDL_Vulkan_LoadLibrary(nullptr) == 0);
-    m_sdlVulkan = sdlVulkan;
+    // SDL3: SDL_Vulkan_LoadLibrary returns bool (true on success).
+    const bool sdlVulkanLoaded = SDL_Vulkan_LoadLibrary(nullptr);
+    m_sdlVulkanLoaded = sdlVulkanLoaded;
+
+    auto appendUnique = [](std::vector<const char*>& v, const char* s) {
+        if (!s) return;
+        for (const char* existing : v) {
+            if (existing && std::strcmp(existing, s) == 0) return;
+        }
+        v.push_back(s);
+    };
+
+    const Uint64 winFlags = SDL_GetWindowFlags(m_window);
+    const bool windowHasVulkanFlag = (winFlags & SDL_WINDOW_VULKAN) != 0;
+    const bool canUseSDLSurface = sdlVulkanLoaded && windowHasVulkanFlag;
+
     std::vector<const char*> extensions;
-    if (sdlVulkan) {
-        unsigned int count = 0;
-        if (!SDL_Vulkan_GetInstanceExtensions(m_window, &count, nullptr)) {
-            std::cerr << "VulkanRenderer: SDL_Vulkan_GetInstanceExtensions failed" << std::endl;
-            if (sdlVulkan) SDL_Vulkan_UnloadLibrary();
-            return false;
+    if (sdlVulkanLoaded) {
+        uint32_t count = 0;
+        const char* const* extNames = SDL_Vulkan_GetInstanceExtensions(&count);
+        if (extNames) {
+            std::cout << "VulkanRenderer: SDL reported " << count << " required instance extensions:\n";
+            for (uint32_t i = 0; i < count; ++i) {
+                appendUnique(extensions, extNames[i]);
+                std::cout << "  " << extNames[i] << std::endl;
+            }
+        } else {
+            std::cerr << "VulkanRenderer: SDL_Vulkan_GetInstanceExtensions failed: " << SDL_GetError() << std::endl;
         }
-        extensions.resize(count);
-        if (!SDL_Vulkan_GetInstanceExtensions(m_window, &count, extensions.data())) {
-            std::cerr << "VulkanRenderer: SDL_Vulkan_GetInstanceExtensions failed (2)" << std::endl;
-            if (sdlVulkan) SDL_Vulkan_UnloadLibrary();
-            return false;
-        }
-        std::cout << "VulkanRenderer: SDL reported " << count << " required instance extensions:\n";
-        for (unsigned int i = 0; i < count; ++i) std::cout << "  " << extensions[i] << std::endl;
-    } else {
+    }
+
+    // If SDL didn't provide extensions (or Vulkan isn't available via SDL), fall back to a minimal list.
+    // Also, if we won't use SDL to create the surface, ensure we have the platform surface extensions.
+    if (extensions.empty() || !canUseSDLSurface) {
 #ifdef _WIN32
-        std::cout << "VulkanRenderer: SDL reports no dynamic Vulkan support; falling back to Win32 surface creation" << std::endl;
-        extensions.push_back("VK_KHR_surface");
-        extensions.push_back("VK_KHR_win32_surface");
+        if (!canUseSDLSurface) {
+            std::cout << "VulkanRenderer: window not created with SDL_WINDOW_VULKAN; using Win32 surface creation" << std::endl;
+        } else if (!sdlVulkanLoaded) {
+            std::cout << "VulkanRenderer: SDL reports no dynamic Vulkan support; falling back to Win32 surface creation" << std::endl;
+        }
+        appendUnique(extensions, "VK_KHR_surface");
+        appendUnique(extensions, "VK_KHR_win32_surface");
 #else
-        std::cerr << "VulkanRenderer: SDL Vulkan not available and no fallback for this platform" << std::endl;
-        return false;
+        if (!sdlVulkanLoaded) {
+            std::cerr << "VulkanRenderer: SDL Vulkan not available and no fallback for this platform" << std::endl;
+            return false;
+        }
+        if (!canUseSDLSurface) {
+            std::cerr << "VulkanRenderer: SDL window not created with SDL_WINDOW_VULKAN and no fallback for this platform" << std::endl;
+            return false;
+        }
 #endif
     }
 
@@ -66,36 +91,38 @@ bool VulkanRenderer::Init(SDL_Window* window, SDL_GLContext /*glContext*/) {
     if (r != VK_SUCCESS) {
         std::cerr << "VulkanRenderer: vkCreateInstance failed: " << r << std::endl;
         m_available = false;
-        SDL_Vulkan_UnloadLibrary();
+        if (m_sdlVulkanLoaded) SDL_Vulkan_UnloadLibrary();
         return false;
     }
 
     std::cout << "VulkanRenderer: instance created" << std::endl;
 
     // Create a surface via SDL if available; otherwise try a platform-specific surface (Win32)
-    if (sdlVulkan) {
-        if (!SDL_Vulkan_CreateSurface(m_window, m_instance, &m_surface)) {
+    m_surfaceCreatedViaSDL = false;
+    if (canUseSDLSurface) {
+        if (!SDL_Vulkan_CreateSurface(m_window, m_instance, nullptr, &m_surface)) {
             std::cerr << "VulkanRenderer: SDL_Vulkan_CreateSurface failed: " << SDL_GetError() << std::endl;
-            m_available = false;
-            vkDestroyInstance(m_instance, nullptr);
-            m_instance = VK_NULL_HANDLE;
-            if (sdlVulkan) SDL_Vulkan_UnloadLibrary();
-            return false;
+            std::cerr << "VulkanRenderer: falling back to Win32 surface creation" << std::endl;
+            m_surface = VK_NULL_HANDLE;
+        } else {
+            m_surfaceCreatedViaSDL = true;
         }
-    } else {
+    }
+
+    if (!m_surfaceCreatedViaSDL) {
 #ifdef _WIN32
-        SDL_SysWMinfo wminfo;
-        SDL_VERSION(&wminfo.version);
-        if (!SDL_GetWindowWMInfo(m_window, &wminfo)) {
-            std::cerr << "VulkanRenderer: SDL_GetWindowWMInfo failed" << std::endl;
+        HWND hwnd = (HWND)SDL_GetPointerProperty(SDL_GetWindowProperties(m_window), SDL_PROP_WINDOW_WIN32_HWND_POINTER, NULL);
+        HINSTANCE hinstance = (HINSTANCE)SDL_GetPointerProperty(SDL_GetWindowProperties(m_window), SDL_PROP_WINDOW_WIN32_INSTANCE_POINTER, NULL);
+        if (!hwnd || !hinstance) {
+            std::cerr << "VulkanRenderer: Failed to get HWND/HINSTANCE from SDL window" << std::endl;
             vkDestroyInstance(m_instance, nullptr);
             m_instance = VK_NULL_HANDLE;
             return false;
         }
         VkWin32SurfaceCreateInfoKHR sc{};
         sc.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
-        sc.hwnd = wminfo.info.win.window;
-        sc.hinstance = wminfo.info.win.hinstance;
+        sc.hwnd = hwnd;
+        sc.hinstance = hinstance;
         PFN_vkCreateWin32SurfaceKHR fpCreateWin32 = (PFN_vkCreateWin32SurfaceKHR)vkGetInstanceProcAddr(m_instance, "vkCreateWin32SurfaceKHR");
         if (!fpCreateWin32) { std::cerr << "VulkanRenderer: vkCreateWin32SurfaceKHR not available via vkGetInstanceProcAddr" << std::endl; vkDestroyInstance(m_instance, nullptr); m_instance = VK_NULL_HANDLE; return false; }
         VkResult sr = fpCreateWin32(m_instance, &sc, nullptr, &m_surface);
@@ -117,7 +144,7 @@ bool VulkanRenderer::Init(SDL_Window* window, SDL_GLContext /*glContext*/) {
     if (deviceCount == 0) {
         std::cerr << "VulkanRenderer: no physical devices found" << std::endl;
         m_available = false;
-        if (m_sdlVulkan) SDL_Vulkan_UnloadLibrary();
+        if (m_sdlVulkanLoaded) SDL_Vulkan_UnloadLibrary();
         return false;
     }
     std::vector<VkPhysicalDevice> devices(deviceCount);
@@ -189,7 +216,7 @@ bool VulkanRenderer::Init(SDL_Window* window, SDL_GLContext /*glContext*/) {
     if (!found) {
         std::cerr << "VulkanRenderer: no suitable physical device found" << std::endl;
         m_available = false;
-        if (m_sdlVulkan) SDL_Vulkan_UnloadLibrary();
+        if (m_sdlVulkanLoaded) SDL_Vulkan_UnloadLibrary();
         return false;
     }
 
@@ -225,7 +252,7 @@ bool VulkanRenderer::Init(SDL_Window* window, SDL_GLContext /*glContext*/) {
     if (res != VK_SUCCESS) {
         std::cerr << "VulkanRenderer: vkCreateDevice failed: " << res << std::endl;
         m_available = false;
-        if (m_sdlVulkan) SDL_Vulkan_UnloadLibrary();
+        if (m_sdlVulkanLoaded) SDL_Vulkan_UnloadLibrary();
         return false;
     }
 
@@ -234,8 +261,9 @@ bool VulkanRenderer::Init(SDL_Window* window, SDL_GLContext /*glContext*/) {
     if (m_presentQueueFamily != m_graphicsQueueFamily) vkGetDeviceQueue(m_device, m_presentQueueFamily, 0, &m_presentQueue);
     else m_presentQueue = m_graphicsQueue;
     std::cout << "VulkanRenderer: obtained graphics and present queues" << std::endl;
-    // If we fell back to Win32 surface creation (SDL didn't expose Vulkan), do not attempt a full swapchain here — this environment sometimes crashes with certain drivers.
-    if (!m_sdlVulkan) {
+    // If we created the surface via a platform fallback (not SDL_Vulkan_CreateSurface), do not attempt a full swapchain here —
+    // this environment sometimes crashes with certain drivers.
+    if (!m_surfaceCreatedViaSDL) {
         // Allow a force option through an environment variable for controlled testing:
         // set GENESIS_FORCE_VULKAN_SWAPCHAIN=1 to force swapchain creation despite Win32 fallback.
         const char* env = std::getenv("GENESIS_FORCE_VULKAN_SWAPCHAIN");
@@ -284,7 +312,7 @@ bool VulkanRenderer::Init(SDL_Window* window, SDL_GLContext /*glContext*/) {
     VkExtent2D extent = caps.currentExtent;
     if (extent.width == (uint32_t)-1) {
         int w, h;
-        SDL_Vulkan_GetDrawableSize(m_window, &w, &h);
+        SDL_GetWindowSizeInPixels(m_window, &w, &h);
         extent.width = (uint32_t)w;
         extent.height = (uint32_t)h;
     }
@@ -716,7 +744,9 @@ void VulkanRenderer::Shutdown() {
     }
     std::cout << "VulkanRenderer::Shutdown -> exit" << std::endl;
 #endif
-    SDL_Vulkan_UnloadLibrary();
+    if (m_sdlVulkanLoaded) SDL_Vulkan_UnloadLibrary();
+    m_sdlVulkanLoaded = false;
+    m_surfaceCreatedViaSDL = false;
     m_window = nullptr;
     m_available = false;
 }

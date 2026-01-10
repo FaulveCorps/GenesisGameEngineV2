@@ -48,7 +48,11 @@ private:
     VkSemaphore m_imageAvailableSemaphore = VK_NULL_HANDLE;
     VkSemaphore m_renderFinishedSemaphore = VK_NULL_HANDLE;
     VkFence m_inFlightFence = VK_NULL_HANDLE;
-    bool m_sdlVulkan = false;
+    // Whether SDL successfully loaded the Vulkan loader (SDL_Vulkan_LoadLibrary)
+    bool m_sdlVulkanLoaded = false;
+
+    // Whether the VkSurfaceKHR was created via SDL_Vulkan_CreateSurface (requires SDL_WINDOW_VULKAN)
+    bool m_surfaceCreatedViaSDL = false;
 
     // Optional host-side image used for shaderless triangle blit testing
     VkImage m_hostImage = VK_NULL_HANDLE;

@@ -77,6 +77,9 @@ out_cli_triangle.log
 out_cli_triangle2.log
 smoke-*.log
 
+# WASM host-bridge logs (generated)
+wasm_hb_log*.txt
+
 # Runtime-generated artifacts (screenshots, test outputs)
 /artifacts/
 software_render*.bmp

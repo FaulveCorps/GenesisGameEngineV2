@@ -7,6 +7,7 @@
 #include "engine/INetwork.h"
 #include "engine/ISave.h"
 #include "engine/IScripting.h"
+#include "engine/RendererManager.h"
 #include <iostream>
 
 namespace Genesis::Engine {
@@ -223,6 +224,10 @@ bool Init(const std::string& config) {
 }
 
 void Shutdown() {
+    // Explicitly destroy the renderer to ensure shaders are cleaned up
+    // before static objects (like ShaderRegistry) are destroyed.
+    RendererManager::SetRenderer(nullptr);
+
     std::cout << "Genesis Engine shutdown" << std::endl;
 }
 

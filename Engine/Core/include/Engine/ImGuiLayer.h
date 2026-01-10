@@ -6,6 +6,7 @@
 namespace Genesis::Engine {
 
 class Profiler;
+class Scene;
 
 class ImGuiLayer {
 public:
@@ -13,7 +14,7 @@ public:
     ~ImGuiLayer();
 
     void NewFrame();
-    void Render(Profiler& profiler);
+    void Render(Profiler& profiler, Scene* scene);
 
 private:
     struct Impl;

@@ -1,6 +1,5 @@
 #include "Engine/D3D12Renderer.h"
 #include <iostream>
-#include <SDL_syswm.h>
 
 #ifdef _WIN32
 #include <Windows.h>
@@ -18,13 +17,11 @@ bool D3D12Renderer::Init(SDL_Window* window, SDL_GLContext /*glContext*/) {
 #ifdef _WIN32
     std::cout << "D3D12Renderer: initializing" << std::endl;
 
-    SDL_SysWMinfo wmInfo;
-    SDL_VERSION(&wmInfo.version);
-    if (!SDL_GetWindowWMInfo(window, &wmInfo)) {
-        std::cerr << "D3D12Renderer: SDL_GetWindowWMInfo failed: " << SDL_GetError() << std::endl;
+    HWND hwnd = (HWND)SDL_GetPointerProperty(SDL_GetWindowProperties(window), SDL_PROP_WINDOW_WIN32_HWND_POINTER, NULL);
+    if (!hwnd) {
+        std::cerr << "D3D12Renderer: Failed to get HWND from SDL window" << std::endl;
         return false;
     }
-    HWND hwnd = wmInfo.info.win.window;
     // Save for viewport queries
     m_hwnd = hwnd;
 

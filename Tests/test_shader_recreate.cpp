@@ -8,10 +8,10 @@
 #include <cstring>
 
 TEST_CASE("Shader re-creation across renderer switches") {
-    int sdlInitRes = SDL_Init(SDL_INIT_VIDEO);
-    REQUIRE(sdlInitRes == 0);
+    bool sdlInitRes = SDL_Init(SDL_INIT_VIDEO);
+    REQUIRE(sdlInitRes == true);
 
-    SDL_Window* win = SDL_CreateWindow("ShaderRecreateTest", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 64, 64, SDL_WINDOW_HIDDEN | SDL_WINDOW_OPENGL);
+    SDL_Window* win = SDL_CreateWindow("ShaderRecreateTest", 64, 64, SDL_WINDOW_HIDDEN | SDL_WINDOW_OPENGL);
     REQUIRE(win != nullptr);
     SDL_GLContext ctx = SDL_GL_CreateContext(win);
     REQUIRE(ctx != nullptr);
@@ -20,7 +20,7 @@ TEST_CASE("Shader re-creation across renderer switches") {
     const char* _enableGL = std::getenv("GENESIS_ENABLE_OPENGL");
     if (!_enableGL || std::strcmp(_enableGL, "1") != 0) {
         // Skip tests that explicitly require OpenGL if not enabled
-        SDL_GL_DeleteContext(ctx);
+        SDL_GL_DestroyContext(ctx);
         SDL_DestroyWindow(win);
         SDL_Quit();
         SUCCEED("OpenGL tests disabled via GENESIS_ENABLE_OPENGL");
@@ -78,7 +78,7 @@ TEST_CASE("Shader re-creation across renderer switches") {
 
     // Cleanup
     if (auto cur3 = Genesis::Engine::RendererManager::GetRenderer()) cur3->Shutdown();
-    SDL_GL_DeleteContext(ctx);
+    SDL_GL_DestroyContext(ctx);
     SDL_DestroyWindow(win);
     SDL_Quit();
 }

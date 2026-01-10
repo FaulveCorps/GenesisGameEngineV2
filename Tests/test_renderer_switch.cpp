@@ -6,10 +6,10 @@
 #include <SDL.h>
 
 TEST_CASE("Renderer runtime switch basic") {
-    int sdlInitRes = SDL_Init(SDL_INIT_VIDEO);
-    REQUIRE(sdlInitRes == 0);
+    bool sdlInitRes = SDL_Init(SDL_INIT_VIDEO);
+    REQUIRE(sdlInitRes == true);
 
-    SDL_Window* win = SDL_CreateWindow("RendererSwitchTest", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 64, 64, SDL_WINDOW_HIDDEN | SDL_WINDOW_OPENGL);
+    SDL_Window* win = SDL_CreateWindow("RendererSwitchTest", 64, 64, SDL_WINDOW_HIDDEN | SDL_WINDOW_OPENGL);
     REQUIRE(win != nullptr);
     SDL_GLContext ctx = SDL_GL_CreateContext(win);
     REQUIRE(ctx != nullptr);
@@ -63,7 +63,7 @@ TEST_CASE("Renderer runtime switch basic") {
 
     // Cleanup
     if (auto cur3 = Genesis::Engine::RendererManager::GetRenderer()) cur3->Shutdown();
-    SDL_GL_DeleteContext(ctx);
+    SDL_GL_DestroyContext(ctx);
     SDL_DestroyWindow(win);
     SDL_Quit();
 }

@@ -1,0 +1,9 @@
+Shader::UploadToRenderer -> subsystem failed to create program; falling back
+Shader::UploadToRenderer -> subsystem failed to create program; falling back
+Shader::UploadToRenderer -> subsystem failed to create program; falling back
+Shader::UploadToRenderer -> subsystem failed to create program; falling back
+Shader::UploadToRenderer -> subsystem failed to create program; falling back
+Shader::UploadToRenderer -> subsystem failed to create program; falling back
+Shader::UploadToRenderer -> subsystem failed to create program; falling back
+Shader::UploadToRenderer -> subsystem failed to create program; falling back
+DEBUG: Video subsystem has not been initialized

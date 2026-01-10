@@ -2,6 +2,7 @@
 #include "ENGINE/GraphicsFactory.h"
 #include "ENGINE/RendererManager.h"
 #include "ENGINE/Texture.h"
+#include "ENGINE/OpenGLRenderer.h"
 #include <SDL.h>
 
 #ifdef _WIN32
@@ -9,10 +10,10 @@
 #endif
 
 TEST_CASE("2D sprite readback (opengl)") {
-    int sdlInitRes = SDL_Init(SDL_INIT_VIDEO);
-    REQUIRE(sdlInitRes == 0);
+    bool sdlInitRes = SDL_Init(SDL_INIT_VIDEO);
+    REQUIRE(sdlInitRes == true);
 
-    SDL_Window* win = SDL_CreateWindow("2DGLReadback", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 64, 64, SDL_WINDOW_OPENGL);
+    SDL_Window* win = SDL_CreateWindow("2DGLReadback", 64, 64, SDL_WINDOW_OPENGL | SDL_WINDOW_HIDDEN);
     REQUIRE(win != nullptr);
     SDL_GLContext ctx = SDL_GL_CreateContext(win);
     REQUIRE(ctx != nullptr);
@@ -21,7 +22,7 @@ TEST_CASE("2D sprite readback (opengl)") {
     if (!r) {
         // OpenGL may not be available on some runners; treat as skipped
         SUCCEED("OpenGL renderer not available - skipping GL readback test");
-        SDL_GL_DeleteContext(ctx);
+        SDL_GL_DestroyContext(ctx);
         SDL_DestroyWindow(win);
         SDL_Quit();
         return;
@@ -29,6 +30,11 @@ TEST_CASE("2D sprite readback (opengl)") {
     Genesis::Engine::RendererManager::SetRenderer(std::move(r));
     auto gr = Genesis::Engine::RendererManager::GetRenderer();
     REQUIRE(gr != nullptr);
+
+    // Disable swap for readback so we can read the back buffer
+    if (auto glRenderer = dynamic_cast<Genesis::Engine::OpenGLRenderer*>(gr)) {
+        glRenderer->SetPresentEnabled(false);
+    }
 
     // Create a small 2x2 RGBA texture
     std::vector<uint8_t> pixels = { 255,0,0,255, 0,255,0,255, 0,0,255,255, 255,255,0,255 };
@@ -50,7 +56,7 @@ TEST_CASE("2D sprite readback (opengl)") {
     if (!addrReadPixels) {
         SUCCEED("glReadPixels not available - skipping GL readback test");
         if (auto cur = Genesis::Engine::RendererManager::GetRenderer()) cur->Shutdown();
-        SDL_GL_DeleteContext(ctx);
+        SDL_GL_DestroyContext(ctx);
         SDL_DestroyWindow(win);
         SDL_Quit();
         return;
@@ -71,7 +77,7 @@ TEST_CASE("2D sprite readback (opengl)") {
     REQUIRE((pix[0] >= 10 || pix[1] >= 10 || pix[2] >= 10));
 
     if (auto cur = Genesis::Engine::RendererManager::GetRenderer()) cur->Shutdown();
-    SDL_GL_DeleteContext(ctx);
+    SDL_GL_DestroyContext(ctx);
     SDL_DestroyWindow(win);
     SDL_Quit();
 }

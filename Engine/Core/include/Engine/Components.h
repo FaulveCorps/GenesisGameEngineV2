@@ -1,18 +1,29 @@
 #pragma once
 
 #include <memory>
+#include <string>
 #include "engine/Model.h"
 
 namespace Genesis::Engine {
 
 struct Transform {
     float x = 0.f, y = 0.f, z = 0.f;
+    // Rotation is stored in radians (matches Engine math utilities).
     float rx = 0.f, ry = 0.f, rz = 0.f;
     float sx = 1.f, sy = 1.f, sz = 1.f;
 };
 
+// Optional human-readable entity name (Editor / tooling).
+struct NameComponent {
+    std::string name;
+};
+
 struct ModelComponent {
     std::shared_ptr<Model> model;
+
+    // Optional source asset path used for scene save/reload.
+    // (If empty, the model cannot be serialized by SceneLoader::SaveScene.)
+    std::string sourcePath;
 };
 
 enum class LightType {

@@ -9,25 +9,80 @@
 ## Quick Start
 
 ### 1. Configure
+This repo includes `CMakePresets.json`. Recommended:
+
+```powershell
+cd c:\Users\jpfau\Desktop\Project\GenesisGameEngine
+
+# Visual Studio generator (IDE-friendly)
+cmake --preset default
+
+# OR: Ninja (fast parallel builds)
+# cmake --preset ninja-debug
+```
+
+Legacy (manual) configuration also works:
+
 ```powershell
 cd c:\Users\jpfau\Desktop\Project\GenesisGameEngine
 cmake -B Build -G "Visual Studio 17 2022" -DCMAKE_TOOLCHAIN_FILE="C:/Program Files/vcpkg/scripts/buildsystems/vcpkg.cmake"
 ```
 
 ### 2. Build All Targets
+With presets:
+
+```powershell
+# Ninja Debug (recommended for fast iteration)
+cmake --build --preset debug
+
+# OR: Visual Studio generator
+# cmake --build --preset vs2022 --config Debug
+```
+
+Legacy:
+
 ```powershell
 cmake --build Build --config Debug
 ```
 
 ### 3. Run Unit Tests
+With presets:
+
+```powershell
+ctest --preset default
+```
+
+Legacy:
+
 ```powershell
 ctest -C Debug --test-dir Build --output-on-failure
 ```
 
 ### 4. Run Sample Game
 ```powershell
-cd Build\GameProjects\SampleGame\Debug
+cd build-vs\GameProjects\SampleGame\Debug
 .\SampleGame.exe
+```
+
+### 5. Run the Editor
+
+```powershell
+# Example for the Visual Studio preset build dir
+cd build-vs\Editor\Debug
+./GenesisEditor.exe
+```
+
+#### Headless quit-prompt regression self-test
+
+The editor includes a headless self-test mode to validate the “unsaved changes” quit/close prompt logic without GUI automation.
+
+This self-test is also registered as a CTest named `GenesisEditor_QuitPromptSelftest`, so it will run automatically when you run `ctest`.
+
+Because it runs before engine/window initialization and does not create any OS windows, it is safe to run in headless CI.
+
+```powershell
+cd build-vs\Editor\Debug
+./GenesisEditor.exe --quit-prompt-selftest
 ```
 
 ### Auto-cycle and artifacts
@@ -42,12 +97,13 @@ Screenshots and test outputs are saved into the `artifacts/` directory (ignored 
 
 | Target | Type | Location | Purpose |
 |--------|------|----------|---------|
-| EngineCore | Static Library | `Build/Engine/Core/Debug/EngineCore.lib` | Core engine with renderer, scene, ECS |
-| SampleGame | Executable | `Build/GameProjects/SampleGame/Debug/SampleGame.exe` | Demo application |
-| UnitTests | Executable | `Build/Tests/Debug/UnitTests.exe` | 4 unit tests with Catch2 |
-| SamplePlugin | Plugin | `Build/Plugins/SamplePlugin/Debug/SamplePlugin.dll` | Plugin system demo |
-| asset_packer | Tool | `Build/Tools/asset_packer/Debug/asset_packer.exe` | Asset compression utility |
-| shader_compiler | Tool | `Build/Tools/shader_compiler/Debug/shader_compiler.exe` | Shader preprocessing tool |
+| EngineCore | Static Library | `<build-dir>/Engine/Core/Debug/EngineCore.lib` | Core engine with renderer, scene, ECS |
+| GenesisEditor | Executable | `<build-dir>/Editor/Debug/GenesisEditor.exe` | Editor application (ImGui + scene tools) |
+| SampleGame | Executable | `<build-dir>/GameProjects/SampleGame/Debug/SampleGame.exe` | Demo application |
+| UnitTests | Executable | `<build-dir>/Tests/Debug/UnitTests.exe` | Catch2 test suite |
+| SamplePlugin | Plugin | `<build-dir>/Plugins/SamplePlugin/Debug/SamplePlugin.dll` | Plugin system demo |
+| asset_packer | Tool | `<build-dir>/Tools/asset_packer/Debug/asset_packer.exe` | Asset compression utility |
+| shader_compiler | Tool | `<build-dir>/Tools/shader_compiler/Debug/shader_compiler.exe` | Shader preprocessing tool |
 
 ## Detailed Build Commands
 

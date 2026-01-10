@@ -9,10 +9,10 @@
 #include <iostream>
 
 TEST_CASE("SampleGame auto-cycle smoke test") {
-    int sdlInitRes = SDL_Init(SDL_INIT_VIDEO);
-    REQUIRE(sdlInitRes == 0);
+    bool sdlInitRes = SDL_Init(SDL_INIT_VIDEO);
+    REQUIRE(sdlInitRes == true);
 
-    SDL_Window* win = SDL_CreateWindow("AutoCycleTest", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 64, 64, SDL_WINDOW_HIDDEN | SDL_WINDOW_OPENGL);
+    SDL_Window* win = SDL_CreateWindow("AutoCycleTest", 64, 64, SDL_WINDOW_HIDDEN | SDL_WINDOW_OPENGL);
     REQUIRE(win != nullptr);
     SDL_GLContext ctx = SDL_GL_CreateContext(win);
     REQUIRE(ctx != nullptr);
@@ -62,19 +62,18 @@ TEST_CASE("SampleGame auto-cycle smoke test") {
             // Save artifact
             std::filesystem::path artifacts = std::filesystem::current_path() / "artifacts";
             try { std::filesystem::create_directories(artifacts); } catch(...) {}
-            SDL_Surface* surf = SDL_CreateRGBSurfaceFrom((void*)pixels.data(), 64, 64, 32, 64*4,
-                0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000);
+            SDL_Surface* surf = SDL_CreateSurfaceFrom(64, 64, SDL_PIXELFORMAT_BGRA8888, (void*)pixels.data(), 64*4);
             if (surf) {
-                std::string fname = (artifacts / ("test_cycle_" + std::to_string(i) + ".bmp")).string();
+                std::string fname = "test_autocycle_" + std::to_string(i) + ".bmp";
                 SDL_SaveBMP(surf, fname.c_str());
-                SDL_FreeSurface(surf);
+                SDL_DestroySurface(surf);
             }
         }
     }
     REQUIRE(anySwitch == true);
 
     if (auto cur3 = Genesis::Engine::RendererManager::GetRenderer()) cur3->Shutdown();
-    SDL_GL_DeleteContext(ctx);
+    SDL_GL_DestroyContext(ctx);
     SDL_DestroyWindow(win);
     SDL_Quit();
 }

@@ -42,7 +42,7 @@ static PFNGLGETVERTEXATTRIBIVPROC pglGetVertexAttribiv = nullptr;
 static PFNGLGETERRORPROC pglGetErrorPtr = nullptr;
 
 int main(int argc, char** argv) {
-    if (SDL_Init(SDL_INIT_VIDEO) != 0) {
+    if (!SDL_Init(SDL_INIT_VIDEO)) {
         std::cerr << "SDL_Init failed: " << SDL_GetError() << std::endl;
         return 1;
     }
@@ -51,7 +51,7 @@ int main(int argc, char** argv) {
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
 
-    SDL_Window* win = SDL_CreateWindow("GL VAO Repro", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 640, 480, SDL_WINDOW_OPENGL);
+    SDL_Window* win = SDL_CreateWindow("GL VAO Repro", 640, 480, SDL_WINDOW_OPENGL);
     if (!win) { std::cerr << "SDL_CreateWindow failed: " << SDL_GetError() << std::endl; return 1; }
     SDL_GLContext ctx = SDL_GL_CreateContext(win);
     if (!ctx) { std::cerr << "SDL_GL_CreateContext failed: " << SDL_GetError() << std::endl; return 1; }
@@ -135,7 +135,7 @@ int main(int argc, char** argv) {
 
     SDL_Delay(2000);
 
-    SDL_GL_DeleteContext(ctx);
+    SDL_GL_DestroyContext(ctx);
     SDL_DestroyWindow(win);
     SDL_Quit();
 

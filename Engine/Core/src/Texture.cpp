@@ -71,17 +71,17 @@ std::shared_ptr<Texture> Texture::CreateFromFile(const std::string& path) {
         std::cerr << "Texture::CreateFromFile -> SDL_LoadBMP failed for '" << path << "': " << SDL_GetError() << std::endl;
         return nullptr;
     }
-    SDL_Surface* conv = SDL_ConvertSurfaceFormat(surf, SDL_PIXELFORMAT_RGBA32, 0);
-    SDL_FreeSurface(surf);
+    SDL_Surface* conv = SDL_ConvertSurface(surf, SDL_PIXELFORMAT_RGBA32);
+    SDL_DestroySurface(surf);
     if (!conv) {
-        std::cerr << "Texture::CreateFromFile -> SDL_ConvertSurfaceFormat failed for '" << path << "': " << SDL_GetError() << std::endl;
+        std::cerr << "Texture::CreateFromFile -> SDL_ConvertSurface failed for '" << path << "': " << SDL_GetError() << std::endl;
         return nullptr;
     }
     uint32_t w = static_cast<uint32_t>(conv->w);
     uint32_t h = static_cast<uint32_t>(conv->h);
     std::vector<uint8_t> pixels(static_cast<size_t>(w) * h * 4);
     std::memcpy(pixels.data(), conv->pixels, pixels.size());
-    SDL_FreeSurface(conv);
+    SDL_DestroySurface(conv);
     return CreateFromMemory(w, h, pixels);
 } 
 

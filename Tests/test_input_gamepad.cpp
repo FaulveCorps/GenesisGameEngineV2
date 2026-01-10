@@ -7,8 +7,8 @@
 
 TEST_CASE("SDLInput: controller button/axis events are detected", "[input][gamepad]") {
     // Try to initialize the GameController subsystem; if not available, skip.
-    if (SDL_Init(SDL_INIT_EVENTS | SDL_INIT_GAMECONTROLLER) != 0) {
-        if (SDL_Init(SDL_INIT_EVENTS | SDL_INIT_JOYSTICK) != 0) {
+    if (!SDL_Init(SDL_INIT_EVENTS | SDL_INIT_GAMEPAD)) {
+        if (!SDL_Init(SDL_INIT_EVENTS | SDL_INIT_JOYSTICK)) {
             WARN("SDL gamecontroller/joystick not available; skipping gamepad test");
             SDL_Quit();
             return;
@@ -27,40 +27,40 @@ TEST_CASE("SDLInput: controller button/axis events are detected", "[input][gamep
 
     // Simulate controller A button down on controller instance 0
     SDL_Event e{};
-    e.type = SDL_CONTROLLERBUTTONDOWN;
-    e.cbutton.which = 0; // instance id 0, creates placeholder if needed
-    e.cbutton.button = SDL_CONTROLLER_BUTTON_A;
-    e.cbutton.state = SDL_PRESSED;
+    e.type = SDL_EVENT_GAMEPAD_BUTTON_DOWN;
+    e.gbutton.which = 0; // instance id 0, creates placeholder if needed
+    e.gbutton.button = SDL_GAMEPAD_BUTTON_SOUTH;
+    e.gbutton.down = true;
     SDL_PushEvent(&e);
 
     in->Update(0.016);
 
     REQUIRE(in->IsControllerConnected(0) == true);
-    REQUIRE(in->WasControllerButtonPressed(0, SDL_CONTROLLER_BUTTON_A) == true);
-    REQUIRE(in->IsControllerButtonDown(0, SDL_CONTROLLER_BUTTON_A) == true);
+    REQUIRE(in->WasControllerButtonPressed(0, SDL_GAMEPAD_BUTTON_SOUTH) == true);
+    REQUIRE(in->IsControllerButtonDown(0, SDL_GAMEPAD_BUTTON_SOUTH) == true);
 
     // Release
     SDL_Event e2{};
-    e2.type = SDL_CONTROLLERBUTTONUP;
-    e2.cbutton.which = 0;
-    e2.cbutton.button = SDL_CONTROLLER_BUTTON_A;
-    e2.cbutton.state = SDL_RELEASED;
+    e2.type = SDL_EVENT_GAMEPAD_BUTTON_UP;
+    e2.gbutton.which = 0;
+    e2.gbutton.button = SDL_GAMEPAD_BUTTON_SOUTH;
+    e2.gbutton.down = false;
     SDL_PushEvent(&e2);
 
     in->Update(0.016);
-    REQUIRE(in->WasControllerButtonReleased(0, SDL_CONTROLLER_BUTTON_A) == true);
-    REQUIRE(in->IsControllerButtonDown(0, SDL_CONTROLLER_BUTTON_A) == false);
+    REQUIRE(in->WasControllerButtonReleased(0, SDL_GAMEPAD_BUTTON_SOUTH) == true);
+    REQUIRE(in->IsControllerButtonDown(0, SDL_GAMEPAD_BUTTON_SOUTH) == false);
 
     // Axis motion
     SDL_Event a{};
-    a.type = SDL_CONTROLLERAXISMOTION;
-    a.caxis.which = 0;
-    a.caxis.axis = SDL_CONTROLLER_AXIS_LEFTX;
-    a.caxis.value = 16000; // mid-right
+    a.type = SDL_EVENT_GAMEPAD_AXIS_MOTION;
+    a.gaxis.which = 0;
+    a.gaxis.axis = SDL_GAMEPAD_AXIS_LEFTX;
+    a.gaxis.value = 16000; // mid-right
     SDL_PushEvent(&a);
 
     in->Update(0.016);
-    float axisVal = in->GetControllerAxis(0, SDL_CONTROLLER_AXIS_LEFTX);
+    float axisVal = in->GetControllerAxis(0, SDL_GAMEPAD_AXIS_LEFTX);
     REQUIRE(std::fabs(axisVal - (16000.0f / 32767.0f)) < 0.06f);
 
     // Cleanup: switch back to null input

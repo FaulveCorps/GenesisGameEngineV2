@@ -4,39 +4,42 @@
 
 Genesis is a modular, cross-platform C++ game engine prototype. This repository contains the engine core, renderers, tools, and a sample game used for verification.
 
-## Getting started (initial skeleton)
+## Features
+- **Rendering**: Modular backend supporting OpenGL (PBR), Vulkan, DirectX, and Software rendering.
+  - **PBR Pipeline**: Physically Based Rendering with glTF 2.0 support (Albedo, Normal, Metallic/Roughness).
+  - **Runtime Switching**: Hot-swap renderers at runtime (F2 key).
+- **Architecture**: ECS-based (Entity Component System) using `entt`.
+- **Scripting**: 
+  - **Lua**: Standard game logic scripting.
+  - **WASM**: Secure, sandboxed modding support via `wasm3`.
+- **Physics**: Modular backend supporting Bullet and Box2D.
+- **Platform**: Windows (primary), Linux/macOS (via CMake).
+
+## Status
+See [Docs/status_report_20260103.md](Docs/status_report_20260103.md) for the latest detailed status and competitive analysis.
+
+## Getting started
 Requirements:
 - CMake >= 3.16
-- Visual Studio (recommended) or a suitable C++ toolchain
-- SDL3 development libraries (headers and import libs) to build and run the desktop windowing sample
-- Assimp development libraries for model import support
-- Dear ImGui (fetched automatically by CMake) for debug overlays
+- Visual Studio 2022 (recommended)
+- `vcpkg` (integrated automatically)
 
-On Windows you can install SDL3 and Assimp or provide the development packages to CMake via your preferred method (vcpkg / MSYS2 / system install).
-
-Build (out-of-source):
-
-```bash
-mkdir Build
-cd Build
-cmake ..
-cmake --build . --config Debug
+Build (Windows):
+```powershell
+./build.ps1
 ```
 
-This initial scaffold builds a small `EngineCore` static library and a `SampleGame` executable used for smoke tests. Later steps will integrate SDL3, OpenGL, Assimp, EnTT, and ImGui.
+This script uses CMake Presets to configure and build the project with all dependencies (SDL3, Assimp, etc.) managed by vcpkg.
 
-Runtime renderer switching: The engine supports runtime switching between renderers (e.g., OpenGL, Vulkan, WGPU, DirectX, Software). Shaders and textures are now tracked by registries and will be re-created on renderer switches where supported.
+## Tools
+- `asset_packer`: Pack/unpack assets.
+- `shader_compiler`: Compile GLSL to SPIR-V.
+- `Scripts/generate_gltf.py`: Generate test PBR assets.
 
-Artifacts: runtime screenshots and automatic test outputs are written to an `artifacts/` directory; this directory is ignored by default (see `.gitignore`).
+## CI/CD
+- **Build**: GitHub Actions (Windows/Linux/macOS).
+- **Security**: Snyk SAST integration for vulnerability scanning.
 
-Next step: implement Task 3 — add Core window + input (SDL3) minimal app.
-
-Tools:
-- `asset_packer` (Tools/asset_packer) — pack/unpack asset directories into a simple .ggpak archive. Usage: `asset_packer pack <input_dir> <out_file>` or `asset_packer unpack <archive> <out_dir>`.
-- `shader_compiler` (Tools/shader_compiler) — compiles GLSL to SPIR-V using `glslangValidator` if available, otherwise copies the source as a fallback. Usage: `shader_compiler <input_shader> <output_spv>`.
-
-CI:
-- A GitHub Actions workflow is included at `.github/workflows/ci.yml` which builds the project on **Ubuntu**, **macOS**, and **Windows** using `vcpkg` to fetch dependencies (SDL3, Assimp). The workflow runs on push and PR to `main`/`master` and performs a full CMake configure + build step.
 
 Packaging:
 - Use CPack to create a ZIP package of the built artifacts. Example:

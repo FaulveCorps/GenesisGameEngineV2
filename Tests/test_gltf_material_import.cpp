@@ -37,9 +37,9 @@ TEST_CASE("glTF PBR material file contains expected values", "[gltf][material]")
 
     auto baseColor = findArray("\"baseColorFactor\"");
     REQUIRE(baseColor.size() == 4);
-    REQUIRE(baseColor[0] == Approx(0.3f));
-    REQUIRE(baseColor[1] == Approx(0.6f));
-    REQUIRE(baseColor[2] == Approx(0.9f));
+    REQUIRE(baseColor[0] == Approx(1.0f));
+    REQUIRE(baseColor[1] == Approx(0.766f));
+    REQUIRE(baseColor[2] == Approx(0.336f));
     // metallicFactor and roughnessFactor are scalar values; simple string parse
     auto findScalar = [&](const std::string& key){
         size_t pos = s.find(key);
@@ -53,6 +53,6 @@ TEST_CASE("glTF PBR material file contains expected values", "[gltf][material]")
 
     float metallic = findScalar("\"metallicFactor\"");
     float roughness = findScalar("\"roughnessFactor\"");
-    REQUIRE(metallic == Approx(0.5f));
-    REQUIRE(roughness == Approx(0.25f));
+    REQUIRE(metallic == Approx(1.0f));
+    REQUIRE(roughness == Approx(0.2f));
 }

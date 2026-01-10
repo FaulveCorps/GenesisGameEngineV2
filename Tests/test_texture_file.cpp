@@ -12,24 +12,24 @@
 #endif
 
 TEST_CASE("Texture file load and recreate") {
-    int sdlInitRes = SDL_Init(SDL_INIT_VIDEO);
-    REQUIRE(sdlInitRes == 0);
+    bool sdlInitRes = SDL_Init(SDL_INIT_VIDEO);
+    REQUIRE(sdlInitRes == true);
 
-    SDL_Window* win = SDL_CreateWindow("TextureFileTest", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 64, 64, SDL_WINDOW_HIDDEN | SDL_WINDOW_OPENGL);
+    SDL_Window* win = SDL_CreateWindow("TextureFileTest", 64, 64, SDL_WINDOW_HIDDEN | SDL_WINDOW_OPENGL);
     REQUIRE(win != nullptr);
     SDL_GLContext ctx = SDL_GL_CreateContext(win);
     REQUIRE(ctx != nullptr);
 
     // Create a small surf, save BMP to disk, then load via Texture::CreateFromFile
     const int w = 2, h = 2;
-    SDL_Surface* surf = SDL_CreateRGBSurfaceWithFormat(0, w, h, 32, SDL_PIXELFORMAT_RGBA32);
+    SDL_Surface* surf = SDL_CreateSurface(w, h, SDL_PIXELFORMAT_RGBA8888);
     REQUIRE(surf != nullptr);
     // Fill pixels: RGBA
     uint8_t data[w*h*4] = { 255,0,0,255, 0,255,0,255, 0,0,255,255, 255,255,0,255 };
     memcpy(surf->pixels, data, sizeof(data));
     std::string fname = "temp_test_tex.bmp";
-    REQUIRE(SDL_SaveBMP(surf, fname.c_str()) == 0);
-    SDL_FreeSurface(surf);
+    REQUIRE(SDL_SaveBMP(surf, fname.c_str()) == true);
+    SDL_DestroySurface(surf);
 
     auto r = Genesis::Engine::GraphicsFactory::CreateRenderer(win, ctx, {"opengl"}, false);
     if (!r) r = Genesis::Engine::GraphicsFactory::CreateRenderer(win, ctx, {}, false);
@@ -40,7 +40,7 @@ TEST_CASE("Texture file load and recreate") {
 
     // If OpenGL isn't available in this environment, skip the GL portions of the test
     if (cur->GetName() != std::string("opengl")) {
-        SDL_GL_DeleteContext(ctx);
+        SDL_GL_DestroyContext(ctx);
         SDL_DestroyWindow(win);
         SDL_Quit();
         SUCCEED("OpenGL not available; skipping GL-specific assertions");
@@ -69,7 +69,7 @@ TEST_CASE("Texture file load and recreate") {
 
     // Cleanup
     if (auto cur3 = Genesis::Engine::RendererManager::GetRenderer()) cur3->Shutdown();
-    SDL_GL_DeleteContext(ctx);
+    SDL_GL_DestroyContext(ctx);
     SDL_DestroyWindow(win);
     SDL_Quit();
 

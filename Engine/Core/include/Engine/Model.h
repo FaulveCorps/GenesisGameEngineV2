@@ -21,6 +21,8 @@ public:
     const std::vector<Material>& Materials() const { return m_materials; }
     int GetMaterialIndexForMesh(size_t meshIndex) const;
 
+    void AddMesh(Mesh&& mesh) { m_meshes.push_back(std::move(mesh)); }
+
 private:
     Assimp::Importer m_importer;
     const aiScene* m_scene = nullptr;

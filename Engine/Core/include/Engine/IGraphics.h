@@ -30,6 +30,7 @@ public:
     virtual bool Init(SDL_Window* window, SDL_GLContext glContext) = 0;
     virtual void BeginFrame() = 0;
     virtual void EndFrame() = 0;
+    virtual void Present() {} // Optional explicit present, if EndFrame doesn't swap
     virtual void Shutdown() = 0;
 
     // Optional (default no-op) resource APIs for runtime switching
@@ -39,6 +40,18 @@ public:
     virtual void DrawMesh(const MeshHandle& /*h*/, Material* /*material*/, const float* /*transform*/) { }
 
     virtual void SetGlobalLight(const float /*direction*/[3], const float /*color*/[3], float /*intensity*/) {}
+    
+    struct PointLightData {
+        float position[3];
+        float color[3];
+        float intensity;
+        float radius;
+    };
+    virtual void AddPointLight(const PointLightData& /*light*/) {}
+    virtual void ClearPointLights() {}
+
+    virtual void SetPostProcessParams(float /*exposure*/, float /*gamma*/) {}
+    virtual void SetViewProjection(const float* /*view*/, const float* /*projection*/) {}
 
     // Texture handle for renderer-managed textures
     struct TextureHandle {
