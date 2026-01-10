@@ -62,12 +62,10 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(imgui)
 
-FetchContent_Declare(
-  imguizmo
-  GIT_REPOSITORY https://github.com/CedricGuillemet/ImGuizmo.git
-  GIT_TAG master
-)
-FetchContent_MakeAvailable(imguizmo)
+# ImGuizmo
+# We vendor ImGuizmo because we apply editor-specific behavior tweaks (view-cube interaction,
+# face labels, etc). Using FetchContent would overwrite those customizations.
+set(imguizmo_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/vendor/ImGuizmo")
 
 add_library(EngineCore STATIC
     src/Engine.cpp

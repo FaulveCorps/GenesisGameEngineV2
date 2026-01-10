@@ -964,6 +964,7 @@ int main(int argc, char** argv) {
 
         // View Manipulate (View Cube) - position already calculated above for conflict detection
         glm::mat4 viewCopy = view; // Make a copy to pass to ViewManipulate
+        ImGuizmo::SetDrawlist();
         ImGuizmo::ViewManipulate(glm::value_ptr(viewCopy), 5.0f, viewManipulatePos, ImVec2(viewManipulateSize, viewManipulateSize), 0x10101010);
 
         // Axis labels (X/Y/Z) around the cube (overlay, positioned based on current view orientation)

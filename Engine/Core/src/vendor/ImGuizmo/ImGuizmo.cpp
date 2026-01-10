@@ -2981,6 +2981,16 @@ namespace IMGUIZMO_NAMESPACE
       // We intentionally keep this to the 6 cube faces only (no edge/corner 3x3 regions)
       // to match modern editor "view cube" behavior.
       bool faceHovered[6]{};
+
+      struct FaceLabel
+      {
+         ImVec2 center = ImVec2(0.f, 0.f);
+         ImVec2 corners[4]{};
+         char c = 0;
+         bool valid = false;
+      };
+      FaceLabel faceLabels[6]{};
+
       static int overFace = -1;
       for (int iPass = 0; iPass < 2; iPass++)
       {
@@ -3065,15 +3075,125 @@ namespace IMGUIZMO_NAMESPACE
                   case 1: label[0] = 'A'; break;
                   case 2: label[0] = 'F'; break;
                   case 3: label[0] = 'L'; break;
-                  case 4: label[0] = 'U'; break;
+                  case 4: label[0] = 'B'; break;
                   case 5: label[0] = 'B'; break;
                   }
-                  ImVec2 textSize = ImGui::CalcTextSize(label);
-                  gContext.mDrawList->AddText(center - textSize * 0.5f, IM_COL32(255, 255, 255, 255), label);
+
+                  // Draw labels in a dedicated pass after all faces are drawn.
+                  // This guarantees they render on top regardless of face draw order.
+                  faceLabels[iFace].center = center;
+                  for (int k = 0; k < 4; k++)
+                     faceLabels[iFace].corners[k] = faceCoordsScreen[k];
+                  faceLabels[iFace].c = label[0];
+                  faceLabels[iFace].valid = (label[0] != 0);
                }
             }
          }
       }
+
+      // Dedicated label pass (on-top)
+      {
+         ImDrawList* labelDrawList = gContext.mDrawList ? gContext.mDrawList : ImGui::GetWindowDrawList();
+         ImGuiIO& io2 = ImGui::GetIO();
+         ImFont* font = ImGui::GetFont();
+         ImTextureRef fontTex = (io2.Fonts != nullptr) ? io2.Fonts->TexRef : ImTextureRef();
+         ImFontBaked* fontBaked = (font != nullptr) ? font->GetFontBaked(ImGui::GetFontSize()) : nullptr;
+
+         const ImU32 outlineCol = IM_COL32(0, 0, 0, 220);
+         for (int iFace = 0; iFace < 6; iFace++)
+         {
+            if (!faceLabels[iFace].valid)
+               continue;
+
+            const char c = faceLabels[iFace].c;
+            char label[2] = { c, 0 };
+
+            // If we can, draw the glyph as a *textured quad* mapped onto the face.
+            // This makes the label feel "baked" into the cube instead of being screen-space text.
+            ImFontGlyph* glyph = (fontBaked != nullptr) ? fontBaked->FindGlyph((ImWchar)c) : nullptr;
+            if (fontBaked != nullptr && glyph != nullptr && fontTex.GetTexID() != ImTextureID_Invalid)
+            {
+               const ImVec2 p0 = faceLabels[iFace].corners[0];
+               const ImVec2 p1 = faceLabels[iFace].corners[1];
+               const ImVec2 p2 = faceLabels[iFace].corners[2];
+               const ImVec2 p3 = faceLabels[iFace].corners[3];
+
+               // NOTE: faceCoordsScreen[] is ordered from panelPos[]:
+               // 0=(0,0), 1=(0,1), 2=(1,1), 3=(1,0) in the face local basis (dy, dx).
+               // Therefore the "u" axis (local x) is p0->p3 and the "v" axis (local y) is p0->p1.
+               // Using p0->p1 as u would rotate glyphs by 90 degrees.
+               ImVec2 u = p3 - p0;
+               ImVec2 v = p1 - p0;
+               const float uLen = sqrtf(u.x * u.x + u.y * u.y);
+               const float vLen = sqrtf(v.x * v.x + v.y * v.y);
+               if (uLen > 1e-3f && vLen > 1e-3f)
+               {
+                  u.x /= uLen; u.y /= uLen;
+                  v.x /= vLen; v.y /= vLen;
+
+                  const float glyphW = glyph->X1 - glyph->X0;
+                  const float glyphH = glyph->Y1 - glyph->Y0;
+                  const float aspect = (glyphH > 1e-3f) ? (glyphW / glyphH) : 1.0f;
+
+                  const float wOpp = sqrtf((p2.x - p1.x) * (p2.x - p1.x) + (p2.y - p1.y) * (p2.y - p1.y));
+                  const float hOpp = sqrtf((p2.x - p3.x) * (p2.x - p3.x) + (p2.y - p3.y) * (p2.y - p3.y));
+                  const float faceW = ImMin(uLen, wOpp);
+                  const float faceH = ImMin(vLen, hOpp);
+
+                  float targetH = faceH * 0.45f;
+                  float targetW = targetH * aspect;
+                  const float maxW = faceW * 0.75f;
+                  if (targetW > maxW && aspect > 1e-3f)
+                  {
+                     targetW = maxW;
+                     targetH = targetW / aspect;
+                  }
+
+                  const float halfW = targetW * 0.5f;
+                  const float halfH = targetH * 0.5f;
+                  const ImVec2 center = faceLabels[iFace].center;
+
+                  // Quad corners on the face (screen-projected, rotated with the face).
+                  const ImVec2 q0 = center - u * halfW - v * halfH;
+                  const ImVec2 q1 = center + u * halfW - v * halfH;
+                  const ImVec2 q2 = center + u * halfW + v * halfH;
+                  const ImVec2 q3 = center - u * halfW + v * halfH;
+
+                  // Backing plate for contrast (slightly larger than the glyph quad)
+                  const float platePad = ImMax(2.0f, ImMin(faceW, faceH) * 0.06f);
+                  const ImVec2 b0 = center - u * (halfW + platePad) - v * (halfH + platePad);
+                  const ImVec2 b1 = center + u * (halfW + platePad) - v * (halfH + platePad);
+                  const ImVec2 b2 = center + u * (halfW + platePad) + v * (halfH + platePad);
+                  const ImVec2 b3 = center - u * (halfW + platePad) + v * (halfH + platePad);
+                  labelDrawList->AddQuadFilled(b0, b1, b2, b3, IM_COL32(0, 0, 0, 140));
+
+                  const ImVec2 uv0(glyph->U0, glyph->V0);
+                  const ImVec2 uv1(glyph->U1, glyph->V0);
+                  const ImVec2 uv2(glyph->U1, glyph->V1);
+                  const ImVec2 uv3(glyph->U0, glyph->V1);
+
+                  // Outline (screen-space offsets) + main glyph
+                  const ImVec2 oL(-1, 0), oR(1, 0), oU(0, -1), oD(0, 1);
+                  labelDrawList->AddImageQuad(fontTex, q0 + oL, q1 + oL, q2 + oL, q3 + oL, uv0, uv1, uv2, uv3, outlineCol);
+                  labelDrawList->AddImageQuad(fontTex, q0 + oR, q1 + oR, q2 + oR, q3 + oR, uv0, uv1, uv2, uv3, outlineCol);
+                  labelDrawList->AddImageQuad(fontTex, q0 + oU, q1 + oU, q2 + oU, q3 + oU, uv0, uv1, uv2, uv3, outlineCol);
+                  labelDrawList->AddImageQuad(fontTex, q0 + oD, q1 + oD, q2 + oD, q3 + oD, uv0, uv1, uv2, uv3, outlineCol);
+                  labelDrawList->AddImageQuad(fontTex, q0, q1, q2, q3, uv0, uv1, uv2, uv3, IM_COL32(255, 255, 255, 255));
+                  continue;
+               }
+            }
+
+            // Fallback: normal text (should never be needed, but keeps things robust)
+            const ImVec2 textSize = ImGui::CalcTextSize(label);
+            const ImVec2 textPos = faceLabels[iFace].center - textSize * 0.5f;
+            labelDrawList->AddText(textPos + ImVec2(-1, 0), outlineCol, label);
+            labelDrawList->AddText(textPos + ImVec2(1, 0), outlineCol, label);
+            labelDrawList->AddText(textPos + ImVec2(0, -1), outlineCol, label);
+            labelDrawList->AddText(textPos + ImVec2(0, 1), outlineCol, label);
+            labelDrawList->AddText(textPos, IM_COL32(255, 255, 255, 255), label);
+         }
+      }
+
       if (interpolationFrames)
       {
          interpolationFrames--;
