@@ -23,7 +23,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y ninja-build build-essential cmake git python3 python3-distutils
+          sudo apt-get install -y ninja-build build-essential cmake git python3
 
       - name: Install Ninja on Windows
         if: runner.os == 'Windows'
