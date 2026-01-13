@@ -68,6 +68,13 @@ bool SceneLoader::LoadScene(Scene& scene, const std::string& filePath) {
             }
             scene.Registry().emplace<LightComponent>(currentEntity, l);
         }
+        else if (token == "CAMERA" && currentEntity != entt::null) {
+            CameraComponent c;
+            int prim;
+            ss >> c.fov >> c.nearPlane >> c.farPlane >> prim;
+            c.primary = (prim != 0);
+            scene.Registry().emplace<CameraComponent>(currentEntity, c);
+        }
     }
     
     std::cout << "SceneLoader: Loaded scene from " << filePath << std::endl;
@@ -130,6 +137,15 @@ bool SceneLoader::SaveScene(const Scene& scene, const std::string& filePath) {
                     file << " " << l.range;
                 }
                 file << "\n";
+            }
+
+            if (reg.any_of<CameraComponent>(entity)) {
+                const auto& c = reg.get<CameraComponent>(entity);
+                file << "CAMERA " 
+                     << c.fov << " " 
+                     << c.nearPlane << " " 
+                     << c.farPlane << " " 
+                     << (c.primary ? 1 : 0) << "\n";
             }
 
             file << "\n";

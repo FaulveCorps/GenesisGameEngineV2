@@ -2982,15 +2982,6 @@ namespace IMGUIZMO_NAMESPACE
       // to match modern editor "view cube" behavior.
       bool faceHovered[6]{};
 
-      struct FaceLabel
-      {
-         ImVec2 center = ImVec2(0.f, 0.f);
-         ImVec2 corners[4]{};
-         char c = 0;
-         bool valid = false;
-      };
-      FaceLabel faceLabels[6]{};
-
       static int overFace = -1;
       for (int iPass = 0; iPass < 2; iPass++)
       {
@@ -3075,122 +3066,151 @@ namespace IMGUIZMO_NAMESPACE
                   case 1: label[0] = 'A'; break;
                   case 2: label[0] = 'F'; break;
                   case 3: label[0] = 'L'; break;
-                  case 4: label[0] = 'B'; break;
+                  case 4: label[0] = 'U'; break; // Under
                   case 5: label[0] = 'B'; break;
                   }
 
-                  // Draw labels in a dedicated pass after all faces are drawn.
-                  // This guarantees they render on top regardless of face draw order.
-                  faceLabels[iFace].center = center;
-                  for (int k = 0; k < 4; k++)
-                     faceLabels[iFace].corners[k] = faceCoordsScreen[k];
-                  faceLabels[iFace].c = label[0];
-                  faceLabels[iFace].valid = (label[0] != 0);
-               }
-            }
-         }
-      }
-
-      // Dedicated label pass (on-top)
-      {
-         ImDrawList* labelDrawList = gContext.mDrawList ? gContext.mDrawList : ImGui::GetWindowDrawList();
-         ImGuiIO& io2 = ImGui::GetIO();
-         ImFont* font = ImGui::GetFont();
-         ImTextureRef fontTex = (io2.Fonts != nullptr) ? io2.Fonts->TexRef : ImTextureRef();
-         ImFontBaked* fontBaked = (font != nullptr) ? font->GetFontBaked(ImGui::GetFontSize()) : nullptr;
-
-         const ImU32 outlineCol = IM_COL32(0, 0, 0, 220);
-         for (int iFace = 0; iFace < 6; iFace++)
-         {
-            if (!faceLabels[iFace].valid)
-               continue;
-
-            const char c = faceLabels[iFace].c;
-            char label[2] = { c, 0 };
-
-            // If we can, draw the glyph as a *textured quad* mapped onto the face.
-            // This makes the label feel "baked" into the cube instead of being screen-space text.
-            ImFontGlyph* glyph = (fontBaked != nullptr) ? fontBaked->FindGlyph((ImWchar)c) : nullptr;
-            if (fontBaked != nullptr && glyph != nullptr && fontTex.GetTexID() != ImTextureID_Invalid)
-            {
-               const ImVec2 p0 = faceLabels[iFace].corners[0];
-               const ImVec2 p1 = faceLabels[iFace].corners[1];
-               const ImVec2 p2 = faceLabels[iFace].corners[2];
-               const ImVec2 p3 = faceLabels[iFace].corners[3];
-
-               // NOTE: faceCoordsScreen[] is ordered from panelPos[]:
-               // 0=(0,0), 1=(0,1), 2=(1,1), 3=(1,0) in the face local basis (dy, dx).
-               // Therefore the "u" axis (local x) is p0->p3 and the "v" axis (local y) is p0->p1.
-               // Using p0->p1 as u would rotate glyphs by 90 degrees.
-               ImVec2 u = p3 - p0;
-               ImVec2 v = p1 - p0;
-               const float uLen = sqrtf(u.x * u.x + u.y * u.y);
-               const float vLen = sqrtf(v.x * v.x + v.y * v.y);
-               if (uLen > 1e-3f && vLen > 1e-3f)
-               {
-                  u.x /= uLen; u.y /= uLen;
-                  v.x /= vLen; v.y /= vLen;
-
-                  const float glyphW = glyph->X1 - glyph->X0;
-                  const float glyphH = glyph->Y1 - glyph->Y0;
-                  const float aspect = (glyphH > 1e-3f) ? (glyphW / glyphH) : 1.0f;
-
-                  const float wOpp = sqrtf((p2.x - p1.x) * (p2.x - p1.x) + (p2.y - p1.y) * (p2.y - p1.y));
-                  const float hOpp = sqrtf((p2.x - p3.x) * (p2.x - p3.x) + (p2.y - p3.y) * (p2.y - p3.y));
-                  const float faceW = ImMin(uLen, wOpp);
-                  const float faceH = ImMin(vLen, hOpp);
-
-                  float targetH = faceH * 0.45f;
-                  float targetW = targetH * aspect;
-                  const float maxW = faceW * 0.75f;
-                  if (targetW > maxW && aspect > 1e-3f)
+                  // Draw the label directly onto the face (textured onto the cube side).
+                  // This keeps it attached to the face instead of being a separate overlay pass.
+                  if (label[0] != 0)
                   {
-                     targetW = maxW;
-                     targetH = targetW / aspect;
+                     // Font-atlas sampling is sensitive to app font choices (e.g., symbol fonts can make 'A' not be an A).
+                     // For a stable, Roblox-like "decal on the face" look, draw a tiny pixel-font letter directly as quads.
+
+                     auto Get5x7 = [](char ch, uint8_t outRows[7])
+                     {
+                        // Each row is 5 bits (bit 4 is left-most).
+                        // Simple, original block glyphs (not copied from any product).
+                        const uint8_t A_[7] = { 0x0E, 0x11, 0x11, 0x1F, 0x11, 0x11, 0x11 }; // 01110,10001,10001,11111,10001,10001,10001
+                        const uint8_t B_[7] = { 0x1E, 0x11, 0x11, 0x1E, 0x11, 0x11, 0x1E }; // 11110,10001,10001,11110,10001,10001,11110
+                        const uint8_t F_[7] = { 0x1F, 0x10, 0x10, 0x1E, 0x10, 0x10, 0x10 }; // 11111,10000,10000,11110,10000,10000,10000
+                        const uint8_t L_[7] = { 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x1F }; // 10000 x6, 11111
+                        const uint8_t R_[7] = { 0x1E, 0x11, 0x11, 0x1E, 0x14, 0x12, 0x11 }; // 11110,10001,10001,11110,10100,10010,10001
+                        const uint8_t U_[7] = { 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x0E }; // 10001 x6, 01110
+                        const uint8_t* src = nullptr;
+                        switch (ch)
+                        {
+                        case 'A': src = A_; break;
+                        case 'B': src = B_; break;
+                        case 'F': src = F_; break;
+                        case 'L': src = L_; break;
+                        case 'R': src = R_; break;
+                        case 'U': src = U_; break;
+                        default: src = nullptr; break;
+                        }
+                        for (int i = 0; i < 7; i++)
+                           outRows[i] = (src != nullptr) ? src[i] : 0;
+                     };
+
+                     // Use a canonical face-local basis per face (like a real cube-side decal).
+                     // Deriving axes from the face corner order makes the +Y face appear rotated (u/v swap) compared to expectation.
+                     vec_t u3d, v3d;
+                     switch (iFace)
+                     {
+                     case 0: // +X (Right): glyph-down=-Y, right=-Z
+                        u3d = makeVect(0.f, 0.f, -1.f);
+                        v3d = makeVect(0.f, -1.f, 0.f);
+                        break;
+                     case 1: // +Y (Above): screen up=+Z, right=+X
+                        u3d = makeVect(1.f, 0.f, 0.f);
+                        v3d = makeVect(0.f, 0.f, 1.f);
+                        break;
+                     case 2: // +Z (Front): screen up=-Y, right=+X (prevents upside-down 'F')
+                        u3d = makeVect(1.f, 0.f, 0.f);
+                        v3d = makeVect(0.f, -1.f, 0.f);
+                        break;
+                     case 3: // -X (Left): glyph-down=-Y, right=+Z
+                        u3d = makeVect(0.f, 0.f, 1.f);
+                        v3d = makeVect(0.f, -1.f, 0.f);
+                        break;
+                     case 4: // -Y (Under): screen up=-Z, right=+X
+                        u3d = makeVect(1.f, 0.f, 0.f);
+                        v3d = makeVect(0.f, 0.f, -1.f);
+                        break;
+                     case 5: // -Z (Back): glyph-down=-Y, right=-X (avoid horizontal mirroring)
+                        u3d = makeVect(-1.f, 0.f, 0.f);
+                        v3d = makeVect(0.f, -1.f, 0.f);
+                        break;
+                     default:
+                        u3d = makeVect(1.f, 0.f, 0.f);
+                        v3d = makeVect(0.f, 1.f, 0.f);
+                        break;
+                     }
+
+                     // Face edge length is 1.0 in this cube (corners at +/-0.5).
+                     const float uLen = 1.0f;
+                     const float vLen = 1.0f;
+
+                     // Center of the face in cube-local space.
+                     const vec_t center3D = n * 0.5f;
+                     {
+
+                        // 5x7 glyph, keep aspect consistent.
+                        const float glyphAspect = 5.0f / 7.0f;
+                        float decalH = (vLen * 0.5f) * 0.90f;
+                        float decalW = decalH * glyphAspect;
+                        const float maxW = (uLen * 0.5f) * 0.90f;
+                        if (decalW > maxW)
+                        {
+                           decalW = maxW;
+                           decalH = decalW / glyphAspect;
+                        }
+
+                        const float halfW = decalW * 0.5f;
+                        const float halfH = decalH * 0.5f;
+                        const vec_t tl3D = center3D - u3d * halfW - v3d * halfH;
+
+                        // Backing plate (on-face)
+                        {
+                           const vec_t p0 = tl3D;
+                           const vec_t p1 = tl3D + u3d * decalW;
+                           const vec_t p2 = p1 + v3d * decalH;
+                           const vec_t p3 = tl3D + v3d * decalH;
+                           const ImVec2 s0 = worldToPos(p0, res, position, size);
+                           const ImVec2 s1 = worldToPos(p1, res, position, size);
+                           const ImVec2 s2 = worldToPos(p2, res, position, size);
+                           const ImVec2 s3 = worldToPos(p3, res, position, size);
+                           gContext.mDrawList->AddQuadFilled(s0, s1, s2, s3, IM_COL32(0, 0, 0, 70));
+                        }
+
+                        uint8_t rows[7]{};
+                        Get5x7(label[0], rows);
+
+                        const int gw = 5;
+                        const int gh = 7;
+                        const float cellW = decalW / (float)gw;
+                        const float cellH = decalH / (float)gh;
+                        const ImVec2 shadowOfs(1.0f, 1.0f);
+                        const ImU32 colShadow = IM_COL32(0, 0, 0, 180);
+                        const ImU32 colFill = IM_COL32(255, 255, 255, 255);
+
+                        for (int y = 0; y < gh; y++)
+                        {
+                           const uint8_t r = rows[y];
+                           for (int x = 0; x < gw; x++)
+                           {
+                              const bool on = ((r >> (gw - 1 - x)) & 1) != 0;
+                              if (!on)
+                                 continue;
+
+                              const vec_t p00 = tl3D + u3d * (cellW * (float)x) + v3d * (cellH * (float)y);
+                              const vec_t p10 = tl3D + u3d * (cellW * (float)(x + 1)) + v3d * (cellH * (float)y);
+                              const vec_t p11 = tl3D + u3d * (cellW * (float)(x + 1)) + v3d * (cellH * (float)(y + 1));
+                              const vec_t p01 = tl3D + u3d * (cellW * (float)x) + v3d * (cellH * (float)(y + 1));
+
+                              const ImVec2 s00 = worldToPos(p00, res, position, size);
+                              const ImVec2 s10 = worldToPos(p10, res, position, size);
+                              const ImVec2 s11 = worldToPos(p11, res, position, size);
+                              const ImVec2 s01 = worldToPos(p01, res, position, size);
+
+                              gContext.mDrawList->AddQuadFilled(s00 + shadowOfs, s10 + shadowOfs, s11 + shadowOfs, s01 + shadowOfs, colShadow);
+                              gContext.mDrawList->AddQuadFilled(s00, s10, s11, s01, colFill);
+                           }
+                        }
+                     }
                   }
-
-                  const float halfW = targetW * 0.5f;
-                  const float halfH = targetH * 0.5f;
-                  const ImVec2 center = faceLabels[iFace].center;
-
-                  // Quad corners on the face (screen-projected, rotated with the face).
-                  const ImVec2 q0 = center - u * halfW - v * halfH;
-                  const ImVec2 q1 = center + u * halfW - v * halfH;
-                  const ImVec2 q2 = center + u * halfW + v * halfH;
-                  const ImVec2 q3 = center - u * halfW + v * halfH;
-
-                  // Backing plate for contrast (slightly larger than the glyph quad)
-                  const float platePad = ImMax(2.0f, ImMin(faceW, faceH) * 0.06f);
-                  const ImVec2 b0 = center - u * (halfW + platePad) - v * (halfH + platePad);
-                  const ImVec2 b1 = center + u * (halfW + platePad) - v * (halfH + platePad);
-                  const ImVec2 b2 = center + u * (halfW + platePad) + v * (halfH + platePad);
-                  const ImVec2 b3 = center - u * (halfW + platePad) + v * (halfH + platePad);
-                  labelDrawList->AddQuadFilled(b0, b1, b2, b3, IM_COL32(0, 0, 0, 140));
-
-                  const ImVec2 uv0(glyph->U0, glyph->V0);
-                  const ImVec2 uv1(glyph->U1, glyph->V0);
-                  const ImVec2 uv2(glyph->U1, glyph->V1);
-                  const ImVec2 uv3(glyph->U0, glyph->V1);
-
-                  // Outline (screen-space offsets) + main glyph
-                  const ImVec2 oL(-1, 0), oR(1, 0), oU(0, -1), oD(0, 1);
-                  labelDrawList->AddImageQuad(fontTex, q0 + oL, q1 + oL, q2 + oL, q3 + oL, uv0, uv1, uv2, uv3, outlineCol);
-                  labelDrawList->AddImageQuad(fontTex, q0 + oR, q1 + oR, q2 + oR, q3 + oR, uv0, uv1, uv2, uv3, outlineCol);
-                  labelDrawList->AddImageQuad(fontTex, q0 + oU, q1 + oU, q2 + oU, q3 + oU, uv0, uv1, uv2, uv3, outlineCol);
-                  labelDrawList->AddImageQuad(fontTex, q0 + oD, q1 + oD, q2 + oD, q3 + oD, uv0, uv1, uv2, uv3, outlineCol);
-                  labelDrawList->AddImageQuad(fontTex, q0, q1, q2, q3, uv0, uv1, uv2, uv3, IM_COL32(255, 255, 255, 255));
-                  continue;
                }
             }
-
-            // Fallback: normal text (should never be needed, but keeps things robust)
-            const ImVec2 textSize = ImGui::CalcTextSize(label);
-            const ImVec2 textPos = faceLabels[iFace].center - textSize * 0.5f;
-            labelDrawList->AddText(textPos + ImVec2(-1, 0), outlineCol, label);
-            labelDrawList->AddText(textPos + ImVec2(1, 0), outlineCol, label);
-            labelDrawList->AddText(textPos + ImVec2(0, -1), outlineCol, label);
-            labelDrawList->AddText(textPos + ImVec2(0, 1), outlineCol, label);
-            labelDrawList->AddText(textPos, IM_COL32(255, 255, 255, 255), label);
          }
       }
 
