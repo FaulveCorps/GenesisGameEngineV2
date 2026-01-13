@@ -39,4 +39,11 @@ struct LightComponent {
     float range = 10.0f; 
 };
 
+struct CameraComponent {
+    float fov = 45.0f; // degrees
+    float nearPlane = 0.1f;
+    float farPlane = 100.0f;
+    bool primary = true;
+};
+
 } // namespace Genesis::Engine

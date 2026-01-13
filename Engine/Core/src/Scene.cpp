@@ -8,9 +8,37 @@
 
 namespace Genesis::Engine {
 
-void Scene::Update(double dt) {
+void Scene::OnRuntimeStart() {
+}
+
+void Scene::OnRuntimeStop() {
+}
+
+void Scene::OnUpdateRuntime(double dt) {
     AnimationSystem::Update(*this, dt);
     UISystem::Update(*this, dt);
+
+    // Demonstration: Rotate entities named "Cube" to visible show Play Mode is working
+    auto view = m_registry.view<Transform, NameComponent>();
+    for (auto entity : view) {
+        auto& t = view.get<Transform>(entity);
+        const auto& n = view.get<NameComponent>(entity);
+        if (n.name == "Cube") {
+            t.ry += (float)dt; 
+            t.rx += (float)dt * 0.5f;
+        }
+    }
+}
+
+void Scene::OnUpdateEditor(double dt) {
+}
+
+void Scene::Update(double dt) {
+    OnUpdateRuntime(dt);
+}
+
+void Scene::CopyFrom(const Scene& other) {
+    // Not implemented yet
 }
 
 void Scene::Render(IGraphicsAPI* renderer) {
