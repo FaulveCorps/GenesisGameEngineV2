@@ -1184,6 +1184,125 @@ int main(int argc, char** argv) {
                     HandleIconInteraction(entity, sPos, size * 1.5f);
                 }
             }
+
+            // 3. Audio / Speakers (Speaker icon)
+            auto viewAudio = activeScene->Registry().view<Genesis::Engine::Transform, Genesis::Engine::AudioComponent>();
+            for (auto entity : viewAudio) {
+                const auto& t = viewAudio.get<Genesis::Engine::Transform>(entity);
+                ImVec2 sPos;
+                if (WorldToScreen(glm::vec3(t.x, t.y, t.z), sPos)) {
+                    bool isSelected = (entity == selectedEntity);
+                    // High-visibility Orange
+                    ImU32 colorP = isSelected ? IM_COL32(255, 180, 100, 255) : IM_COL32(255, 140, 0, 255);
+                    ImU32 colorBorder = IM_COL32(10, 10, 10, 255);
+                    float size = 18.0f; 
+
+                    // Speaker Box (Left part) - Rectangle
+                    ImVec2 boxMin(sPos.x - size * 0.5f, sPos.y - size * 0.35f);
+                    ImVec2 boxMax(sPos.x - size * 0.1f, sPos.y + size * 0.35f);
+                    drawList->AddRectFilled(boxMin, boxMax, colorP);
+                    drawList->AddRect(boxMin, boxMax, colorBorder, 0, 0, 3.0f);
+
+                    // Speaker Cone (Right triangle/trapezoid)
+                    ImVec2 p1(sPos.x - size * 0.1f, sPos.y - size * 0.35f); // Base top
+                    ImVec2 p2(sPos.x - size * 0.1f, sPos.y + size * 0.35f); // Base bottom
+                    ImVec2 p3(sPos.x + size * 0.6f, sPos.y + size * 0.8f);  // Front bottom
+                    ImVec2 p4(sPos.x + size * 0.6f, sPos.y - size * 0.8f);  // Front top
+                    
+                    ImVec2 poly[4] = { p1, p2, p3, p4 };
+                    drawList->AddConvexPolyFilled(poly, 4, colorP);
+                    drawList->AddPolyline(poly, 4, colorBorder, ImDrawFlags_Closed, 3.0f);
+
+                    // Sound Waves (Arcs roughly)
+                    ImVec2 centerOffset(sPos.x + size * 0.2f, sPos.y); 
+                    // We simulate arcs with lines or quadratic beziers
+                    drawList->AddBezierQuadratic(
+                        ImVec2(sPos.x + size * 0.8f, sPos.y - size * 0.5f),
+                        ImVec2(sPos.x + size * 1.0f, sPos.y),
+                        ImVec2(sPos.x + size * 0.8f, sPos.y + size * 0.5f),
+                        colorP, 3.0f
+                    );
+                    drawList->AddBezierQuadratic(
+                        ImVec2(sPos.x + size * 1.1f, sPos.y - size * 0.8f),
+                        ImVec2(sPos.x + size * 1.4f, sPos.y),
+                        ImVec2(sPos.x + size * 1.1f, sPos.y + size * 0.8f),
+                        colorP, 3.0f
+                    );
+
+                    HandleIconInteraction(entity, sPos, size * 1.5f);
+                }
+            }
+
+            // 4. Particle Systems
+            auto viewParticles = activeScene->Registry().view<Genesis::Engine::Transform, Genesis::Engine::ParticleSystemComponent>();
+            for (auto entity : viewParticles) {
+                const auto& t = viewParticles.get<Genesis::Engine::Transform>(entity);
+                ImVec2 sPos;
+                if (WorldToScreen(glm::vec3(t.x, t.y, t.z), sPos)) {
+                    bool isSelected = (entity == selectedEntity);
+                    // Cyan/Pinkish for Effects
+                    ImU32 colorP = isSelected ? IM_COL32(255, 100, 255, 255) : IM_COL32(200, 50, 200, 255);
+                    ImU32 colorBorder = IM_COL32(10, 10, 10, 255);
+                    float size = 16.0f;
+
+                    // Draw a "Spray" icon (Center circle + little dots)
+                    drawList->AddCircleFilled(sPos, size * 0.4f, colorP);
+                    drawList->AddCircle(sPos, size * 0.4f, colorBorder, 0, 3.0f);
+                    
+                    // Little particles
+                    ImVec2 bioffsets[3] = { ImVec2(0.6f, -0.6f), ImVec2(0.8f, 0.0f), ImVec2(0.6f, 0.6f) };
+                    for(auto& off : bioffsets) {
+                        ImVec2 p(sPos.x + off.x * size, sPos.y + off.y * size);
+                        drawList->AddCircleFilled(p, size * 0.15f, colorP);
+                        drawList->AddCircle(p, size * 0.15f, colorBorder, 0, 2.0f);
+                    }
+
+                    HandleIconInteraction(entity, sPos, size * 1.5f);
+                }
+            }
+
+            // 5. Physics Colliders (Box & Sphere) - Unified Green Logic Icon
+            auto viewBox = activeScene->Registry().view<Genesis::Engine::Transform, Genesis::Engine::BoxColliderComponent>();
+            for (auto entity : viewBox) {
+                const auto& t = viewBox.get<Genesis::Engine::Transform>(entity);
+                ImVec2 sPos;
+                if (WorldToScreen(glm::vec3(t.x, t.y, t.z), sPos)) {
+                    bool isSelected = (entity == selectedEntity);
+                    ImU32 colorP = isSelected ? IM_COL32(150, 255, 150, 255) : IM_COL32(50, 200, 50, 255);
+                    ImU32 colorBorder = IM_COL32(10, 10, 10, 255);
+                    float size = 18.0f;
+
+                    // Draw Box
+                    ImVec2 tl(sPos.x - size*0.5f, sPos.y - size*0.5f);
+                    ImVec2 br(sPos.x + size*0.5f, sPos.y + size*0.5f);
+                    
+                    drawList->AddRect(tl, br, colorP, 2.0f, 0, 3.0f); // Wireframe look
+                    drawList->AddRect(tl, br, colorBorder, 2.0f, 0, 1.0f); // Inner outline helper
+                    drawList->AddRectFilled(tl, br, (colorP & 0x00FFFFFF) | 0x40000000); // Semi-transparent fill
+
+                    HandleIconInteraction(entity, sPos, size * 1.5f);
+                }
+            }
+
+             auto viewSphere = activeScene->Registry().view<Genesis::Engine::Transform, Genesis::Engine::SphereColliderComponent>();
+            for (auto entity : viewSphere) {
+                const auto& t = viewSphere.get<Genesis::Engine::Transform>(entity);
+                ImVec2 sPos;
+                // Avoid double-drawing if it has both box and sphere (rare but possible)
+                if (!activeScene->Registry().all_of<Genesis::Engine::BoxColliderComponent>(entity)) {
+                     if (WorldToScreen(glm::vec3(t.x, t.y, t.z), sPos)) {
+                        bool isSelected = (entity == selectedEntity);
+                        ImU32 colorP = isSelected ? IM_COL32(150, 255, 150, 255) : IM_COL32(50, 200, 50, 255);
+                        float size = 18.0f;
+                        
+                        drawList->AddCircle(sPos, size*0.5f, colorP, 0, 3.0f);
+                        drawList->AddCircleFilled(sPos, size*0.5f, (colorP & 0x00FFFFFF) | 0x40000000);
+
+                        HandleIconInteraction(entity, sPos, size * 1.5f);
+                     }
+                }
+            }
+
             drawList->PopClipRect();
         }
 
@@ -1552,6 +1671,113 @@ int main(int argc, char** argv) {
                     }
                 }
 
+                if (activeScene->Registry().all_of<Genesis::Engine::AudioComponent>(selectedEntity)) {
+                    if (ImGui::CollapsingHeader("Audio Source", ImGuiTreeNodeFlags_DefaultOpen)) {
+                        auto& ac = activeScene->Registry().get<Genesis::Engine::AudioComponent>(selectedEntity);
+                        
+                        char pathBuf[256];
+                        strncpy_s(pathBuf, ac.soundPath.c_str(), sizeof(pathBuf) - 1);
+                        if (ImGui::InputText("Sound Path", pathBuf, sizeof(pathBuf))) {
+                            ac.soundPath = std::string(pathBuf);
+                            if (editorState == EditorState::Edit) sceneDirty = true;
+                        }
+                        // Drag drop for sound files
+                        if (ImGui::BeginDragDropTarget()) {
+                            if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("CONTENT_BROWSER_ITEM")) {
+                                const char* droppedPath = (const char*)payload->Data;
+                                if (droppedPath) {
+                                    std::string pStr = droppedPath;
+                                    std::string ext = std::filesystem::path(pStr).extension().string();
+                                    // Basic audio extensions
+                                    if (ext == ".wav" || ext == ".mp3" || ext == ".ogg") {
+                                        ac.soundPath = pStr;
+                                        if (editorState == EditorState::Edit) sceneDirty = true;
+                                    }
+                                }
+                            }
+                            ImGui::EndDragDropTarget();
+                        }
+
+                        if (ImGui::DragFloat("Volume", &ac.volume, 0.01f, 0.0f, 1.0f)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        if (ImGui::DragFloat("Pitch", &ac.pitch, 0.01f, 0.1f, 3.0f)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        if (ImGui::Checkbox("Loop", &ac.loop)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        if (ImGui::Checkbox("Play On Awake", &ac.playOnAwake)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        
+                        ImGui::Separator();
+                        if (ImGui::Checkbox("3D Spatial", &ac.spatial)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        if (ac.spatial) {
+                             if (ImGui::DragFloat("Min Distance", &ac.minDistance, 0.1f, 0.0f)) if (editorState == EditorState::Edit) sceneDirty = true;
+                             if (ImGui::DragFloat("Max Distance", &ac.maxDistance, 0.1f, 0.0f)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        }
+
+                        if (ImGui::Button("Remove Component")) {
+                            activeScene->Registry().remove<Genesis::Engine::AudioComponent>(selectedEntity);
+                            if (editorState == EditorState::Edit) sceneDirty = true;
+                        }
+                    }
+                }
+
+                if (activeScene->Registry().all_of<Genesis::Engine::ParticleSystemComponent>(selectedEntity)) {
+                    if (ImGui::CollapsingHeader("Particle System", ImGuiTreeNodeFlags_DefaultOpen)) {
+                        auto& ps = activeScene->Registry().get<Genesis::Engine::ParticleSystemComponent>(selectedEntity);
+                        if (ImGui::ColorEdit4("Start Color", ps.startColor)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        if (ImGui::DragFloat("Start Lifetime", &ps.startLifetime, 0.1f, 0.0f)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        if (ImGui::DragFloat("Start Speed", &ps.startSpeed, 0.1f)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        if (ImGui::DragFloat("Start Size", &ps.startSize, 0.1f, 0.0f)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        if (ImGui::DragFloat("Emission Rate", &ps.rateOverTime, 0.1f, 0.0f)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        if (ImGui::DragFloat("Duration", &ps.duration, 0.1f, 0.0f)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        if (ImGui::Checkbox("Looping", &ps.looping)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        if (ImGui::Checkbox("Play On Awake", &ps.playOnAwake)) if (editorState == EditorState::Edit) sceneDirty = true;
+
+                        if (ImGui::Button("Remove Component")) {
+                            activeScene->Registry().remove<Genesis::Engine::ParticleSystemComponent>(selectedEntity);
+                            if (editorState == EditorState::Edit) sceneDirty = true;
+                        }
+                    }
+                }
+
+                if (activeScene->Registry().all_of<Genesis::Engine::BoxColliderComponent>(selectedEntity)) {
+                    if (ImGui::CollapsingHeader("Box Collider", ImGuiTreeNodeFlags_DefaultOpen)) {
+                        auto& bc = activeScene->Registry().get<Genesis::Engine::BoxColliderComponent>(selectedEntity);
+                        if (ImGui::DragFloat3("Size", bc.size, 0.1f)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        if (ImGui::DragFloat3("Offset", bc.offset, 0.1f)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        if (ImGui::Checkbox("Is Trigger", &bc.isTrigger)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        
+                         if (ImGui::Button("Remove Component")) {
+                            activeScene->Registry().remove<Genesis::Engine::BoxColliderComponent>(selectedEntity);
+                            if (editorState == EditorState::Edit) sceneDirty = true;
+                        }
+                    }
+                }
+
+                if (activeScene->Registry().all_of<Genesis::Engine::SphereColliderComponent>(selectedEntity)) {
+                    if (ImGui::CollapsingHeader("Sphere Collider", ImGuiTreeNodeFlags_DefaultOpen)) {
+                        auto& sc = activeScene->Registry().get<Genesis::Engine::SphereColliderComponent>(selectedEntity);
+                        if (ImGui::DragFloat("Radius", &sc.radius, 0.1f, 0.0f)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        if (ImGui::DragFloat3("Offset", sc.offset, 0.1f)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        if (ImGui::Checkbox("Is Trigger", &sc.isTrigger)) if (editorState == EditorState::Edit) sceneDirty = true;
+
+                        if (ImGui::Button("Remove Component")) {
+                            activeScene->Registry().remove<Genesis::Engine::SphereColliderComponent>(selectedEntity);
+                            if (editorState == EditorState::Edit) sceneDirty = true;
+                        }
+                    }
+                }
+
+                if (activeScene->Registry().all_of<Genesis::Engine::RigidBodyComponent>(selectedEntity)) {
+                    if (ImGui::CollapsingHeader("RigidBody", ImGuiTreeNodeFlags_DefaultOpen)) {
+                        auto& rb = activeScene->Registry().get<Genesis::Engine::RigidBodyComponent>(selectedEntity);
+                        if (ImGui::DragFloat("Mass", &rb.mass, 0.1f, 0.0f)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        if (ImGui::Checkbox("Use Gravity", &rb.useGravity)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        if (ImGui::Checkbox("Is Kinematic", &rb.isKinematic)) if (editorState == EditorState::Edit) sceneDirty = true;
+
+                        if (ImGui::Button("Remove Component")) {
+                            activeScene->Registry().remove<Genesis::Engine::RigidBodyComponent>(selectedEntity);
+                            if (editorState == EditorState::Edit) sceneDirty = true;
+                        }
+                    }
+                }
+
                 if (ImGui::Button("Add Component")) {
                     ImGui::OpenPopup("AddComponentPopup");
                 }
@@ -1559,6 +1785,42 @@ int main(int argc, char** argv) {
                     if (ImGui::MenuItem("Light")) {
                         if (!activeScene->Registry().all_of<Genesis::Engine::LightComponent>(selectedEntity)) {
                             activeScene->Registry().emplace<Genesis::Engine::LightComponent>(selectedEntity);
+                            if (editorState == EditorState::Edit) sceneDirty = true;
+                        }
+                    }
+                    if (ImGui::MenuItem("Audio Source")) {
+                        if (!activeScene->Registry().all_of<Genesis::Engine::AudioComponent>(selectedEntity)) {
+                            activeScene->Registry().emplace<Genesis::Engine::AudioComponent>(selectedEntity);
+                            if (editorState == EditorState::Edit) sceneDirty = true;
+                        }
+                    }
+                    if (ImGui::MenuItem("Particle System")) {
+                        if (!activeScene->Registry().all_of<Genesis::Engine::ParticleSystemComponent>(selectedEntity)) {
+                            activeScene->Registry().emplace<Genesis::Engine::ParticleSystemComponent>(selectedEntity);
+                            if (editorState == EditorState::Edit) sceneDirty = true;
+                        }
+                    }
+                    if (ImGui::MenuItem("Box Collider")) {
+                        if (!activeScene->Registry().all_of<Genesis::Engine::BoxColliderComponent>(selectedEntity)) {
+                            activeScene->Registry().emplace<Genesis::Engine::BoxColliderComponent>(selectedEntity);
+                            if (editorState == EditorState::Edit) sceneDirty = true;
+                        }
+                    }
+                    if (ImGui::MenuItem("Sphere Collider")) {
+                        if (!activeScene->Registry().all_of<Genesis::Engine::SphereColliderComponent>(selectedEntity)) {
+                            activeScene->Registry().emplace<Genesis::Engine::SphereColliderComponent>(selectedEntity);
+                            if (editorState == EditorState::Edit) sceneDirty = true;
+                        }
+                    }
+                    if (ImGui::MenuItem("RigidBody")) {
+                        if (!activeScene->Registry().all_of<Genesis::Engine::RigidBodyComponent>(selectedEntity)) {
+                            activeScene->Registry().emplace<Genesis::Engine::RigidBodyComponent>(selectedEntity);
+                            if (editorState == EditorState::Edit) sceneDirty = true;
+                        }
+                    }
+                    if (ImGui::MenuItem("Camera")) {
+                        if (!activeScene->Registry().all_of<Genesis::Engine::CameraComponent>(selectedEntity)) {
+                            activeScene->Registry().emplace<Genesis::Engine::CameraComponent>(selectedEntity);
                             if (editorState == EditorState::Edit) sceneDirty = true;
                         }
                     }

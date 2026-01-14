@@ -46,4 +46,53 @@ struct CameraComponent {
     bool primary = true;
 };
 
+struct AudioComponent {
+    std::string soundPath;
+    float volume = 1.0f;
+    float pitch = 1.0f;
+    bool loop = false;
+    bool playOnAwake = true;
+    
+    // 3D Spatial Settings
+    bool spatial = true;
+    float minDistance = 1.0f;
+    float maxDistance = 20.0f;
+};
+
+struct ParticleSystemComponent {
+    float duration = 5.0f;
+    bool looping = true;
+    bool playOnAwake = true;
+    
+    float startLifetime = 5.0f;
+    float startSpeed = 5.0f;
+    float startSize = 1.0f;
+    float startColor[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+    
+    // Emission
+    float rateOverTime = 10.0f;
+    
+    // Shape (Cone, Sphere, Box)
+    // For now simplistic
+    float emitterRadius = 0.5f;
+};
+
+struct BoxColliderComponent {
+    float size[3] = {1.0f, 1.0f, 1.0f};
+    float offset[3] = {0.0f, 0.0f, 0.0f};
+    bool isTrigger = false;
+};
+
+struct SphereColliderComponent {
+    float radius = 0.5f;
+    float offset[3] = {0.0f, 0.0f, 0.0f};
+    bool isTrigger = false;
+};
+
+struct RigidBodyComponent {
+    float mass = 1.0f;
+    bool useGravity = true;
+    bool isKinematic = false;
+};
+
 } // namespace Genesis::Engine
