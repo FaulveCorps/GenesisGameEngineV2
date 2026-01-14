@@ -12,7 +12,7 @@ target_compile_features(GenesisEditor PUBLIC cxx_std_17)
 # Copy assets to the target build folder
 add_custom_command(TARGET GenesisEditor POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
-    ${CMAKE_SOURCE_DIR}/assets ${CMAKE_CURRENT_BINARY_DIR}/assets
+    ${CMAKE_SOURCE_DIR}/Assets $<TARGET_FILE_DIR:GenesisEditor>/Assets
 )
 
 # Copy runtime DLLs (SDL3, Assimp and dependencies) into the output folder on Windows

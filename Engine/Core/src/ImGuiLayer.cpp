@@ -29,6 +29,9 @@ ImGuiLayer::ImGuiLayer(SDL_Window* window, SDL_GLContext context)
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
     io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable; // Enable Multi-Viewport / Platform Windows
 
+    // Load Monoid font
+    io.Fonts->AddFontFromFileTTF("Assets/fonts/Monoid.ttf", 16.0f);
+
     ImGui::StyleColorsDark();
 
     // When viewports are enabled we tweak WindowRounding/WindowBg so platform windows can look identical to regular ones.
