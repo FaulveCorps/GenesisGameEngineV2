@@ -1076,6 +1076,117 @@ int main(int argc, char** argv) {
             ImGuizmo::DrawGrid(glm::value_ptr(view), glm::value_ptr(projection), glm::value_ptr(identityMatrix), 100.f);
         }
 
+        // Draw Scene Icons (Lights, Cameras) - Visual aids for non-mesh entities
+        // RENDER ORDER: Image -> Grid -> Icons -> ViewManipulate/Gizmos
+        // Use ForegroundDrawList to ensure icons are drawn ON TOP of the grid (which is drawn to WindowDrawList by ImGuizmo)
+        if (editorState == EditorState::Edit) {
+            auto* drawList = ImGui::GetForegroundDrawList();
+            drawList->PushClipRect(viewportTopLeft, ImVec2(viewportTopLeft.x + viewportSize.x, viewportTopLeft.y + viewportSize.y));
+
+            auto WorldToScreen = [&](const glm::vec3& worldPos, ImVec2& outScreen) -> bool {
+                glm::vec4 clip = projection * view * glm::vec4(worldPos, 1.0f);
+                if (clip.w <= 0.0f) return false; // Behind camera
+
+                float ndc_x = clip.x / clip.w;
+                float ndc_y = clip.y / clip.w;
+
+                float viewportX = (ndc_x * 0.5f + 0.5f) * viewportSize.x;
+                float viewportY = (ndc_y * 0.5f + 0.5f) * viewportSize.y;
+                
+                // Flip Y for ImGui (OpenGL Y is up, ImGui Y is down)
+                viewportY = viewportSize.y - viewportY;
+
+                outScreen = ImVec2(viewportTopLeft.x + viewportX, viewportTopLeft.y + viewportY);
+                return true;
+            };
+
+            auto HandleIconInteraction = [&](entt::entity entity, const ImVec2& screenPos, float radius) {
+                // If gizmo is hovered/active, it takes priority
+                if (ImGuizmo::IsOver() || ImGuizmo::IsUsing()) return;
+                
+                // Only allow selection if the viewport logic allows interaction
+                if (allowGizmoInteractionThisFrame && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+                    ImVec2 mouse = ImGui::GetMousePos();
+                    float dx = mouse.x - screenPos.x;
+                    float dy = mouse.y - screenPos.y;
+                    if (dx*dx + dy*dy <= radius*radius) {
+                        selectedEntity = entity;
+                    }
+                }
+            };
+
+            // 1. Lights (Sun icon)
+            auto viewLights = activeScene->Registry().view<Genesis::Engine::Transform, Genesis::Engine::LightComponent>();
+            for (auto entity : viewLights) {
+                const auto& t = viewLights.get<Genesis::Engine::Transform>(entity);
+                ImVec2 sPos;
+                if (WorldToScreen(glm::vec3(t.x, t.y, t.z), sPos)) {
+                    bool isSelected = (entity == selectedEntity);
+                    // High-visibility Yellow
+                    ImU32 colorP = isSelected ? IM_COL32(255, 255, 150, 255) : IM_COL32(255, 215, 0, 255);
+                    ImU32 colorBorder = IM_COL32(10, 10, 10, 255); // Near black
+                    float radius = 20.0f; // Significantly Larger (was 14)
+
+                    // Draw rays
+                    for (int i = 0; i < 8; i++) {
+                        float angle = (float)i * (6.28318f / 8.0f);
+                        float c = cosf(angle), s = sinf(angle);
+                        ImVec2 p1(sPos.x + c * radius * 0.7f, sPos.y + s * radius * 0.7f);
+                        ImVec2 p2(sPos.x + c * radius * 1.5f, sPos.y + s * radius * 1.5f);
+
+                        // Ray border (outline)
+                        drawList->AddLine(p1, p2, colorBorder, 5.0f);
+                        // Ray core
+                        drawList->AddLine(p1, p2, colorP, 3.0f);
+                    }
+
+                    // Draw center (Filled with border)
+                    drawList->AddCircleFilled(sPos, radius * 0.5f, colorP);
+                    drawList->AddCircle(sPos, radius * 0.5f, colorBorder, 0, 3.0f);
+
+                    HandleIconInteraction(entity, sPos, radius * 1.5f);
+                }
+            }
+
+            // 2. Cameras (Camera box icon)
+            auto viewCams = activeScene->Registry().view<Genesis::Engine::Transform, Genesis::Engine::CameraComponent>();
+            for (auto entity : viewCams) {
+                const auto& t = viewCams.get<Genesis::Engine::Transform>(entity);
+                ImVec2 sPos;
+                if (WorldToScreen(glm::vec3(t.x, t.y, t.z), sPos)) {
+                    bool isSelected = (entity == selectedEntity);
+                    // High-visibility Cyan
+                    ImU32 colorP = isSelected ? IM_COL32(150, 255, 255, 255) : IM_COL32(0, 200, 255, 255);
+                    ImU32 colorBorder = IM_COL32(10, 10, 10, 255);
+                    float size = 24.0f; // Significantly Larger (was 16)
+
+                    // Body
+                    ImVec2 tl(sPos.x - size, sPos.y - size * 0.6f);
+                    ImVec2 br(sPos.x + size * 0.4f, sPos.y + size * 0.6f);
+
+                    // Draw body filled + border
+                    drawList->AddRectFilled(tl, br, colorP, 4.0f); // Rounded corners
+                    drawList->AddRect(tl, br, colorBorder, 4.0f, 0, 3.0f);
+
+                    // Lens
+                    ImVec2 tri1(sPos.x + size * 0.4f, sPos.y);
+                    ImVec2 tri2(sPos.x + size * 1.2f, sPos.y - size * 0.6f);
+                    ImVec2 tri3(sPos.x + size * 1.2f, sPos.y + size * 0.6f);
+
+                    // Draw lens filled + border
+                    drawList->AddTriangleFilled(tri1, tri2, tri3, colorP);
+                    drawList->AddTriangle(tri1, tri2, tri3, colorBorder, 3.0f);
+                    
+                    // Small "CAM" text overlay for clarity
+                    // ImVec2 textPos(tl.x + 4.0f, tl.y + 4.0f);
+                    // drawList->AddText(textPos, IM_COL32(0,0,0,200), "C");
+
+                    HandleIconInteraction(entity, sPos, size * 1.5f);
+                }
+            }
+            drawList->PopClipRect();
+        }
+
         // View Manipulate (View Cube) - only in Edit Mode
         // Position still calculated above for conflict detection, but we only draw/interact in Edit.
         if (editorState == EditorState::Edit) {
