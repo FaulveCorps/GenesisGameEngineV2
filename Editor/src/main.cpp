@@ -351,12 +351,60 @@ int main(int argc, char** argv) {
         cubeTrans.y = 0.0f;
         editorScene.Registry().emplace<Genesis::Engine::Transform>(cubeEntity, cubeTrans);
         
-        auto& modelComp = editorScene.Registry().emplace<Genesis::Engine::ModelComponent>(cubeEntity);
+        auto modelComp = editorScene.Registry().emplace<Genesis::Engine::ModelComponent>(cubeEntity);
         modelComp.model = std::make_shared<Genesis::Engine::Model>();
-        modelComp.sourcePath = "Assets/models/cube.obj";
-        if (!modelComp.model->Load(modelComp.sourcePath)) {
-            std::cerr << "Failed to load default cube model: " << modelComp.sourcePath << std::endl;
-        }
+        modelComp.sourcePath.clear();
+        
+        // Manually create a cube mesh
+        Genesis::Engine::Mesh cubeMesh;
+        std::vector<float> vertices = {
+            // Front face
+            -0.5f, -0.5f,  0.5f,  0.5f, -0.5f,  0.5f,  0.5f,  0.5f,  0.5f, -0.5f,  0.5f,  0.5f,
+            // Back face
+            -0.5f, -0.5f, -0.5f, -0.5f,  0.5f, -0.5f,  0.5f,  0.5f, -0.5f,  0.5f, -0.5f, -0.5f,
+            // Top face
+            -0.5f,  0.5f, -0.5f, -0.5f,  0.5f,  0.5f,  0.5f,  0.5f,  0.5f,  0.5f,  0.5f, -0.5f,
+            // Bottom face
+            -0.5f, -0.5f, -0.5f,  0.5f, -0.5f, -0.5f,  0.5f, -0.5f,  0.5f, -0.5f, -0.5f,  0.5f,
+            // Right face
+             0.5f, -0.5f, -0.5f,  0.5f,  0.5f, -0.5f,  0.5f,  0.5f,  0.5f,  0.5f, -0.5f,  0.5f,
+            // Left face
+            -0.5f, -0.5f, -0.5f, -0.5f, -0.5f,  0.5f, -0.5f,  0.5f,  0.5f, -0.5f,  0.5f, -0.5f
+        };
+        std::vector<float> normals = {
+            // Front
+             0.0f,  0.0f,  1.0f,  0.0f,  0.0f,  1.0f,  0.0f,  0.0f,  1.0f,  0.0f,  0.0f,  1.0f,
+            // Back
+             0.0f,  0.0f, -1.0f,  0.0f,  0.0f, -1.0f,  0.0f,  0.0f, -1.0f,  0.0f,  0.0f, -1.0f,
+            // Top
+             0.0f,  1.0f,  0.0f,  0.0f,  1.0f,  0.0f,  0.0f,  1.0f,  0.0f,  0.0f,  1.0f,  0.0f,
+            // Bottom
+             0.0f, -1.0f,  0.0f,  0.0f, -1.0f,  0.0f,  0.0f, -1.0f,  0.0f,  0.0f, -1.0f,  0.0f,
+            // Right
+             1.0f,  0.0f,  0.0f,  1.0f,  0.0f,  0.0f,  1.0f,  0.0f,  0.0f,  1.0f,  0.0f,  0.0f,
+            // Left
+            -1.0f,  0.0f,  0.0f, -1.0f,  0.0f,  0.0f, -1.0f,  0.0f,  0.0f, -1.0f,  0.0f,  0.0f
+        };
+        std::vector<uint32_t> indices = {
+             0,  1,  2,  2,  3,  0, // Front
+             4,  5,  6,  6,  7,  4, // Back
+             8,  9, 10, 10, 11,  8, // Top
+            12, 13, 14, 14, 15, 12, // Bottom
+            16, 17, 18, 18, 19, 16, // Right
+            20, 21, 22, 22, 23, 20  // Left
+        };
+        // Add dummy UVs
+        std::vector<float> uvs(vertices.size() / 3 * 2, 0.0f);
+
+        cubeMesh.SetData(vertices, normals, uvs, indices);
+        
+        // We need to access the private m_meshes of Model to add this mesh
+        // But Model::m_meshes is private. 
+        // We should probably add a method to Model to add a mesh, or just use a public method if available.
+        // Checking Model.h... m_meshes is private.
+        // Let's modify Model.h to allow adding a mesh manually or make m_meshes public/protected.
+        // For now, I'll just modify Model.h to add `AddMesh(Mesh&& mesh)`.
+        modelComp.model->AddMesh(std::move(cubeMesh));
     }
     else {
         currentScenePath = "Assets/scenes/default.scene";
@@ -430,31 +478,6 @@ int main(int argc, char** argv) {
         if (!MaybePromptUnsaved(PendingSceneAction::Quit)) {
             running = false;
         }
-    };
-
-    auto MatDifferent = [](const glm::mat4& m1, const glm::mat4& m2) {
-        const float* p1 = glm::value_ptr(m1);
-        const float* p2 = glm::value_ptr(m2);
-        for (int i = 0; i < 16; i++) {
-            if (fabsf(p1[i] - p2[i]) > 0.0001f) return true;
-        }
-        return false;
-    };
-
-    auto ApplyViewMatrixToCamera = [&](const glm::mat4& newView) {
-        glm::mat4 inverseView = glm::inverse(newView);
-        cameraPos = glm::vec3(inverseView[3]);
-        
-        glm::vec3 scale;
-        glm::quat rotation;
-        glm::vec3 translation;
-        glm::vec3 skew;
-        glm::vec4 perspective;
-        glm::decompose(inverseView, scale, rotation, translation, skew, perspective);
-        glm::vec3 euler = glm::degrees(glm::eulerAngles(rotation));
-        cameraRot.x = euler.x; 
-        cameraRot.y = euler.y;
-        cameraRot.z = euler.z;
     };
 
     while (running) {
@@ -698,7 +721,7 @@ int main(int argc, char** argv) {
                 ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 16.0f);
                 
                 if (editorState == EditorState::Edit) {
-                    if (ImGui::Button(" Play ", ImVec2(60, 0))) {
+                    if (ImGui::Button("Play", ImVec2(80, 0))) {
                         // Enter Play Mode
                         // 1. Save Scene to temp
                         if (Genesis::Engine::SceneLoader::SaveScene(editorScene, "tmp/play_backup.scene")) {
@@ -720,17 +743,17 @@ int main(int argc, char** argv) {
                 } else {
                     // Play / Pause / Stop controls
                     if (editorState == EditorState::Play) {
-                        if (ImGui::Button(" Pause ", ImVec2(60, 0))) {
+                        if (ImGui::Button("Pause", ImVec2(80, 0))) {
                             editorState = EditorState::Pause;
                         }
                     } else if (editorState == EditorState::Pause) {
-                        if (ImGui::Button(" Resume ", ImVec2(60, 0))) {
+                        if (ImGui::Button("Resume", ImVec2(80, 0))) {
                             editorState = EditorState::Play;
                         }
                     }
 
                     ImGui::SameLine();
-                    if (ImGui::Button(" Stop ", ImVec2(60, 0))) {
+                    if (ImGui::Button("Stop", ImVec2(80, 0))) {
                          // Stop Play Mode
                          if (activeScene) activeScene->OnRuntimeStop();
                          activeScene = &editorScene;
@@ -1069,286 +1092,108 @@ int main(int argc, char** argv) {
             ImGui::EndDragDropTarget();
         }
 
-        if (showGrid && editorState == EditorState::Edit) {
+        // Draw Grid
+        if (showGrid) {
             ImGuizmo::SetDrawlist();
             ImGuizmo::SetRect(viewportTopLeft.x, viewportTopLeft.y, viewportSize.x, viewportSize.y);
             glm::mat4 identityMatrix = glm::mat4(1.0f);
             ImGuizmo::DrawGrid(glm::value_ptr(view), glm::value_ptr(projection), glm::value_ptr(identityMatrix), 100.f);
         }
 
-        // Draw Scene Icons (Lights, Cameras) - Visual aids for non-mesh entities
-        // RENDER ORDER: Image -> Grid -> Icons -> ViewManipulate/Gizmos
-        // Use ForegroundDrawList to ensure icons are drawn ON TOP of the grid (which is drawn to WindowDrawList by ImGuizmo)
-        if (editorState == EditorState::Edit) {
-            auto* drawList = ImGui::GetForegroundDrawList();
-            drawList->PushClipRect(viewportTopLeft, ImVec2(viewportTopLeft.x + viewportSize.x, viewportTopLeft.y + viewportSize.y));
+        // View Manipulate (View Cube) - position already calculated above for conflict detection
+        glm::mat4 viewCopy = view; // Make a copy to pass to ViewManipulate
+        ImGuizmo::SetDrawlist();
+        ImGuizmo::ViewManipulate(glm::value_ptr(viewCopy), 5.0f, viewManipulatePos, ImVec2(viewManipulateSize, viewManipulateSize), 0x10101010);
 
-            auto WorldToScreen = [&](const glm::vec3& worldPos, ImVec2& outScreen) -> bool {
-                glm::vec4 clip = projection * view * glm::vec4(worldPos, 1.0f);
-                if (clip.w <= 0.0f) return false; // Behind camera
+        // Axis labels (X/Y/Z) around the cube (overlay, positioned based on current view orientation)
+        {
+            ImDrawList* dl = ImGui::GetWindowDrawList();
+            const ImU32 shadow = IM_COL32(0, 0, 0, 160);
+            const ImU32 textFront = IM_COL32(235, 235, 235, 230);
+            const ImU32 textBack = IM_COL32(170, 170, 170, 180);
+            const ImVec2 center = ImVec2(viewManipulatePos.x + viewManipulateSize * 0.5f, viewManipulatePos.y + viewManipulateSize * 0.5f);
 
-                float ndc_x = clip.x / clip.w;
-                float ndc_y = clip.y / clip.w;
+            // View matrix transforms World -> View (camera). Use its rotation part to estimate
+            // where the world axes point on the view-cube overlay.
+            const glm::mat3 viewRot = glm::mat3(view);
 
-                float viewportX = (ndc_x * 0.5f + 0.5f) * viewportSize.x;
-                float viewportY = (ndc_y * 0.5f + 0.5f) * viewportSize.y;
-                
-                // Flip Y for ImGui (OpenGL Y is up, ImGui Y is down)
-                viewportY = viewportSize.y - viewportY;
+            auto DrawAxisLabel = [&](const char* label, const glm::vec3& worldAxis) {
+                // Axis direction in view/camera space.
+                const glm::vec3 axisView = viewRot * worldAxis;
 
-                outScreen = ImVec2(viewportTopLeft.x + viewportX, viewportTopLeft.y + viewportY);
-                return true;
+                // Map to 2D (screen y down). Normalize to avoid huge/NaN offsets.
+                glm::vec2 axis2(axisView.x, -axisView.y);
+                float len = glm::length(axis2);
+                if (len < 1e-6f) {
+                    return;
+                }
+                axis2 /= len;
+
+                // Place near the edge of the view cube.
+                const float radius = viewManipulateSize * 0.42f;
+                ImVec2 pos = ImVec2(center.x + axis2.x * radius, center.y + axis2.y * radius);
+
+                // In OpenGL view space, points "in front" typically have negative Z.
+                const bool frontFacing = (axisView.z < 0.0f);
+                const ImU32 text = frontFacing ? textFront : textBack;
+
+                dl->AddText(ImVec2(pos.x + 1.0f, pos.y + 1.0f), shadow, label);
+                dl->AddText(pos, text, label);
             };
 
-            auto HandleIconInteraction = [&](entt::entity entity, const ImVec2& screenPos, float radius) {
-                // If gizmo is hovered/active, it takes priority
-                if (ImGuizmo::IsOver() || ImGuizmo::IsUsing()) return;
-                
-                // Only allow selection if the viewport logic allows interaction
-                if (allowGizmoInteractionThisFrame && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
-                    ImVec2 mouse = ImGui::GetMousePos();
-                    float dx = mouse.x - screenPos.x;
-                    float dy = mouse.y - screenPos.y;
-                    if (dx*dx + dy*dy <= radius*radius) {
-                        selectedEntity = entity;
-                    }
-                }
-            };
-
-            // 1. Lights (Sun icon)
-            auto viewLights = activeScene->Registry().view<Genesis::Engine::Transform, Genesis::Engine::LightComponent>();
-            for (auto entity : viewLights) {
-                const auto& t = viewLights.get<Genesis::Engine::Transform>(entity);
-                ImVec2 sPos;
-                if (WorldToScreen(glm::vec3(t.x, t.y, t.z), sPos)) {
-                    bool isSelected = (entity == selectedEntity);
-                    // High-visibility Yellow
-                    ImU32 colorP = isSelected ? IM_COL32(255, 255, 150, 255) : IM_COL32(255, 215, 0, 255);
-                    ImU32 colorBorder = IM_COL32(10, 10, 10, 255); // Near black
-                    float radius = 20.0f; // Significantly Larger (was 14)
-
-                    // Draw rays
-                    for (int i = 0; i < 8; i++) {
-                        float angle = (float)i * (6.28318f / 8.0f);
-                        float c = cosf(angle), s = sinf(angle);
-                        ImVec2 p1(sPos.x + c * radius * 0.7f, sPos.y + s * radius * 0.7f);
-                        ImVec2 p2(sPos.x + c * radius * 1.5f, sPos.y + s * radius * 1.5f);
-
-                        // Ray border (outline)
-                        drawList->AddLine(p1, p2, colorBorder, 5.0f);
-                        // Ray core
-                        drawList->AddLine(p1, p2, colorP, 3.0f);
-                    }
-
-                    // Draw center (Filled with border)
-                    drawList->AddCircleFilled(sPos, radius * 0.5f, colorP);
-                    drawList->AddCircle(sPos, radius * 0.5f, colorBorder, 0, 3.0f);
-
-                    HandleIconInteraction(entity, sPos, radius * 1.5f);
-                }
-            }
-
-            // 2. Cameras (Camera box icon)
-            auto viewCams = activeScene->Registry().view<Genesis::Engine::Transform, Genesis::Engine::CameraComponent>();
-            for (auto entity : viewCams) {
-                const auto& t = viewCams.get<Genesis::Engine::Transform>(entity);
-                ImVec2 sPos;
-                if (WorldToScreen(glm::vec3(t.x, t.y, t.z), sPos)) {
-                    bool isSelected = (entity == selectedEntity);
-                    // High-visibility Cyan
-                    ImU32 colorP = isSelected ? IM_COL32(150, 255, 255, 255) : IM_COL32(0, 200, 255, 255);
-                    ImU32 colorBorder = IM_COL32(10, 10, 10, 255);
-                    float size = 24.0f; // Significantly Larger (was 16)
-
-                    // Body
-                    ImVec2 tl(sPos.x - size, sPos.y - size * 0.6f);
-                    ImVec2 br(sPos.x + size * 0.4f, sPos.y + size * 0.6f);
-
-                    // Draw body filled + border
-                    drawList->AddRectFilled(tl, br, colorP, 4.0f); // Rounded corners
-                    drawList->AddRect(tl, br, colorBorder, 4.0f, 0, 3.0f);
-
-                    // Lens
-                    ImVec2 tri1(sPos.x + size * 0.4f, sPos.y);
-                    ImVec2 tri2(sPos.x + size * 1.2f, sPos.y - size * 0.6f);
-                    ImVec2 tri3(sPos.x + size * 1.2f, sPos.y + size * 0.6f);
-
-                    // Draw lens filled + border
-                    drawList->AddTriangleFilled(tri1, tri2, tri3, colorP);
-                    drawList->AddTriangle(tri1, tri2, tri3, colorBorder, 3.0f);
-                    
-                    // Small "CAM" text overlay for clarity
-                    // ImVec2 textPos(tl.x + 4.0f, tl.y + 4.0f);
-                    // drawList->AddText(textPos, IM_COL32(0,0,0,200), "C");
-
-                    HandleIconInteraction(entity, sPos, size * 1.5f);
-                }
-            }
-
-            // 3. Audio / Speakers (Speaker icon)
-            auto viewAudio = activeScene->Registry().view<Genesis::Engine::Transform, Genesis::Engine::AudioComponent>();
-            for (auto entity : viewAudio) {
-                const auto& t = viewAudio.get<Genesis::Engine::Transform>(entity);
-                ImVec2 sPos;
-                if (WorldToScreen(glm::vec3(t.x, t.y, t.z), sPos)) {
-                    bool isSelected = (entity == selectedEntity);
-                    // High-visibility Orange
-                    ImU32 colorP = isSelected ? IM_COL32(255, 180, 100, 255) : IM_COL32(255, 140, 0, 255);
-                    ImU32 colorBorder = IM_COL32(10, 10, 10, 255);
-                    float size = 18.0f; 
-
-                    // Speaker Box (Left part) - Rectangle
-                    ImVec2 boxMin(sPos.x - size * 0.5f, sPos.y - size * 0.35f);
-                    ImVec2 boxMax(sPos.x - size * 0.1f, sPos.y + size * 0.35f);
-                    drawList->AddRectFilled(boxMin, boxMax, colorP);
-                    drawList->AddRect(boxMin, boxMax, colorBorder, 0, 0, 3.0f);
-
-                    // Speaker Cone (Right triangle/trapezoid)
-                    ImVec2 p1(sPos.x - size * 0.1f, sPos.y - size * 0.35f); // Base top
-                    ImVec2 p2(sPos.x - size * 0.1f, sPos.y + size * 0.35f); // Base bottom
-                    ImVec2 p3(sPos.x + size * 0.6f, sPos.y + size * 0.8f);  // Front bottom
-                    ImVec2 p4(sPos.x + size * 0.6f, sPos.y - size * 0.8f);  // Front top
-                    
-                    ImVec2 poly[4] = { p1, p2, p3, p4 };
-                    drawList->AddConvexPolyFilled(poly, 4, colorP);
-                    drawList->AddPolyline(poly, 4, colorBorder, ImDrawFlags_Closed, 3.0f);
-
-                    // Sound Waves (Arcs roughly)
-                    ImVec2 centerOffset(sPos.x + size * 0.2f, sPos.y); 
-                    // We simulate arcs with lines or quadratic beziers
-                    drawList->AddBezierQuadratic(
-                        ImVec2(sPos.x + size * 0.8f, sPos.y - size * 0.5f),
-                        ImVec2(sPos.x + size * 1.0f, sPos.y),
-                        ImVec2(sPos.x + size * 0.8f, sPos.y + size * 0.5f),
-                        colorP, 3.0f
-                    );
-                    drawList->AddBezierQuadratic(
-                        ImVec2(sPos.x + size * 1.1f, sPos.y - size * 0.8f),
-                        ImVec2(sPos.x + size * 1.4f, sPos.y),
-                        ImVec2(sPos.x + size * 1.1f, sPos.y + size * 0.8f),
-                        colorP, 3.0f
-                    );
-
-                    HandleIconInteraction(entity, sPos, size * 1.5f);
-                }
-            }
-
-            // 4. Particle Systems
-            auto viewParticles = activeScene->Registry().view<Genesis::Engine::Transform, Genesis::Engine::ParticleSystemComponent>();
-            for (auto entity : viewParticles) {
-                const auto& t = viewParticles.get<Genesis::Engine::Transform>(entity);
-                ImVec2 sPos;
-                if (WorldToScreen(glm::vec3(t.x, t.y, t.z), sPos)) {
-                    bool isSelected = (entity == selectedEntity);
-                    // Cyan/Pinkish for Effects
-                    ImU32 colorP = isSelected ? IM_COL32(255, 100, 255, 255) : IM_COL32(200, 50, 200, 255);
-                    ImU32 colorBorder = IM_COL32(10, 10, 10, 255);
-                    float size = 16.0f;
-
-                    // Draw a "Spray" icon (Center circle + little dots)
-                    drawList->AddCircleFilled(sPos, size * 0.4f, colorP);
-                    drawList->AddCircle(sPos, size * 0.4f, colorBorder, 0, 3.0f);
-                    
-                    // Little particles
-                    ImVec2 bioffsets[3] = { ImVec2(0.6f, -0.6f), ImVec2(0.8f, 0.0f), ImVec2(0.6f, 0.6f) };
-                    for(auto& off : bioffsets) {
-                        ImVec2 p(sPos.x + off.x * size, sPos.y + off.y * size);
-                        drawList->AddCircleFilled(p, size * 0.15f, colorP);
-                        drawList->AddCircle(p, size * 0.15f, colorBorder, 0, 2.0f);
-                    }
-
-                    HandleIconInteraction(entity, sPos, size * 1.5f);
-                }
-            }
-
-            // 5. Physics Colliders (Box & Sphere) - Unified Green Logic Icon
-            auto viewBox = activeScene->Registry().view<Genesis::Engine::Transform, Genesis::Engine::BoxColliderComponent>();
-            for (auto entity : viewBox) {
-                const auto& t = viewBox.get<Genesis::Engine::Transform>(entity);
-                ImVec2 sPos;
-                if (WorldToScreen(glm::vec3(t.x, t.y, t.z), sPos)) {
-                    bool isSelected = (entity == selectedEntity);
-                    ImU32 colorP = isSelected ? IM_COL32(150, 255, 150, 255) : IM_COL32(50, 200, 50, 255);
-                    ImU32 colorBorder = IM_COL32(10, 10, 10, 255);
-                    float size = 18.0f;
-
-                    // Draw Box
-                    ImVec2 tl(sPos.x - size*0.5f, sPos.y - size*0.5f);
-                    ImVec2 br(sPos.x + size*0.5f, sPos.y + size*0.5f);
-                    
-                    drawList->AddRect(tl, br, colorP, 2.0f, 0, 3.0f); // Wireframe look
-                    drawList->AddRect(tl, br, colorBorder, 2.0f, 0, 1.0f); // Inner outline helper
-                    drawList->AddRectFilled(tl, br, (colorP & 0x00FFFFFF) | 0x40000000); // Semi-transparent fill
-
-                    HandleIconInteraction(entity, sPos, size * 1.5f);
-                }
-            }
-
-             auto viewSphere = activeScene->Registry().view<Genesis::Engine::Transform, Genesis::Engine::SphereColliderComponent>();
-            for (auto entity : viewSphere) {
-                const auto& t = viewSphere.get<Genesis::Engine::Transform>(entity);
-                ImVec2 sPos;
-                // Avoid double-drawing if it has both box and sphere (rare but possible)
-                if (!activeScene->Registry().all_of<Genesis::Engine::BoxColliderComponent>(entity)) {
-                     if (WorldToScreen(glm::vec3(t.x, t.y, t.z), sPos)) {
-                        bool isSelected = (entity == selectedEntity);
-                        ImU32 colorP = isSelected ? IM_COL32(150, 255, 150, 255) : IM_COL32(50, 200, 50, 255);
-                        float size = 18.0f;
-                        
-                        drawList->AddCircle(sPos, size*0.5f, colorP, 0, 3.0f);
-                        drawList->AddCircleFilled(sPos, size*0.5f, (colorP & 0x00FFFFFF) | 0x40000000);
-
-                        HandleIconInteraction(entity, sPos, size * 1.5f);
-                     }
-                }
-            }
-
-            drawList->PopClipRect();
+            DrawAxisLabel("X", glm::vec3(1.0f, 0.0f, 0.0f));
+            DrawAxisLabel("Y", glm::vec3(0.0f, 1.0f, 0.0f));
+            DrawAxisLabel("Z", glm::vec3(0.0f, 0.0f, 1.0f));
         }
 
-        // View Manipulate (View Cube) - only in Edit Mode
-        // Position still calculated above for conflict detection, but we only draw/interact in Edit.
-        if (editorState == EditorState::Edit) {
-            glm::mat4 viewCopy = view; // Make a copy to pass to ViewManipulate
-            ImGuizmo::SetDrawlist();
-            ImGuizmo::ViewManipulate(glm::value_ptr(viewCopy), 5.0f, viewManipulatePos, ImVec2(viewManipulateSize, viewManipulateSize), 0x10101010);
+        auto MatDifferent = [](const glm::mat4& a, const glm::mat4& b) {
+            constexpr float eps = 1e-5f;
+            for (int c = 0; c < 4; ++c) {
+                for (int r = 0; r < 4; ++r) {
+                    if (fabs(a[c][r] - b[c][r]) > eps) return true;
+                }
+            }
+            return false;
+        };
 
-            // Axis labels (X/Y/Z) around the cube
-            {
-                ImDrawList* dl = ImGui::GetWindowDrawList();
-                const ImU32 shadow = IM_COL32(0, 0, 0, 160);
-                const ImU32 textFront = IM_COL32(235, 235, 235, 230);
-                const ImU32 textBack = IM_COL32(170, 170, 170, 180);
-                const ImVec2 center = ImVec2(viewManipulatePos.x + viewManipulateSize * 0.5f, viewManipulatePos.y + viewManipulateSize * 0.5f);
+        // Apply view-cube camera changes while ImGuizmo is animating.
+        // We intentionally convert to yaw/pitch and force roll=0 to avoid the camera ending up upside-down.
+        auto ApplyViewMatrixToCamera = [&](const glm::mat4& targetView) {
+            glm::mat4 inv = glm::inverse(targetView);
+            glm::vec3 scale;
+            glm::quat rotation;
+            glm::vec3 translation;
+            glm::vec3 skew;
+            glm::vec4 perspective;
+            glm::decompose(inv, scale, rotation, translation, skew, perspective);
 
-                const glm::mat3 viewRot = glm::mat3(view);
+            cameraPos = translation;
 
-                auto DrawAxisLabel = [&](const char* label, const glm::vec3& worldAxis) {
-                    const glm::vec3 axisView = viewRot * worldAxis;
-                    glm::vec2 axis2(axisView.x, -axisView.y);
-                    float len = glm::length(axis2);
-                    if (len < 1e-6f) return;
-                    axis2 /= len;
+            glm::vec3 forward = rotation * glm::vec3(0.0f, 0.0f, -1.0f);
+            if (glm::dot(forward, forward) < 1e-8f) {
+                return;
+            }
+            forward = glm::normalize(forward);
 
-                    const float radius = viewManipulateSize * 0.42f;
-                    ImVec2 pos = ImVec2(center.x + axis2.x * radius, center.y + axis2.y * radius);
+            // Our navigation forward convention uses: forward.y = -sin(pitch).
+            const float clampedY = glm::clamp(forward.y, -1.0f, 1.0f);
+            float pitchRad = -asinf(clampedY);
 
-                    const bool frontFacing = (axisView.z < 0.0f);
-                    const ImU32 text = frontFacing ? textFront : textBack;
-
-                    dl->AddText(ImVec2(pos.x + 1.0f, pos.y + 1.0f), shadow, label);
-                    dl->AddText(pos, text, label);
-                };
-
-                DrawAxisLabel("X", glm::vec3(1.0f, 0.0f, 0.0f));
-                DrawAxisLabel("Y", glm::vec3(0.0f, 1.0f, 0.0f));
-                DrawAxisLabel("Z", glm::vec3(0.0f, 0.0f, 1.0f));
+            // For near-vertical views, yaw becomes underdetermined. Pick a stable yaw that
+            // matches common editor behavior (top/bottom aligned; avoids "upside-down" feel).
+            float yawRad = 0.0f;
+            if (fabsf(forward.y) <= 0.999f) {
+                yawRad = atan2f(forward.x, -forward.z);
             }
 
-            const bool viewCubeDrivingCamera = ImGuizmo::IsUsingViewManipulate();
-            if ((viewCubeDrivingCamera || applyViewCubeThisFrame) && MatDifferent(viewCopy, view)) {
-                ApplyViewMatrixToCamera(viewCopy);
-            }
+            cameraRot.x = glm::degrees(pitchRad);
+            cameraRot.y = glm::degrees(yawRad);
+            cameraRot.z = 0.0f;
+        };
+
+        const bool viewCubeDrivingCamera = ImGuizmo::IsUsingViewManipulate();
+        if ((viewCubeDrivingCamera || applyViewCubeThisFrame) && MatDifferent(viewCopy, view)) {
+            ApplyViewMatrixToCamera(viewCopy);
         }
 
         // Gizmos
@@ -1671,113 +1516,6 @@ int main(int argc, char** argv) {
                     }
                 }
 
-                if (activeScene->Registry().all_of<Genesis::Engine::AudioComponent>(selectedEntity)) {
-                    if (ImGui::CollapsingHeader("Audio Source", ImGuiTreeNodeFlags_DefaultOpen)) {
-                        auto& ac = activeScene->Registry().get<Genesis::Engine::AudioComponent>(selectedEntity);
-                        
-                        char pathBuf[256];
-                        strncpy_s(pathBuf, ac.soundPath.c_str(), sizeof(pathBuf) - 1);
-                        if (ImGui::InputText("Sound Path", pathBuf, sizeof(pathBuf))) {
-                            ac.soundPath = std::string(pathBuf);
-                            if (editorState == EditorState::Edit) sceneDirty = true;
-                        }
-                        // Drag drop for sound files
-                        if (ImGui::BeginDragDropTarget()) {
-                            if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("CONTENT_BROWSER_ITEM")) {
-                                const char* droppedPath = (const char*)payload->Data;
-                                if (droppedPath) {
-                                    std::string pStr = droppedPath;
-                                    std::string ext = std::filesystem::path(pStr).extension().string();
-                                    // Basic audio extensions
-                                    if (ext == ".wav" || ext == ".mp3" || ext == ".ogg") {
-                                        ac.soundPath = pStr;
-                                        if (editorState == EditorState::Edit) sceneDirty = true;
-                                    }
-                                }
-                            }
-                            ImGui::EndDragDropTarget();
-                        }
-
-                        if (ImGui::DragFloat("Volume", &ac.volume, 0.01f, 0.0f, 1.0f)) if (editorState == EditorState::Edit) sceneDirty = true;
-                        if (ImGui::DragFloat("Pitch", &ac.pitch, 0.01f, 0.1f, 3.0f)) if (editorState == EditorState::Edit) sceneDirty = true;
-                        if (ImGui::Checkbox("Loop", &ac.loop)) if (editorState == EditorState::Edit) sceneDirty = true;
-                        if (ImGui::Checkbox("Play On Awake", &ac.playOnAwake)) if (editorState == EditorState::Edit) sceneDirty = true;
-                        
-                        ImGui::Separator();
-                        if (ImGui::Checkbox("3D Spatial", &ac.spatial)) if (editorState == EditorState::Edit) sceneDirty = true;
-                        if (ac.spatial) {
-                             if (ImGui::DragFloat("Min Distance", &ac.minDistance, 0.1f, 0.0f)) if (editorState == EditorState::Edit) sceneDirty = true;
-                             if (ImGui::DragFloat("Max Distance", &ac.maxDistance, 0.1f, 0.0f)) if (editorState == EditorState::Edit) sceneDirty = true;
-                        }
-
-                        if (ImGui::Button("Remove Component")) {
-                            activeScene->Registry().remove<Genesis::Engine::AudioComponent>(selectedEntity);
-                            if (editorState == EditorState::Edit) sceneDirty = true;
-                        }
-                    }
-                }
-
-                if (activeScene->Registry().all_of<Genesis::Engine::ParticleSystemComponent>(selectedEntity)) {
-                    if (ImGui::CollapsingHeader("Particle System", ImGuiTreeNodeFlags_DefaultOpen)) {
-                        auto& ps = activeScene->Registry().get<Genesis::Engine::ParticleSystemComponent>(selectedEntity);
-                        if (ImGui::ColorEdit4("Start Color", ps.startColor)) if (editorState == EditorState::Edit) sceneDirty = true;
-                        if (ImGui::DragFloat("Start Lifetime", &ps.startLifetime, 0.1f, 0.0f)) if (editorState == EditorState::Edit) sceneDirty = true;
-                        if (ImGui::DragFloat("Start Speed", &ps.startSpeed, 0.1f)) if (editorState == EditorState::Edit) sceneDirty = true;
-                        if (ImGui::DragFloat("Start Size", &ps.startSize, 0.1f, 0.0f)) if (editorState == EditorState::Edit) sceneDirty = true;
-                        if (ImGui::DragFloat("Emission Rate", &ps.rateOverTime, 0.1f, 0.0f)) if (editorState == EditorState::Edit) sceneDirty = true;
-                        if (ImGui::DragFloat("Duration", &ps.duration, 0.1f, 0.0f)) if (editorState == EditorState::Edit) sceneDirty = true;
-                        if (ImGui::Checkbox("Looping", &ps.looping)) if (editorState == EditorState::Edit) sceneDirty = true;
-                        if (ImGui::Checkbox("Play On Awake", &ps.playOnAwake)) if (editorState == EditorState::Edit) sceneDirty = true;
-
-                        if (ImGui::Button("Remove Component")) {
-                            activeScene->Registry().remove<Genesis::Engine::ParticleSystemComponent>(selectedEntity);
-                            if (editorState == EditorState::Edit) sceneDirty = true;
-                        }
-                    }
-                }
-
-                if (activeScene->Registry().all_of<Genesis::Engine::BoxColliderComponent>(selectedEntity)) {
-                    if (ImGui::CollapsingHeader("Box Collider", ImGuiTreeNodeFlags_DefaultOpen)) {
-                        auto& bc = activeScene->Registry().get<Genesis::Engine::BoxColliderComponent>(selectedEntity);
-                        if (ImGui::DragFloat3("Size", bc.size, 0.1f)) if (editorState == EditorState::Edit) sceneDirty = true;
-                        if (ImGui::DragFloat3("Offset", bc.offset, 0.1f)) if (editorState == EditorState::Edit) sceneDirty = true;
-                        if (ImGui::Checkbox("Is Trigger", &bc.isTrigger)) if (editorState == EditorState::Edit) sceneDirty = true;
-                        
-                         if (ImGui::Button("Remove Component")) {
-                            activeScene->Registry().remove<Genesis::Engine::BoxColliderComponent>(selectedEntity);
-                            if (editorState == EditorState::Edit) sceneDirty = true;
-                        }
-                    }
-                }
-
-                if (activeScene->Registry().all_of<Genesis::Engine::SphereColliderComponent>(selectedEntity)) {
-                    if (ImGui::CollapsingHeader("Sphere Collider", ImGuiTreeNodeFlags_DefaultOpen)) {
-                        auto& sc = activeScene->Registry().get<Genesis::Engine::SphereColliderComponent>(selectedEntity);
-                        if (ImGui::DragFloat("Radius", &sc.radius, 0.1f, 0.0f)) if (editorState == EditorState::Edit) sceneDirty = true;
-                        if (ImGui::DragFloat3("Offset", sc.offset, 0.1f)) if (editorState == EditorState::Edit) sceneDirty = true;
-                        if (ImGui::Checkbox("Is Trigger", &sc.isTrigger)) if (editorState == EditorState::Edit) sceneDirty = true;
-
-                        if (ImGui::Button("Remove Component")) {
-                            activeScene->Registry().remove<Genesis::Engine::SphereColliderComponent>(selectedEntity);
-                            if (editorState == EditorState::Edit) sceneDirty = true;
-                        }
-                    }
-                }
-
-                if (activeScene->Registry().all_of<Genesis::Engine::RigidBodyComponent>(selectedEntity)) {
-                    if (ImGui::CollapsingHeader("RigidBody", ImGuiTreeNodeFlags_DefaultOpen)) {
-                        auto& rb = activeScene->Registry().get<Genesis::Engine::RigidBodyComponent>(selectedEntity);
-                        if (ImGui::DragFloat("Mass", &rb.mass, 0.1f, 0.0f)) if (editorState == EditorState::Edit) sceneDirty = true;
-                        if (ImGui::Checkbox("Use Gravity", &rb.useGravity)) if (editorState == EditorState::Edit) sceneDirty = true;
-                        if (ImGui::Checkbox("Is Kinematic", &rb.isKinematic)) if (editorState == EditorState::Edit) sceneDirty = true;
-
-                        if (ImGui::Button("Remove Component")) {
-                            activeScene->Registry().remove<Genesis::Engine::RigidBodyComponent>(selectedEntity);
-                            if (editorState == EditorState::Edit) sceneDirty = true;
-                        }
-                    }
-                }
-
                 if (ImGui::Button("Add Component")) {
                     ImGui::OpenPopup("AddComponentPopup");
                 }
@@ -1785,42 +1523,6 @@ int main(int argc, char** argv) {
                     if (ImGui::MenuItem("Light")) {
                         if (!activeScene->Registry().all_of<Genesis::Engine::LightComponent>(selectedEntity)) {
                             activeScene->Registry().emplace<Genesis::Engine::LightComponent>(selectedEntity);
-                            if (editorState == EditorState::Edit) sceneDirty = true;
-                        }
-                    }
-                    if (ImGui::MenuItem("Audio Source")) {
-                        if (!activeScene->Registry().all_of<Genesis::Engine::AudioComponent>(selectedEntity)) {
-                            activeScene->Registry().emplace<Genesis::Engine::AudioComponent>(selectedEntity);
-                            if (editorState == EditorState::Edit) sceneDirty = true;
-                        }
-                    }
-                    if (ImGui::MenuItem("Particle System")) {
-                        if (!activeScene->Registry().all_of<Genesis::Engine::ParticleSystemComponent>(selectedEntity)) {
-                            activeScene->Registry().emplace<Genesis::Engine::ParticleSystemComponent>(selectedEntity);
-                            if (editorState == EditorState::Edit) sceneDirty = true;
-                        }
-                    }
-                    if (ImGui::MenuItem("Box Collider")) {
-                        if (!activeScene->Registry().all_of<Genesis::Engine::BoxColliderComponent>(selectedEntity)) {
-                            activeScene->Registry().emplace<Genesis::Engine::BoxColliderComponent>(selectedEntity);
-                            if (editorState == EditorState::Edit) sceneDirty = true;
-                        }
-                    }
-                    if (ImGui::MenuItem("Sphere Collider")) {
-                        if (!activeScene->Registry().all_of<Genesis::Engine::SphereColliderComponent>(selectedEntity)) {
-                            activeScene->Registry().emplace<Genesis::Engine::SphereColliderComponent>(selectedEntity);
-                            if (editorState == EditorState::Edit) sceneDirty = true;
-                        }
-                    }
-                    if (ImGui::MenuItem("RigidBody")) {
-                        if (!activeScene->Registry().all_of<Genesis::Engine::RigidBodyComponent>(selectedEntity)) {
-                            activeScene->Registry().emplace<Genesis::Engine::RigidBodyComponent>(selectedEntity);
-                            if (editorState == EditorState::Edit) sceneDirty = true;
-                        }
-                    }
-                    if (ImGui::MenuItem("Camera")) {
-                        if (!activeScene->Registry().all_of<Genesis::Engine::CameraComponent>(selectedEntity)) {
-                            activeScene->Registry().emplace<Genesis::Engine::CameraComponent>(selectedEntity);
                             if (editorState == EditorState::Edit) sceneDirty = true;
                         }
                     }

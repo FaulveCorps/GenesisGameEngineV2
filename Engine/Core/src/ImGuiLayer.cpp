@@ -8,6 +8,7 @@
 #include "imgui_impl_sdl3.h"
 #include "imgui_impl_opengl3.h"
 #include <string>
+#include <iostream>
 
 namespace Genesis::Engine {
 
@@ -30,7 +31,16 @@ ImGuiLayer::ImGuiLayer(SDL_Window* window, SDL_GLContext context)
     io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable; // Enable Multi-Viewport / Platform Windows
 
     // Load Monoid font
-    io.Fonts->AddFontFromFileTTF("Assets/fonts/Monoid.ttf", 16.0f);
+    ImFont* font = io.Fonts->AddFontFromFileTTF("Assets/fonts/Monoid.ttf", 18.0f);
+    if (font) {
+        // Build atlas now to ensure it works
+        // io.Fonts->Build(); // Normally handled by backend
+        std::cout << "Successfully loaded Monoid font." << std::endl;
+    } else {
+        std::cerr << "Failed to load Monoid font from Assets/fonts/Monoid.ttf" << std::endl;
+        // Fallback to default
+        io.Fonts->AddFontDefault();
+    }
 
     ImGui::StyleColorsDark();
 
