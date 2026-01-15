@@ -1,8 +1,11 @@
 #include "engine/ImGuiLayer.h"
 #include "engine/Profiler.h"
 #include "engine/Stats.h"
+#include "engine/Engine.h"
 #include "engine/Scene.h"
 #include "engine/Components.h"
+#include "engine/IAudio.h"
+#include "engine/EditorHelpers.h"
 #include <SDL.h>
 #include "imgui.h"
 #include "imgui_impl_sdl3.h"
@@ -179,6 +182,51 @@ void ImGuiLayer::Render(Profiler& /*profiler*/, Scene* scene) {
                 ImGui::Checkbox("Is Trigger", &component.isTrigger);
             });
 
+            // Audio Component
+            DrawComponent<AudioComponent>("Audio", registry, entity, [](auto& component) {
+                ImGui::TextWrapped("Source: %s", component.soundPath.empty() ? "(unspecified)" : component.soundPath.c_str());
+                if (ImGui::Button("Play")) {
+                    PlayAudioPreview(component.soundPath, component.volume);
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Stop")) {
+                    auto s = GetAudioSubsystem();
+                    if (s) s->StopAll();
+                }
+                char buf[256];
+                if (component.soundPath.length() >= 256) buf[0] = 0; else strcpy_s(buf, component.soundPath.c_str());
+                if (ImGui::InputText("Sound Path", buf, 256)) {
+                    component.soundPath = buf;
+                }
+                ImGui::DragFloat("Volume", &component.volume, 0.01f, 0.0f, 4.0f);
+                ImGui::DragFloat("Pitch", &component.pitch, 0.01f, 0.1f, 4.0f);
+                ImGui::Checkbox("Loop", &component.loop);
+                ImGui::Checkbox("Spatial", &component.spatial);
+                ImGui::DragFloat("Min Distance", &component.minDistance, 0.1f);
+                ImGui::DragFloat("Max Distance", &component.maxDistance, 0.1f);
+                ImGui::Checkbox("Play On Awake", &component.playOnAwake);
+            });
+
+            // Particle System
+            DrawComponent<ParticleSystemComponent>("Particle System", registry, entity, [&](auto& component) {
+                ImGui::DragFloat("Duration", &component.duration, 0.1f);
+                ImGui::Checkbox("Looping", &component.looping);
+                ImGui::Checkbox("Play On Awake", &component.playOnAwake);
+                ImGui::DragFloat("Start Lifetime", &component.startLifetime, 0.1f);
+                ImGui::DragFloat("Start Speed", &component.startSpeed, 0.1f);
+                ImGui::DragFloat("Start Size", &component.startSize, 0.01f);
+                ImGui::ColorEdit4("Start Color", component.startColor);
+                ImGui::DragFloat("Rate Over Time", &component.rateOverTime, 0.1f);
+                ImGui::DragFloat("Emitter Radius", &component.emitterRadius, 0.01f);
+                if (ImGui::Button("Play")) {
+                    StartParticlePreview(registry, entity);
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Stop")) {
+                    StopParticlePreview(registry, entity);
+                }
+            });
+
             ImGui::Separator();
 
             if (ImGui::Button("Add Component"))
@@ -203,6 +251,14 @@ void ImGuiLayer::Render(Profiler& /*profiler*/, Scene* scene) {
                 }
                 if (!registry.all_of<LightComponent>(entity) && ImGui::MenuItem("Light")) {
                     registry.emplace<LightComponent>(entity);
+                    ImGui::CloseCurrentPopup();
+                }
+                if (!registry.all_of<AudioComponent>(entity) && ImGui::MenuItem("Audio")) {
+                    registry.emplace<AudioComponent>(entity);
+                    ImGui::CloseCurrentPopup();
+                }
+                if (!registry.all_of<ParticleSystemComponent>(entity) && ImGui::MenuItem("Particle System")) {
+                    registry.emplace<ParticleSystemComponent>(entity);
                     ImGui::CloseCurrentPopup();
                 }
                 ImGui::EndPopup();

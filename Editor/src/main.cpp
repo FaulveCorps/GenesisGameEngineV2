@@ -11,6 +11,7 @@
 #include "engine/ImGuiLayer.h"
 #include "engine/SceneLoader.h"
 #include "engine/EditorHelpers.h"
+#include "engine/IAudio.h"
 #include "engine/ShaderRegistry.h"
 #include "engine/TextureRegistry.h"
 #include "engine/OpenGLRenderer.h"
