@@ -68,6 +68,10 @@ public:
                              float /*u0*/ = 0.f, float /*v0*/ = 0.f, float /*u1*/ = 1.f, float /*v1*/ = 1.f,
                              uint32_t /*color*/ = 0xFFFFFFFF) { }
 
+    // Debug Draw API
+    // vertices: x, y, z triplets. colors: r, g, b triplets (0.0-1.0).
+    virtual void DrawLines(const std::vector<float>& /*vertices*/, const std::vector<float>& /*colors*/) {}
+
     // Human-readable renderer name for UI/debugging
     virtual std::string GetName() const { return std::string("unknown"); }
 };

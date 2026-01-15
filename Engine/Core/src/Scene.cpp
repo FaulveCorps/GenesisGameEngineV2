@@ -4,6 +4,7 @@
 #include "engine/MathUtils.h"
 #include "engine/Animation.h"
 #include "engine/UI.h"
+#include "engine/DebugRenderer.h"
 #include <iostream>
 
 namespace Genesis::Engine {
@@ -107,6 +108,9 @@ void Scene::Render(IGraphicsAPI* renderer) {
             mc.model->Draw(transform.m);
         }
     }
+
+    // Debug Renderer (Colliders)
+    DebugRenderer::Render(*this, renderer);
 
     // 3. Render UI
     UISystem::Render(*this, renderer);
