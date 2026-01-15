@@ -59,25 +59,25 @@ TEST_CASE("SceneLoader: Save/Load components (physics/audio/particle)", "[scene]
         if (out.Registry().any_of<RigidBodyComponent>(entity)) {
             found = true;
             auto& r2 = out.Registry().get<RigidBodyComponent>(entity);
-            REQUIRE(r2.mass == Approx(rb.mass));
+            REQUIRE(r2.mass == Catch::Approx(rb.mass));
             REQUIRE(r2.useGravity == rb.useGravity);
             REQUIRE(r2.isKinematic == rb.isKinematic);
 
             auto& b2 = out.Registry().get<BoxColliderComponent>(entity);
-            REQUIRE(b2.size[0] == Approx(bc.size[0]));
-            REQUIRE(b2.size[1] == Approx(bc.size[1]));
+            REQUIRE(b2.size[0] == Catch::Approx(bc.size[0]));
+            REQUIRE(b2.size[1] == Catch::Approx(bc.size[1]));
             REQUIRE(b2.isTrigger == bc.isTrigger);
 
             auto& s2 = out.Registry().get<SphereColliderComponent>(entity);
-            REQUIRE(s2.radius == Approx(sc.radius));
+            REQUIRE(s2.radius == Catch::Approx(sc.radius));
 
             auto& a2 = out.Registry().get<AudioComponent>(entity);
             REQUIRE(a2.soundPath == ac.soundPath);
-            REQUIRE(a2.volume == Approx(ac.volume));
+            REQUIRE(a2.volume == Catch::Approx(ac.volume));
 
             auto& p2 = out.Registry().get<ParticleSystemComponent>(entity);
-            REQUIRE(p2.startLifetime == Approx(pc.startLifetime));
-            REQUIRE(p2.rateOverTime == Approx(pc.rateOverTime));
+            REQUIRE(p2.startLifetime == Catch::Approx(pc.startLifetime));
+            REQUIRE(p2.rateOverTime == Catch::Approx(pc.rateOverTime));
         }
     });
 

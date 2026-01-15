@@ -40,6 +40,7 @@ add_executable(UnitTests
     test_network_enet.cpp
     test_save.cpp
     test_scene_loader_components.cpp
+    test_editor_audio_particle_ui.cpp
     test_mods.cpp
     test_scripting.cpp
     test_wasm_runtime.cpp

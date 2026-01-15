@@ -10,6 +10,7 @@
 #include "engine/Profiler.h"
 #include "engine/ImGuiLayer.h"
 #include "engine/SceneLoader.h"
+#include "engine/EditorHelpers.h"
 #include "engine/ShaderRegistry.h"
 #include "engine/TextureRegistry.h"
 #include "engine/OpenGLRenderer.h"
@@ -1608,11 +1609,86 @@ int main(int argc, char** argv) {
                     }
                 }
 
-                if (activeScene->Registry().all_of<Genesis::Engine::ScriptComponent>(selectedEntity)) {
-                    if (ImGui::CollapsingHeader("Script", ImGuiTreeNodeFlags_DefaultOpen)) {
-                        ImGui::Text("Native Script Attached");
+                // Audio Component
+                if (activeScene->Registry().all_of<Genesis::Engine::AudioComponent>(selectedEntity)) {
+                    if (ImGui::CollapsingHeader("Audio", ImGuiTreeNodeFlags_DefaultOpen)) {
+                        auto& ac = activeScene->Registry().get<Genesis::Engine::AudioComponent>(selectedEntity);
+                        ImGui::TextWrapped("Source: %s", ac.soundPath.empty() ? "(unspecified)" : ac.soundPath.c_str());
+
+                        // Play / Stop
+                        if (ImGui::Button("Play")) {
+                            Genesis::Engine::PlayAudioPreview(ac.soundPath, ac.volume);
+                        }
+                        ImGui::SameLine();
+                        if (ImGui::Button("Stop")) {
+                            auto s = Genesis::Engine::GetAudioSubsystem();
+                            if (s) s->StopAll();
+                        }
+
+                        // Editable properties
+                        char buf[256];
+                        if (ac.soundPath.length() >= 256) buf[0] = 0; else strcpy_s(buf, ac.soundPath.c_str());
+                        if (ImGui::InputText("Sound Path", buf, 256)) {
+                            ac.soundPath = buf;
+                            if (editorState == EditorState::Edit) sceneDirty = true;
+                        }
+                        if (ImGui::DragFloat("Volume", &ac.volume, 0.01f, 0.0f, 4.0f)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        if (ImGui::DragFloat("Pitch", &ac.pitch, 0.01f, 0.1f, 4.0f)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        if (ImGui::Checkbox("Loop", &ac.loop)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        if (ImGui::Checkbox("Spatial", &ac.spatial)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        if (ImGui::DragFloat("Min Distance", &ac.minDistance, 0.1f)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        if (ImGui::DragFloat("Max Distance", &ac.maxDistance, 0.1f)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        if (ImGui::Checkbox("Play On Awake", &ac.playOnAwake)) if (editorState == EditorState::Edit) sceneDirty = true;
+
+                        // Drag-and-drop
+                        if (ImGui::BeginDragDropTarget()) {
+                            if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("CONTENT_BROWSER_ITEM")) {
+                                const char* droppedPath = (const char*)payload->Data;
+                                if (droppedPath && droppedPath[0] != 0) {
+                                    std::filesystem::path p(droppedPath);
+                                    std::string ext = p.extension().string();
+                                    std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) { return (char)std::tolower(c); });
+                                    if (ext == ".wav" || ext == ".ogg" || ext == ".mp3" || ext == ".flac") {
+                                        ac.soundPath = droppedPath;
+                                        if (editorState == EditorState::Edit) sceneDirty = true;
+                                    }
+                                }
+                            }
+                            ImGui::EndDragDropTarget();
+                        }
+
                         if (ImGui::Button("Remove")) {
-                            activeScene->Registry().remove<Genesis::Engine::ScriptComponent>(selectedEntity);
+                            activeScene->Registry().remove<Genesis::Engine::AudioComponent>(selectedEntity);
+                            if (editorState == EditorState::Edit) sceneDirty = true;
+                        }
+                    }
+                }
+
+                // Particle System
+                if (activeScene->Registry().all_of<Genesis::Engine::ParticleSystemComponent>(selectedEntity)) {
+                    if (ImGui::CollapsingHeader("Particle System", ImGuiTreeNodeFlags_DefaultOpen)) {
+                        auto& pc = activeScene->Registry().get<Genesis::Engine::ParticleSystemComponent>(selectedEntity);
+
+                        if (ImGui::DragFloat("Duration", &pc.duration, 0.1f)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        if (ImGui::Checkbox("Looping", &pc.looping)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        if (ImGui::Checkbox("Play On Awake", &pc.playOnAwake)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        if (ImGui::DragFloat("Start Lifetime", &pc.startLifetime, 0.1f)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        if (ImGui::DragFloat("Start Speed", &pc.startSpeed, 0.1f)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        if (ImGui::DragFloat("Start Size", &pc.startSize, 0.01f)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        if (ImGui::ColorEdit4("Start Color", pc.startColor)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        if (ImGui::DragFloat("Rate Over Time", &pc.rateOverTime, 0.1f)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        if (ImGui::DragFloat("Emitter Radius", &pc.emitterRadius, 0.01f)) if (editorState == EditorState::Edit) sceneDirty = true;
+
+                        if (ImGui::Button("Play")) {
+                            Genesis::Engine::StartParticlePreview(activeScene->Registry(), selectedEntity);
+                        }
+                        ImGui::SameLine();
+                        if (ImGui::Button("Stop")) {
+                            Genesis::Engine::StopParticlePreview(activeScene->Registry(), selectedEntity);
+                        }
+
+                        if (ImGui::Button("Remove")) {
+                            activeScene->Registry().remove<Genesis::Engine::ParticleSystemComponent>(selectedEntity);
                             if (editorState == EditorState::Edit) sceneDirty = true;
                         }
                     }
@@ -1640,6 +1716,22 @@ int main(int argc, char** argv) {
                     if (ImGui::MenuItem("Script")) {
                         if (!activeScene->Registry().all_of<Genesis::Engine::ScriptComponent>(selectedEntity)) {
                             activeScene->Registry().emplace<Genesis::Engine::ScriptComponent>(selectedEntity);
+                            if (editorState == EditorState::Edit) sceneDirty = true;
+                        }
+                    }
+                    if (ImGui::MenuItem("Audio")) {
+                        if (!activeScene->Registry().all_of<Genesis::Engine::AudioComponent>(selectedEntity)) {
+                            Genesis::Engine::AudioComponent ac;
+                            ac.soundPath.clear();
+                            ac.volume = 1.0f; ac.pitch = 1.0f; ac.loop = false; ac.spatial = true; ac.minDistance = 1.0f; ac.maxDistance = 20.0f; ac.playOnAwake = false;
+                            activeScene->Registry().emplace<Genesis::Engine::AudioComponent>(selectedEntity, ac);
+                            if (editorState == EditorState::Edit) sceneDirty = true;
+                        }
+                    }
+                    if (ImGui::MenuItem("Particle System")) {
+                        if (!activeScene->Registry().all_of<Genesis::Engine::ParticleSystemComponent>(selectedEntity)) {
+                            Genesis::Engine::ParticleSystemComponent pc;
+                            activeScene->Registry().emplace<Genesis::Engine::ParticleSystemComponent>(selectedEntity, pc);
                             if (editorState == EditorState::Edit) sceneDirty = true;
                         }
                     }
