@@ -21,7 +21,7 @@ void DebugRenderer::Render(Scene& scene, IGraphicsAPI* renderer) {
     std::vector<float> vertices;
     std::vector<float> colors;
 
-    auto& registry = scene.GetRegistry();
+    auto& registry = scene.Registry();
 
     // BoxCollider
     auto boxView = registry.view<BoxColliderComponent, Transform>();

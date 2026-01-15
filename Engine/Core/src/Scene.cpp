@@ -1,5 +1,6 @@
 #include "engine/Scene.h"
 #include "engine/Components.h"
+#include "engine/ScriptableEntity.h"
 #include "engine/IGraphics.h"
 #include "engine/MathUtils.h"
 #include "engine/Animation.h"
@@ -13,9 +14,37 @@ void Scene::OnRuntimeStart() {
 }
 
 void Scene::OnRuntimeStop() {
+    auto view = m_registry.view<ScriptComponent>();
+    for (auto entity : view) {
+        auto& sc = view.get<ScriptComponent>(entity);
+        if (sc.Instance) {
+            sc.Instance->OnDestroy();
+            if (sc.DestroyScript) sc.DestroyScript(&sc);
+        }
+    }
 }
 
 void Scene::OnUpdateRuntime(double dt) {
+    // Scripts
+    {
+        auto view = m_registry.view<ScriptComponent>();
+        for (auto entity : view) {
+            auto& sc = view.get<ScriptComponent>(entity);
+            if (!sc.Instance) {
+                if (sc.InstantiateScript) {
+                    sc.Instance = sc.InstantiateScript();
+                    sc.Instance->m_Entity = entity;
+                    sc.Instance->m_Scene = this;
+                    sc.Instance->OnCreate();
+                }
+            }
+
+            if (sc.Instance) {
+                sc.Instance->OnUpdate(dt);
+            }
+        }
+    }
+
     AnimationSystem::Update(*this, dt);
     UISystem::Update(*this, dt);
 
@@ -105,7 +134,7 @@ void Scene::Render(IGraphicsAPI* renderer) {
                 transform = transMat * rot * scaleMat;
             }
 
-            mc.model->Draw(transform.m);
+            mc.model->Draw(transform.m, &mc.materialOverrides);
         }
     }
 

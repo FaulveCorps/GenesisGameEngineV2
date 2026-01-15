@@ -58,6 +58,32 @@ bool SceneLoader::LoadScene(Scene& scene, const std::string& filePath) {
                 std::cerr << "SceneLoader: Failed to load model " << path << std::endl;
             }
         }
+        else if (token == "MAT_OVERRIDE" && currentEntity != entt::null) {
+            if (scene.Registry().any_of<ModelComponent>(currentEntity)) {
+                auto& mc = scene.Registry().get<ModelComponent>(currentEntity);
+                int index;
+                Material mat;
+                std::string baseTex, normTex;
+                
+                ss >> index 
+                   >> mat.baseColor[0] >> mat.baseColor[1] >> mat.baseColor[2] >> mat.baseColor[3]
+                   >> mat.metallic >> mat.roughness 
+                   >> baseTex >> normTex;
+                
+                if (baseTex != "NONE") mat.baseColorTexture = baseTex;
+                if (normTex != "NONE") mat.normalTexture = normTex;
+                
+                // Load overridden textures
+                if (!mat.baseColorTexture.empty()) {
+                   mat.baseColorTextureObj = Texture::CreateFromFile(mat.baseColorTexture);
+                }
+                if (!mat.normalTexture.empty()) {
+                   mat.normalTextureObj = Texture::CreateFromFile(mat.normalTexture);
+                }
+
+                mc.materialOverrides[index] = mat;
+            }
+        }
         else if (token == "LIGHT" && currentEntity != entt::null) {
             LightComponent l;
             int type;
@@ -123,6 +149,17 @@ bool SceneLoader::SaveScene(const Scene& scene, const std::string& filePath) {
                 const auto& mc = reg.get<ModelComponent>(entity);
                 if (!mc.sourcePath.empty()) {
                     file << "MODEL " << mc.sourcePath << "\n";
+                    
+                    // Save overrides
+                    for (const auto& [idx, mat] : mc.materialOverrides) {
+                        std::string baseTex = mat.baseColorTexture.empty() ? "NONE" : mat.baseColorTexture;
+                        std::string normTex = mat.normalTexture.empty() ? "NONE" : mat.normalTexture;
+                        
+                        file << "MAT_OVERRIDE " << idx << " "
+                             << mat.baseColor[0] << " " << mat.baseColor[1] << " " << mat.baseColor[2] << " " << mat.baseColor[3] << " "
+                             << mat.metallic << " " << mat.roughness << " "
+                             << baseTex << " " << normTex << "\n";
+                    }
                 } else {
                     // Keep silent by default; editor can show a warning if needed.
                 }
