@@ -39,6 +39,7 @@ add_executable(UnitTests
     test_network.cpp
     test_network_enet.cpp
     test_save.cpp
+    test_scene_loader_components.cpp
     test_mods.cpp
     test_scripting.cpp
     test_wasm_runtime.cpp

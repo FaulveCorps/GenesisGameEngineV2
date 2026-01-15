@@ -101,6 +101,47 @@ bool SceneLoader::LoadScene(Scene& scene, const std::string& filePath) {
             c.primary = (prim != 0);
             scene.Registry().emplace<CameraComponent>(currentEntity, c);
         }
+        else if (token == "RIGIDBODY" && currentEntity != entt::null) {
+            RigidBodyComponent rb;
+            int useGrav, isK;
+            ss >> rb.mass >> useGrav >> isK;
+            rb.useGravity = (useGrav != 0);
+            rb.isKinematic = (isK != 0);
+            scene.Registry().emplace<RigidBodyComponent>(currentEntity, rb);
+        }
+        else if (token == "BOX_COLLIDER" && currentEntity != entt::null) {
+            BoxColliderComponent bc;
+            int isTrig;
+            ss >> bc.size[0] >> bc.size[1] >> bc.size[2] >> bc.offset[0] >> bc.offset[1] >> bc.offset[2] >> isTrig;
+            bc.isTrigger = (isTrig != 0);
+            scene.Registry().emplace<BoxColliderComponent>(currentEntity, bc);
+        }
+        else if (token == "SPHERE_COLLIDER" && currentEntity != entt::null) {
+            SphereColliderComponent sc;
+            int isTrig;
+            ss >> sc.radius >> sc.offset[0] >> sc.offset[1] >> sc.offset[2] >> isTrig;
+            sc.isTrigger = (isTrig != 0);
+            scene.Registry().emplace<SphereColliderComponent>(currentEntity, sc);
+        }
+        else if (token == "AUDIO" && currentEntity != entt::null) {
+            AudioComponent a;
+            int loop, spatial, playOnAwake;
+            ss >> a.soundPath >> a.volume >> a.pitch >> loop >> spatial >> a.minDistance >> a.maxDistance >> playOnAwake;
+            a.loop = (loop != 0);
+            a.spatial = (spatial != 0);
+            a.playOnAwake = (playOnAwake != 0);
+            if (a.soundPath != "NONE") {
+                scene.Registry().emplace<AudioComponent>(currentEntity, a);
+            }
+        }
+        else if (token == "PARTICLE" && currentEntity != entt::null) {
+            ParticleSystemComponent p;
+            int loop, playOnAwake;
+            ss >> p.duration >> loop >> playOnAwake >> p.startLifetime >> p.startSpeed >> p.startSize >> p.startColor[0] >> p.startColor[1] >> p.startColor[2] >> p.startColor[3] >> p.rateOverTime >> p.emitterRadius;
+            p.looping = (loop != 0);
+            p.playOnAwake = (playOnAwake != 0);
+            scene.Registry().emplace<ParticleSystemComponent>(currentEntity, p);
+        }
     }
     
     std::cout << "SceneLoader: Loaded scene from " << filePath << std::endl;
@@ -183,6 +224,35 @@ bool SceneLoader::SaveScene(const Scene& scene, const std::string& filePath) {
                      << c.nearPlane << " " 
                      << c.farPlane << " " 
                      << (c.primary ? 1 : 0) << "\n";
+            }
+
+            if (reg.any_of<RigidBodyComponent>(entity)) {
+                const auto& rb = reg.get<RigidBodyComponent>(entity);
+                file << "RIGIDBODY " << rb.mass << " " << (rb.useGravity ? 1 : 0) << " " << (rb.isKinematic ? 1 : 0) << "\n";
+            }
+
+            if (reg.any_of<BoxColliderComponent>(entity)) {
+                const auto& bc = reg.get<BoxColliderComponent>(entity);
+                file << "BOX_COLLIDER " << bc.size[0] << " " << bc.size[1] << " " << bc.size[2] << " "
+                     << bc.offset[0] << " " << bc.offset[1] << " " << bc.offset[2] << " " << (bc.isTrigger ? 1 : 0) << "\n";
+            }
+
+            if (reg.any_of<SphereColliderComponent>(entity)) {
+                const auto& sc = reg.get<SphereColliderComponent>(entity);
+                file << "SPHERE_COLLIDER " << sc.radius << " " << sc.offset[0] << " " << sc.offset[1] << " " << sc.offset[2] << " " << (sc.isTrigger ? 1 : 0) << "\n";
+            }
+
+            if (reg.any_of<AudioComponent>(entity)) {
+                const auto& a = reg.get<AudioComponent>(entity);
+                if (!a.soundPath.empty()) {
+                    file << "AUDIO " << a.soundPath << " " << a.volume << " " << a.pitch << " " << (a.loop ? 1 : 0) << " " << (a.spatial ? 1 : 0) << " " << a.minDistance << " " << a.maxDistance << " " << (a.playOnAwake ? 1 : 0) << "\n";
+                }
+            }
+
+            if (reg.any_of<ParticleSystemComponent>(entity)) {
+                const auto& p = reg.get<ParticleSystemComponent>(entity);
+                file << "PARTICLE " << p.duration << " " << (p.looping ? 1 : 0) << " " << (p.playOnAwake ? 1 : 0) << " " << p.startLifetime << " " << p.startSpeed << " " << p.startSize << " "
+                     << p.startColor[0] << " " << p.startColor[1] << " " << p.startColor[2] << " " << p.startColor[3] << " " << p.rateOverTime << " " << p.emitterRadius << "\n";
             }
 
             file << "\n";
