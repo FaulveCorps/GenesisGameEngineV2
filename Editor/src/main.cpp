@@ -1070,7 +1070,6 @@ int main(int argc, char** argv) {
             if (!showSceneIcons) {
                 // Skip whole overlay if toggled off
             } else {
-#if 0
                 auto WorldToScreen = [&](const glm::vec3& worldPos, glm::vec2& out, float* outWindowZ = nullptr) -> bool {
                     glm::vec4 clip = projection * view * glm::vec4(worldPos, 1.0f);
                     if (clip.w == 0.0f) return false;
@@ -1086,19 +1085,13 @@ int main(int argc, char** argv) {
                         out.y < viewportTopLeft.y - pad || out.y > viewportTopLeft.y + viewportSize.y + pad) return false;
                     return true;
                 };
-#endif
 
                 ImDrawList* dl = ImGui::GetWindowDrawList();
                 auto io = ImGui::GetIO();
-#if 0
 
                 // Simple in-memory icon generation (lazy). Keep these local to editor scope.
                 static std::shared_ptr<Genesis::Engine::Texture> s_camIcon;
                 static std::shared_ptr<Genesis::Engine::Texture> s_lightIcon;
-                static std::shared_ptr<Genesis::Engine::Texture> s_audioIcon;
-                static std::shared_ptr<Genesis::Engine::Texture> s_particleIcon;
-                static std::shared_ptr<Genesis::Engine::Texture> s_rbIcon;
-#if 0
                 auto CreateCameraIcon = [&]() -> std::shared_ptr<Genesis::Engine::Texture> {
                     if (s_camIcon) return s_camIcon;
                     const int iw = 64, ih = 64;
@@ -1150,70 +1143,10 @@ int main(int argc, char** argv) {
                     return s_lightIcon;
                 };
 
-                auto CreateAudioIcon = [&]() -> std::shared_ptr<Genesis::Engine::Texture> {
-                    if (s_audioIcon) return s_audioIcon;
-                    const int iw = 64, ih = 64;
-                    std::vector<uint8_t> px((size_t)iw * ih * 4, 0);
-                    // simple speaker + cone
-                    for (int y = 0; y < ih; ++y) {
-                        for (int x = 0; x < iw; ++x) {
-                            int i = (y * iw + x) * 4;
-                            if (x >= iw/10 && x <= iw/2 && y >= ih/4 && y <= 3*ih/4) {
-                                px[i+0] = 80; px[i+1] = 80; px[i+2] = 90; px[i+3] = 255;
-                            }
-                            int tx0 = iw/2 + 2;
-                            int dx = x - tx0;
-                            int dy = y - ih/2;
-                            if (dx >= 0 && abs(dy) * 4 <= dx * ih/ (iw/2)) {
-                                px[i+0] = 200; px[i+1] = 200; px[i+2] = 120; px[i+3] = 255;
-                            }
-                        }
-                    }
-                    s_audioIcon = Genesis::Engine::Texture::CreateFromMemory(iw, ih, px);
-                    return s_audioIcon;
-                };
-
-                auto CreateParticleIcon = [&]() -> std::shared_ptr<Genesis::Engine::Texture> {
-                    if (s_particleIcon) return s_particleIcon;
-                    const int iw = 64, ih = 64;
-                    std::vector<uint8_t> px((size_t)iw * ih * 4, 0);
-                    int cx = iw/2, cy = ih/2;
-                    for (int y = 0; y < ih; ++y) {
-                        for (int x = 0; x < iw; ++x) {
-                            int i = (y * iw + x) * 4;
-                            int dx = x - cx, dy = y - cy; int r2 = dx*dx + dy*dy;
-                            if (r2 <= (iw/10)*(iw/10)) { px[i+0]=255; px[i+1]=255; px[i+2]=200; px[i+3]=255; }
-                            if ((abs(dx)==6 && abs(dy)<3) || (abs(dy)==6 && abs(dx)<3)) { px[i+0]=255; px[i+1]=200; px[i+2]=255; px[i+3]=255; }
-                        }
-                    }
-                    s_particleIcon = Genesis::Engine::Texture::CreateFromMemory(iw, ih, px);
-                    return s_particleIcon;
-                };
-
-                auto CreateRigidBodyIcon = [&]() -> std::shared_ptr<Genesis::Engine::Texture> {
-                    if (s_rbIcon) return s_rbIcon;
-                    const int iw = 64, ih = 64;
-                    std::vector<uint8_t> px((size_t)iw * ih * 4, 0);
-                    int bx0 = iw/4, bx1 = iw - iw/4;
-                    int by0 = ih/3, by1 = ih - ih/3;
-                    for (int y = 0; y < ih; ++y) {
-                        for (int x = 0; x < iw; ++x) {
-                            int i = (y * iw + x) * 4;
-                            if (x >= bx0 && x <= bx1 && y >= by0 && y <= by1) { px[i+0]=160; px[i+1]=160; px[i+2]=200; px[i+3]=255; }
-                        }
-                    }
-                    s_rbIcon = Genesis::Engine::Texture::CreateFromMemory(iw, ih, px);
-                    return s_rbIcon;
-                };
-
                 // Ensure textures exist and are uploaded when we have a renderer
-                CreateCameraIcon(); CreateLightIcon(); CreateAudioIcon(); CreateParticleIcon(); CreateRigidBodyIcon();
+                CreateCameraIcon(); CreateLightIcon();
                 if (s_camIcon && currentRenderer) s_camIcon->UploadToRenderer(currentRenderer);
                 if (s_lightIcon && currentRenderer) s_lightIcon->UploadToRenderer(currentRenderer);
-                if (s_audioIcon && currentRenderer) s_audioIcon->UploadToRenderer(currentRenderer);
-                if (s_particleIcon && currentRenderer) s_particleIcon->UploadToRenderer(currentRenderer);
-                if (s_rbIcon && currentRenderer) s_rbIcon->UploadToRenderer(currentRenderer);
-#endif
 
                 auto IsOccluded = [&](int sx, int sy, float windowZ) {
                     if (!iconOcclusion) return false;
@@ -1227,11 +1160,10 @@ int main(int argc, char** argv) {
                     return false;
                 };
 
-                const float iconSize = 64.0f; // larger icons for visibility (try 64x64)
+                const float iconSize = 64.0f; // larger icons for visibility (try 64×64)
                 const float half = iconSize * 0.5f;
 
                 // Camera icons
-#if 0
                 auto camView = activeScene->Registry().view<Genesis::Engine::CameraComponent, Genesis::Engine::Transform>();
                 for (auto entity : camView) {
                     const auto& tc = camView.get<Genesis::Engine::Transform>(entity);
@@ -1278,7 +1210,6 @@ int main(int argc, char** argv) {
                         }
                     }
                 }
-#endif
 
                 // Light icons
                 auto lightView = activeScene->Registry().view<Genesis::Engine::LightComponent, Genesis::Engine::Transform>();
@@ -1339,217 +1270,8 @@ int main(int argc, char** argv) {
                         }
                     }
                 }
-
-            // Audio icons
-            if (showAudioSources) {
-                auto audioView = activeScene->Registry().view<Genesis::Engine::AudioComponent, Genesis::Engine::Transform>();
-                for (auto entity : audioView) {
-                    const auto& tc = audioView.get<Genesis::Engine::Transform>(entity);
-                    const auto& ac = audioView.get<Genesis::Engine::AudioComponent>(entity);
-                    glm::vec3 wp(tc.x, tc.y, tc.z);
-                    glm::vec2 sp; float winZ = 0.0f;
-                    if (!WorldToScreen(wp, sp, &winZ)) continue;
-                    ImVec2 p((float)sp.x, (float)sp.y);
-
-                    if (IsOccluded((int)p.x, (int)p.y, winZ)) continue;
-
-                    bool drewTex = false;
-                    if (s_audioIcon && s_audioIcon->GetID() != 0) {
-                        ImVec2 tl = ImVec2(p.x - half, p.y - half);
-                        ImVec2 br = ImVec2(p.x + half, p.y + half);
-                        dl->AddImage((ImTextureID)(uintptr_t)s_audioIcon->GetID(), tl, br, ImVec2(0, 1), ImVec2(1, 0));
-                        drewTex = true;
-                    }
-                    if (!drewTex) {
-                        ImU32 acol = IM_COL32(200,200,200,255);
-                        ImVec2 a1(p.x - half*0.4f, p.y - half*0.5f);
-                        ImVec2 a2(p.x - half*0.4f, p.y + half*0.5f);
-                        ImVec2 a3(p.x + half*0.2f, p.y);
-                        dl->AddTriangleFilled(a1,a2,a3,acol);
-                    }
-
-                    if (ac.spatial) {
-                        if (ac.minDistance > 0.0f) {
-                            glm::vec3 rworld = wp + glm::vec3(ac.minDistance, 0, 0);
-                            glm::vec2 rscr;
-                            if (WorldToScreen(rworld, rscr)) {
-                                float pixelR = sqrtf((rscr.x - p.x)*(rscr.x - p.x) + (rscr.y - p.y)*(rscr.y - p.y));
-                                dl->AddCircle(p, pixelR, IM_COL32(255,255,255,120), 64, 1.0f);
-                            }
-                        }
-                        if (ac.maxDistance > 0.0f) {
-                            glm::vec3 rworld = wp + glm::vec3(ac.maxDistance, 0, 0);
-                            glm::vec2 rscr;
-                            if (WorldToScreen(rworld, rscr)) {
-                                float pixelR = sqrtf((rscr.x - p.x)*(rscr.x - p.x) + (rscr.y - p.y)*(rscr.y - p.y));
-                                dl->AddCircle(p, pixelR, IM_COL32(255,255,255,80), 64, 1.5f);
-                            }
-                        }
-                    }
-
-                    if (viewportHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
-                        ImVec2 m = io.MousePos;
-                        if (m.x >= p.x - half && m.x <= p.x + half && m.y >= p.y - half && m.y <= p.y + half) {
-                            selectedEntity = entity;
-                        }
-                    }
-                }
-            }
-
-            // Particle systems
-            if (showParticles) {
-                auto partView = activeScene->Registry().view<Genesis::Engine::ParticleSystemComponent, Genesis::Engine::Transform>();
-                for (auto entity : partView) {
-                    const auto& tc = partView.get<Genesis::Engine::Transform>(entity);
-                    const auto& ps = partView.get<Genesis::Engine::ParticleSystemComponent>(entity);
-                    glm::vec3 wp(tc.x, tc.y, tc.z);
-                    glm::vec2 sp; float winZ = 0.0f;
-                    if (!WorldToScreen(wp, sp, &winZ)) continue;
-                    ImVec2 p((float)sp.x, (float)sp.y);
-
-                    if (IsOccluded((int)p.x, (int)p.y, winZ)) continue;
-
-                    bool drewTex = false;
-                    if (s_particleIcon && s_particleIcon->GetID() != 0) {
-                        ImVec2 tl = ImVec2(p.x - half, p.y - half);
-                        ImVec2 br = ImVec2(p.x + half, p.y + half);
-                        dl->AddImage((ImTextureID)(uintptr_t)s_particleIcon->GetID(), tl, br, ImVec2(0, 1), ImVec2(1, 0));
-                        drewTex = true;
-                    }
-                    if (!drewTex) {
-                        ImU32 pcol = IM_COL32(200,200,255,255);
-                        dl->AddCircleFilled(p, half * 0.24f, pcol, 12);
-                    }
-
-                    if (ps.emitterRadius > 0.0f) {
-                        glm::vec3 rworld = wp + glm::vec3(ps.emitterRadius, 0, 0);
-                        glm::vec2 rscr;
-                        if (WorldToScreen(rworld, rscr)) {
-                            float pixelR = sqrtf((rscr.x - p.x)*(rscr.x - p.x) + (rscr.y - p.y)*(rscr.y - p.y));
-                            dl->AddCircle(p, pixelR, IM_COL32(200,200,255,120), 64, 1.2f);
-                        }
-                    }
-
-                    if (viewportHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
-                        ImVec2 m = io.MousePos;
-                        if (m.x >= p.x - half && m.x <= p.x + half && m.y >= p.y - half && m.y <= p.y + half) {
-                            selectedEntity = entity;
-                        }
-                    }
-                }
-            }
-
-            // Colliders (Sphere & Box)
-            if (showColliders) {
-                // Sphere colliders
-                auto sphView = activeScene->Registry().view<Genesis::Engine::SphereColliderComponent, Genesis::Engine::Transform>();
-                for (auto entity : sphView) {
-                    const auto& tc = sphView.get<Genesis::Engine::Transform>(entity);
-                    const auto& sc = sphView.get<Genesis::Engine::SphereColliderComponent>(entity);
-                    glm::vec3 wp(tc.x, tc.y, tc.z);
-                    glm::vec2 sp; float winZ = 0.0f;
-                    if (!WorldToScreen(wp, sp, &winZ)) continue;
-                    ImVec2 p((float)sp.x, (float)sp.y);
-                    if (IsOccluded((int)p.x, (int)p.y, winZ)) continue;
-
-                    float worldR = sc.radius * std::max(std::max(tc.sx, tc.sy), tc.sz);
-                    glm::vec3 rworld = wp + glm::vec3(worldR, 0, 0);
-                    glm::vec2 rscr;
-                    if (WorldToScreen(rworld, rscr)) {
-                        float pixelR = sqrtf((rscr.x - p.x)*(rscr.x - p.x) + (rscr.y - p.y)*(rscr.y - p.y));
-                        ImU32 col = IM_COL32(255,120,80,160);
-                        dl->AddCircle(p, pixelR, col, 64, 2.0f);
-                    }
-
-                    if (viewportHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
-                        ImVec2 m = io.MousePos;
-                        if (m.x >= p.x - half && m.x <= p.x + half && m.y >= p.y - half && m.y <= p.y + half) {
-                            selectedEntity = entity;
-                        }
-                    }
-                }
-
-                // Box colliders
-                auto boxView = activeScene->Registry().view<Genesis::Engine::BoxColliderComponent, Genesis::Engine::Transform>();
-                for (auto entity : boxView) {
-                    const auto& tc = boxView.get<Genesis::Engine::Transform>(entity);
-                    const auto& bc = boxView.get<Genesis::Engine::BoxColliderComponent>(entity);
-
-                    glm::vec3 pos(tc.x, tc.y, tc.z);
-                    glm::mat4 rotX = glm::rotate(glm::mat4(1.0f), tc.rx, glm::vec3(1,0,0));
-                    glm::mat4 rotY = glm::rotate(glm::mat4(1.0f), tc.ry, glm::vec3(0,1,0));
-                    glm::mat4 rotZ = glm::rotate(glm::mat4(1.0f), tc.rz, glm::vec3(0,0,1));
-                    glm::mat4 rot = rotZ * rotY * rotX;
-
-                    glm::vec3 halfExt(bc.size[0]*0.5f * tc.sx, bc.size[1]*0.5f * tc.sy, bc.size[2]*0.5f * tc.sz);
-                    glm::vec3 off(bc.offset[0]*tc.sx, bc.offset[1]*tc.sy, bc.offset[2]*tc.sz);
-
-                    glm::vec3 corners[8] = {
-                        glm::vec3(-halfExt.x, -halfExt.y, -halfExt.z), glm::vec3(halfExt.x, -halfExt.y, -halfExt.z),
-                        glm::vec3(-halfExt.x, halfExt.y, -halfExt.z),  glm::vec3(halfExt.x, halfExt.y, -halfExt.z),
-                        glm::vec3(-halfExt.x, -halfExt.y, halfExt.z),  glm::vec3(halfExt.x, -halfExt.y, halfExt.z),
-                        glm::vec3(-halfExt.x, halfExt.y, halfExt.z),   glm::vec3(halfExt.x, halfExt.y, halfExt.z)
-                    };
-
-                    ImVec2 proj[8]; bool vis[8] = {0};
-                    float minx = FLT_MAX, miny = FLT_MAX, maxx = -FLT_MAX, maxy = -FLT_MAX;
-                    for (int i = 0; i < 8; ++i) {
-                        glm::vec3 w = pos + glm::vec3(rot * glm::vec4(corners[i] + off, 1.0f));
-                        glm::vec2 s; if (WorldToScreen(w, s)) { vis[i] = true; proj[i] = ImVec2((float)s.x, (float)s.y); minx = std::min(minx, proj[i].x); miny = std::min(miny, proj[i].y); maxx = std::max(maxx, proj[i].x); maxy = std::max(maxy, proj[i].y); }
-                    }
-
-                    const int edges[12][2] = {{0,1},{1,3},{3,2},{2,0},{4,5},{5,7},{7,6},{6,4},{0,4},{1,5},{2,6},{3,7}};
-                    ImU32 col = IM_COL32(120,200,120,200);
-                    for (int e = 0; e < 12; ++e) {
-                        int a = edges[e][0], b = edges[e][1];
-                        if (vis[a] && vis[b]) {
-                            dl->AddLine(proj[a], proj[b], col, 2.0f);
-                        }
-                    }
-
-                    // Selection via bounding rect
-                    if (viewportHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
-                        ImVec2 m = io.MousePos;
-                        if (m.x >= minx && m.x <= maxx && m.y >= miny && m.y <= maxy) {
-                            selectedEntity = entity;
-                        }
-                    }
-                }
-            }
-
-            // Physics bodies (rigidbodies)
-            if (showPhysicsBodies) {
-                auto rbView = activeScene->Registry().view<Genesis::Engine::RigidBodyComponent, Genesis::Engine::Transform>();
-                for (auto entity : rbView) {
-                    const auto& tc = rbView.get<Genesis::Engine::Transform>(entity);
-                    glm::vec3 wp(tc.x, tc.y, tc.z);
-                    glm::vec2 sp; float winZ = 0.0f;
-                    if (!WorldToScreen(wp, sp, &winZ)) continue;
-                    ImVec2 p((float)sp.x, (float)sp.y);
-                    if (IsOccluded((int)p.x, (int)p.y, winZ)) continue;
-
-                    bool drewTex = false;
-                    if (s_rbIcon && s_rbIcon->GetID() != 0) {
-                        ImVec2 tl = ImVec2(p.x - half, p.y - half);
-                        ImVec2 br = ImVec2(p.x + half, p.y + half);
-                        dl->AddImage((ImTextureID)(uintptr_t)s_rbIcon->GetID(), tl, br, ImVec2(0, 1), ImVec2(1, 0));
-                        drewTex = true;
-                    }
-                    if (!drewTex) {
-                        ImU32 col = IM_COL32(160,160,200,255);
-                        dl->AddRectFilled(ImVec2(p.x - half*0.5f, p.y - half*0.5f), ImVec2(p.x + half*0.5f, p.y + half*0.5f), col, 4.0f);
-                    }
-
-                    if (viewportHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
-                        ImVec2 m = io.MousePos;
-                        if (m.x >= p.x - half && m.x <= p.x + half && m.y >= p.y - half && m.y <= p.y + half) {
-                            selectedEntity = entity;
-                        }
-                    }
-                }
             }
         }
-#endif
 
         // Drag/drop onto the viewport: create entity from a model, or open a dropped .scene
         if (ImGui::BeginDragDropTarget()) {
