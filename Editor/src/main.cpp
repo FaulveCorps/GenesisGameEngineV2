@@ -1333,6 +1333,110 @@ int main(int argc, char** argv) {
                         }
                     }
                 }
+
+                // Audio sources (icons + ranges)
+                if (showAudioSources) {
+                    auto audioView = activeScene->Registry().view<Genesis::Engine::AudioComponent, Genesis::Engine::Transform>();
+                    for (auto entity : audioView) {
+                        const auto& tc = audioView.get<Genesis::Engine::Transform>(entity);
+                        const auto& ac = audioView.get<Genesis::Engine::AudioComponent>(entity);
+                        glm::vec3 wp(tc.x, tc.y, tc.z);
+                        glm::vec2 sp; float winZ = 0.0f;
+                        if (!WorldToScreen(wp, sp, &winZ)) continue;
+                        ImVec2 p((float)sp.x, (float)sp.y);
+
+                        if (IsOccluded((int)p.x, (int)p.y, winZ)) continue;
+
+                        bool drewTex = false;
+                        if (s_audioIcon && s_audioIcon->GetID() != 0) {
+                            ImVec2 tl = ImVec2(p.x - half, p.y - half);
+                            ImVec2 br = ImVec2(p.x + half, p.y + half);
+                            dl->AddImage((ImTextureID)(uintptr_t)s_audioIcon->GetID(), tl, br, ImVec2(0, 1), ImVec2(1, 0));
+                            drewTex = true;
+                        }
+                        if (!drewTex) {
+                            ImU32 acol = IM_COL32(200,200,200,255);
+                            dl->AddCircleFilled(p, half * 0.6f, acol, 16);
+                            dl->AddCircle(p, half * 0.6f + 3.0f, acol, 16, 2.0f);
+                        }
+
+                        // Ranges for spatial audio
+                        if (ac.spatial) {
+                            if (ac.minDistance > 0.0f) {
+                                glm::vec3 rworld = wp + glm::vec3(ac.minDistance, 0, 0);
+                                glm::vec2 rscr;
+                                if (WorldToScreen(rworld, rscr)) {
+                                    float pixelR = sqrtf((rscr.x - p.x)*(rscr.x - p.x) + (rscr.y - p.y)*(rscr.y - p.y));
+                                    dl->AddCircle(p, pixelR, IM_COL32(255,255,255,80), 64, 1.0f);
+                                }
+                            }
+                            if (ac.maxDistance > ac.minDistance) {
+                                glm::vec3 rworld = wp + glm::vec3(ac.maxDistance, 0, 0);
+                                glm::vec2 rscr;
+                                if (WorldToScreen(rworld, rscr)) {
+                                    float pixelR = sqrtf((rscr.x - p.x)*(rscr.x - p.x) + (rscr.y - p.y)*(rscr.y - p.y));
+                                    dl->AddCircle(p, pixelR, IM_COL32(255,255,255,60), 64, 1.5f);
+                                }
+                            }
+                        }
+
+                        // selection hit test
+                        if (viewportHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+                            ImVec2 m = io.MousePos;
+                            if (m.x >= p.x - half && m.x <= p.x + half && m.y >= p.y - half && m.y <= p.y + half) {
+                                selectedEntity = entity;
+                            }
+                        }
+                    }
+                }
+
+                // Particle systems (icons + emitter radius)
+                if (showParticles) {
+                    auto partView = activeScene->Registry().view<Genesis::Engine::ParticleSystemComponent, Genesis::Engine::Transform>();
+                    for (auto entity : partView) {
+                        const auto& tc = partView.get<Genesis::Engine::Transform>(entity);
+                        const auto& pc = partView.get<Genesis::Engine::ParticleSystemComponent>(entity);
+                        glm::vec3 wp(tc.x, tc.y, tc.z);
+                        glm::vec2 sp; float winZ = 0.0f;
+                        if (!WorldToScreen(wp, sp, &winZ)) continue;
+                        ImVec2 p((float)sp.x, (float)sp.y);
+
+                        if (IsOccluded((int)p.x, (int)p.y, winZ)) continue;
+
+                        bool drewTex = false;
+                        if (s_particleIcon && s_particleIcon->GetID() != 0) {
+                            ImVec2 tl = ImVec2(p.x - half, p.y - half);
+                            ImVec2 br = ImVec2(p.x + half, p.y + half);
+                            dl->AddImage((ImTextureID)(uintptr_t)s_particleIcon->GetID(), tl, br, ImVec2(0, 1), ImVec2(1, 0));
+                            drewTex = true;
+                        }
+                        if (!drewTex) {
+                            ImU32 pcol = IM_COL32(200,200,255,255);
+                            dl->AddCircleFilled(p, half * 0.6f, pcol, 16);
+                            dl->AddCircle(p, half * 0.6f + 3.0f, IM_COL32(255,255,255,90), 12, 1.5f);
+                            dl->AddCircleFilled(ImVec2(p.x - half*0.18f, p.y - half*0.12f), half*0.06f, IM_COL32(255,200,255,255), 8);
+                            dl->AddCircleFilled(ImVec2(p.x + half*0.12f, p.y + half*0.14f), half*0.05f, IM_COL32(255,255,200,200), 8);
+                        }
+
+                        // emitter radius
+                        if (pc.emitterRadius > 0.0f) {
+                            glm::vec3 rworld = wp + glm::vec3(pc.emitterRadius, 0, 0);
+                            glm::vec2 rscr;
+                            if (WorldToScreen(rworld, rscr)) {
+                                float pixelR = sqrtf((rscr.x - p.x)*(rscr.x - p.x) + (rscr.y - p.y)*(rscr.y - p.y));
+                                dl->AddCircle(p, pixelR, IM_COL32(255,255,255,100), 64, 1.5f);
+                            }
+                        }
+
+                        // selection hit test
+                        if (viewportHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+                            ImVec2 m = io.MousePos;
+                            if (m.x >= p.x - half && m.x <= p.x + half && m.y >= p.y - half && m.y <= p.y + half) {
+                                selectedEntity = entity;
+                            }
+                        }
+                    }
+                }
             }
         }
 
