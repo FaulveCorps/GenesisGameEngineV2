@@ -62,6 +62,7 @@ using PFNGLTEXIMAGE2DPROC = void (APIENTRY*)(unsigned int, int, int, int, int, i
 using PFNGLTEXPARAMETERIPROC = void (APIENTRY*)(unsigned int, int, int);
 using PFNGLTEXPARAMETERFVPROC = void (APIENTRY*)(unsigned int, unsigned int, const float*);
 using PFNGLREADBUFFERPROC = void (APIENTRY*)(unsigned int);
+using PFNGLREADPIXELSPROC = void (APIENTRY*)(int, int, int, int, unsigned int, unsigned int, void*);
 using PFNGLDRAWARRAYSPROC = void (APIENTRY*)(unsigned int, int, int);
 using PFNGLDISABLEPROC = void (APIENTRY*)(unsigned int);
 using PFNGLBUFFERSUBDATAPROC = void (APIENTRY*)(unsigned int, ptrdiff_t, ptrdiff_t, const void*);
@@ -73,6 +74,7 @@ static PFNGLENABLEPROC pglEnable = nullptr;
 static PFNGLCLEARPROC pglClear = nullptr;
 static PFNGLBLENDFUNCPROC pglBlendFunc = nullptr;
 static PFNGLDRAWBUFFERPROC pglDrawBuffer = nullptr;
+static PFNGLREADPIXELSPROC pglReadPixels = nullptr; 
 
 static PFNGLGENVERTEXARRAYSPROC pglGenVertexArrays = nullptr;
 static PFNGLBINDVERTEXARRAYPROC pglBindVertexArray = nullptr;
@@ -1220,6 +1222,37 @@ void OpenGLRenderer::SetViewProjection(const float* view, const float* projectio
     }
 }
 
+bool OpenGLRenderer::ReadDepthAtWindowCoord(int x, int y, float& outDepth) {
+    if (!m_window) return false;
+    if (SDL_GL_MakeCurrent(m_window, m_context) != 0) return false;
+
+    // Resolve glReadPixels lazily
+    if (!pglReadPixels) {
+        auto addrReadPixels = (void*)SDL_GL_GetProcAddress("glReadPixels");
+        if (!addrReadPixels) return false;
+        pglReadPixels = (PFNGLREADPIXELSPROC)addrReadPixels;
+    }
+
+    // Prefer the g-buffer depth if available, otherwise fall back to the post-process FBO or default
+    unsigned int fboToRead = (m_gBuffer != 0) ? m_gBuffer : ((m_fbo != 0) ? m_fbo : 0);
+
+    // Bind framebuffer for read
+    if (pglBindFramebuffer) pglBindFramebuffer(GL_FRAMEBUFFER, fboToRead);
+
+    int ix = x;
+    int iy = y;
+    int readY = m_screenHeight - 1 - iy; // convert to GL lower-left origin
+
+    float depth = 1.0f;
+    pglReadPixels(ix, readY, 1, 1, GL_DEPTH_COMPONENT, GL_FLOAT, &depth);
+
+    // Restore default framebuffer binding
+    if (pglBindFramebuffer) pglBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+    outDepth = depth;
+    return true;
+}
+
 void OpenGLRenderer::BindDefaultFramebuffer() {
     if (pglBindFramebuffer) pglBindFramebuffer(GL_FRAMEBUFFER, 0);
 
@@ -1227,7 +1260,7 @@ void OpenGLRenderer::BindDefaultFramebuffer() {
     // Shadow-map setup uses GL_NONE for draw/read buffers.
     if (pglDrawBuffer) pglDrawBuffer(GL_BACK);
     if (pglReadBuffer) pglReadBuffer(GL_BACK);
-}
+} 
 
 void OpenGLRenderer::Clear(float r, float g, float b, float a) {
     if (pglClearColor && pglClear) {

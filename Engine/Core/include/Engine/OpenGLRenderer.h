@@ -55,6 +55,9 @@ public:
     // If 0, the frame was rendered to the default framebuffer.
     uint64_t GetFinalTextureID() const { return (uint64_t)m_finalTexture; }
 
+    // Read depth buffer at window coordinates (origin top-left). Returns true on success and sets depth in [0,1].
+    bool ReadDepthAtWindowCoord(int x, int y, float& outDepth);
+
     void BindDefaultFramebuffer();
     void Clear(float r, float g, float b, float a);
 
