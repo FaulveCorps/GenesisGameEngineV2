@@ -1201,15 +1201,42 @@ int main(int argc, char** argv) {
                     if (s_particleIcon) return s_particleIcon;
                     const int iw = 64, ih = 64;
                     std::vector<uint8_t> px((size_t)iw * ih * 4, 0);
-                    int cx = iw/2, cy = ih/2;
+
+                    auto setPixel = [&](int x, int y, uint8_t r, uint8_t g, uint8_t b, uint8_t a) {
+                        if (x < 0 || x >= iw || y < 0 || y >= ih) return;
+                        int idx = (y * iw + x) * 4;
+                        px[idx+0] = r; px[idx+1] = g; px[idx+2] = b; px[idx+3] = a;
+                    };
+
+                    // Sparkle core (diamond / soft gradient)
+                    int cx = iw / 2, cy = ih / 2;
                     for (int y = 0; y < ih; ++y) {
                         for (int x = 0; x < iw; ++x) {
-                            int i = (y * iw + x) * 4;
-                            int dx = x - cx, dy = y - cy; int r2 = dx*dx + dy*dy;
-                            if (r2 <= (iw/10)*(iw/10)) { px[i+0]=255; px[i+1]=255; px[i+2]=200; px[i+3]=255; }
-                            if ((abs(dx)==6 && abs(dy)<3) || (abs(dy)==6 && abs(dx)<3)) { px[i+0]=255; px[i+1]=200; px[i+2]=255; px[i+3]=255; }
+                            int dx = x - cx, dy = y - cy;
+                            int man = abs(dx) + abs(dy);
+                            if (man <= 8) {
+                                uint8_t a = (uint8_t)std::max(0, 255 - man * 24);
+                                // warm golden core
+                                setPixel(x, y, 255, 230, 140, a);
+                            }
+                            // diagonal glints
+                            if (abs(dx - dy) <= 1 && abs(dx) <= 14) {
+                                int d = abs(dx);
+                                uint8_t a = (uint8_t)std::max(0, 160 - d * 10);
+                                if (a > 16) setPixel(x, y, 255, 210, 120, a);
+                            }
+                            if (abs(dx + dy) <= 1 && abs(dx) <= 14) {
+                                int d = abs(dx);
+                                uint8_t a = (uint8_t)std::max(0, 160 - d * 10);
+                                if (a > 16) setPixel(x, y, 255, 210, 120, a);
+                            }
+                            // small accent dots
+                            if ((dx == 11 && dy == -10) || (dx == -10 && dy == -6) || (dx == 9 && dy == 6)) {
+                                setPixel(x, y, 255, 255, 255, 220);
+                            }
                         }
                     }
+
                     s_particleIcon = Genesis::Engine::Texture::CreateFromMemory(iw, ih, px);
                     return s_particleIcon;
                 };
@@ -1549,15 +1576,38 @@ int main(int argc, char** argv) {
                         if (s_particleIcon && s_particleIcon->GetID() != 0) {
                             ImVec2 tl = ImVec2(p.x - half, p.y - half);
                             ImVec2 br = ImVec2(p.x + half, p.y + half);
-                            dl->AddImage((ImTextureID)(uintptr_t)s_particleIcon->GetID(), tl, br, ImVec2(0, 1), ImVec2(1, 0));
-                            drewTex = true;
+                            // Prefer the generated texture when available and not forcing fallback
+                            if (!forceSimpleCameraIcon) {
+                                dl->AddImage((ImTextureID)(uintptr_t)s_particleIcon->GetID(), tl, br, ImVec2(0, 1), ImVec2(1, 0));
+                                drewTex = true;
+                            }
                         }
                         if (!drewTex) {
-                            ImU32 pcol = IM_COL32(200,200,255,255);
-                            dl->AddCircleFilled(p, half * 0.6f, pcol, 16);
-                            dl->AddCircle(p, half * 0.6f + 3.0f, IM_COL32(255,255,255,90), 12, 1.5f);
-                            dl->AddCircleFilled(ImVec2(p.x - half*0.18f, p.y - half*0.12f), half*0.06f, IM_COL32(255,200,255,255), 8);
-                            dl->AddCircleFilled(ImVec2(p.x + half*0.12f, p.y + half*0.14f), half*0.05f, IM_COL32(255,255,200,200), 8);
+                            // Sparkle fallback (✨): diamond core + glint arms + small accent dots
+                            ImU32 coreCol = IM_COL32(255,220,110,220);
+                            ImU32 outlineCol = IM_COL32(255,180,60,200);
+                            ImU32 whiteCol = IM_COL32(255,255,255,220);
+
+                            float r = half * 0.36f;
+                            ImVec2 top(p.x, p.y - r);
+                            ImVec2 right(p.x + r, p.y);
+                            ImVec2 bottom(p.x, p.y + r);
+                            ImVec2 left(p.x - r, p.y);
+                            ImVec2 diamond[4] = { top, right, bottom, left };
+
+                            dl->AddConvexPolyFilled(diamond, 4, coreCol);
+                            dl->AddPolyline(diamond, 4, outlineCol, true, 1.6f);
+
+                            // subtle glint arms
+                            float arm = r * 1.1f;
+                            dl->AddLine(ImVec2(p.x - arm * 0.2f, p.y - arm), ImVec2(p.x + arm * 0.2f, p.y - arm * 0.3f), whiteCol, 1.0f);
+                            dl->AddLine(ImVec2(p.x - arm * 0.2f, p.y + arm), ImVec2(p.x + arm * 0.2f, p.y + arm * 0.3f), whiteCol, 1.0f);
+                            dl->AddLine(ImVec2(p.x - arm, p.y - arm * 0.2f), ImVec2(p.x - arm * 0.3f, p.y + arm * 0.2f), whiteCol, 1.0f);
+                            dl->AddLine(ImVec2(p.x + arm, p.y - arm * 0.2f), ImVec2(p.x + arm * 0.3f, p.y + arm * 0.2f), whiteCol, 1.0f);
+
+                            // small accent dots
+                            dl->AddCircleFilled(ImVec2(p.x + r * 0.6f, p.y - r * 0.6f), half * 0.06f, whiteCol);
+                            dl->AddCircleFilled(ImVec2(p.x - r * 0.6f, p.y - r * 0.4f), half * 0.05f, IM_COL32(255,200,255,200));
                         }
 
                         // emitter radius
