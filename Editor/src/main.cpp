@@ -1117,47 +1117,32 @@ int main(int argc, char** argv) {
                         px[i+0] = r; px[i+1] = g; px[i+2] = b; px[i+3] = a;
                     };
 
-                    // Lens (left side, pronounced cylinder)
-                    const int lx = 12, ly = 32;
-                    const int lrOuter = 11;
-                    const int lrInner = 7;
-                    const int lrCenter = 4;
-                    for (int y = ly - lrOuter; y <= ly + lrOuter; ++y) {
-                        for (int x = lx - lrOuter; x <= lx + lrOuter; ++x) {
-                            int dx = x - lx, dy = y - ly; int r2 = dx*dx + dy*dy;
-                            if (r2 <= lrOuter*lrOuter && r2 >= (lrInner-1)*(lrInner-1)) setPixel(x,y,170,170,180,255);
-                            if (r2 <= lrInner*lrInner && r2 >= lrCenter*lrCenter) setPixel(x,y,110,110,120,255);
-                            if (r2 <= lrCenter*lrCenter) setPixel(x,y,10,10,12,255);
-                        }
+                    // Simple block (█)
+                    int bodyLeft = 12, bodyRight = 46;
+                    int bodyTop = 18, bodyBottom = 46;
+                    for (int y = bodyTop; y <= bodyBottom; ++y) {
+                        for (int x = bodyLeft; x <= bodyRight; ++x) setPixel(x, y, 70, 70, 80, 255);
                     }
 
-                    // Body rectangle (right side)
-                    int bx0 = 22, bx1 = 58;
-                    int by0 = 20, by1 = 44;
-                    for (int y = by0; y <= by1; ++y) {
-                        for (int x = bx0; x <= bx1; ++x) setPixel(x, y, 60, 70, 80, 255);
+                    // Left-pointing triangle to the RIGHT of the block (█◀)
+                    int tipX = bodyRight + 2, tipY = ih / 2;
+                    int halfH = 10;
+                    int baseX = bodyRight + 12;
+                    int topY = tipY - halfH, bottomY = tipY + halfH;
+                    for (int y = topY; y <= bottomY; ++y) {
+                        float f = float(y - topY) / float(bottomY - topY);
+                        int xRight = tipX + (int)(f * (baseX - tipX));
+                        for (int x = tipX; x <= xRight; ++x) setPixel(x, y, 70, 70, 80, 255);
                     }
 
-                    // Top handle / viewfinder
-                    for (int y = 8; y < 16; ++y) {
-                        for (int x = 18; x < 34; ++x) setPixel(x, y, 120, 130, 140, 255);
+                    // Small highlight
+                    for (int y = bodyTop + 3; y < bodyTop + 8; ++y) {
+                        for (int x = bodyLeft + 3; x < bodyLeft + 12; ++x) setPixel(x, y, 110, 110, 120, 120);
                     }
 
-                    // Small film reels / top circles
-                    auto drawCircle = [&](int cx, int cy, int r, uint8_t rr, uint8_t gg, uint8_t bb) {
-                        for (int y = cy - r; y <= cy + r; ++y) for (int x = cx - r; x <= cx + r; ++x) {
-                            int dx = x - cx, dy = y - cy; if (dx*dx + dy*dy <= r*r) setPixel(x,y, rr, gg, bb, 255);
-                        }
-                    };
-                    drawCircle(40, 12, 6, 200,200,210);
-                    drawCircle(50, 12, 4, 180,180,190);
-
-                    // Small REC indicator (red dot)
-                    drawCircle(54, 20, 3, 220, 40, 40);
-
-                    // Outline for body
-                    for (int x = bx0; x <= bx1; ++x) { setPixel(x,by0,30,30,35,255); setPixel(x,by1,30,30,35,255); }
-                    for (int y = by0; y <= by1; ++y) { setPixel(bx0,y,30,30,35,255); setPixel(bx1,y,30,30,35,255); }
+                    // Outline
+                    for (int x = bodyLeft; x <= bodyRight; ++x) { setPixel(x, bodyTop, 30,30,35,255); setPixel(x, bodyBottom, 30,30,35,255); }
+                    for (int y = bodyTop; y <= bodyBottom; ++y) { setPixel(bodyLeft, y, 30,30,35,255); setPixel(bodyRight, y, 30,30,35,255); }
 
                     s_camIcon = Genesis::Engine::Texture::CreateFromMemory(iw, ih, px);
                     return s_camIcon;
@@ -1284,17 +1269,17 @@ int main(int argc, char** argv) {
                         drewTex = true;
                     }
                     if (!drewTex) {
-                        // Simple camera icon: block (█) + left-pointing triangle (◀)
+                        // Simple camera icon: block (█) + left-pointing triangle placed on the RIGHT (█◀)
                         ImU32 col = IM_COL32(70,70,80,255);
                         ImVec2 bodyTL(p.x - half * 0.1f, p.y - half * 0.35f);
                         ImVec2 bodyBR(p.x + half * 0.6f, p.y + half * 0.35f);
                         dl->AddRectFilled(bodyTL, bodyBR, col, 4.0f);
                         dl->AddRect(bodyTL, bodyBR, IM_COL32(30,30,35,255), 2.0f);
 
-                        // Triangle tip on left
-                        ImVec2 tA(bodyTL.x - half * 0.28f, p.y);
-                        ImVec2 tB(bodyTL.x, p.y - half * 0.22f);
-                        ImVec2 tC(bodyTL.x, p.y + half * 0.22f);
+                        // Triangle tip on the right side (pointing left)
+                        ImVec2 tA(bodyBR.x + half * 0.28f, p.y);
+                        ImVec2 tB(bodyBR.x, p.y - half * 0.22f);
+                        ImVec2 tC(bodyBR.x, p.y + half * 0.22f);
                         dl->AddTriangleFilled(tA, tB, tC, col);
                     }
 
