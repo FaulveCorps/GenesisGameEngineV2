@@ -267,6 +267,7 @@ int main(int argc, char** argv) {
     bool showAudioSources = true;
     bool showParticles = true;
     bool showPhysicsBodies = true;
+    bool showCameraFOV = true;
     char commandSearchBuffer[128] = "";
     int selectedCommandIndex = 0;
 
@@ -715,6 +716,7 @@ int main(int argc, char** argv) {
                 ImGui::MenuItem("Show Colliders", nullptr, &showColliders);
                 ImGui::MenuItem("Show Audio Sources", nullptr, &showAudioSources);
                 ImGui::MenuItem("Show Particle Systems", nullptr, &showParticles);
+                ImGui::MenuItem("Show Camera FOV", nullptr, &showCameraFOV);
                 ImGui::MenuItem("Show Physics Bodies", nullptr, &showPhysicsBodies);
                 if (ImGui::MenuItem("Reset Layout")) { requestResetLayout = true; }
                 ImGui::EndMenu();
@@ -1262,6 +1264,84 @@ int main(int argc, char** argv) {
                         if (WorldToScreen(arrowWorld, arrowScr)) {
                             ImVec2 end((float)arrowScr.x, (float)arrowScr.y);
                             dl->AddLine(p, end, ImGui::GetColorU32(ImVec4(0.4f,0.6f,1.0f,1.0f)), 2.0f);
+                        }
+                    }
+
+                    // Camera FOV visualization
+                    if (showCameraFOV) {
+                        // Also get the camera component fields
+                        const auto& cc = camView.get<Genesis::Engine::CameraComponent>(entity);
+
+                        glm::vec3 dir = glm::normalize(fwd);
+                        glm::vec3 right = glm::vec3(rot * glm::vec4(1,0,0,0));
+                        glm::vec3 up = glm::vec3(rot * glm::vec4(0,1,0,0));
+
+                        float aspect = viewportSize.x / viewportSize.y;
+                        float tanHalf = tanf(glm::radians(cc.fov * 0.5f));
+                        float n = cc.nearPlane;
+                        float f = cc.farPlane;
+
+                        glm::vec3 nc = wp + dir * n;
+                        glm::vec3 fc = wp + dir * f;
+
+                        float hN = tanHalf * n; float wN = hN * aspect;
+                        float hF = tanHalf * f; float wF = hF * aspect;
+
+                        glm::vec3 nTL = nc + up * hN - right * wN;
+                        glm::vec3 nTR = nc + up * hN + right * wN;
+                        glm::vec3 nBR = nc - up * hN + right * wN;
+                        glm::vec3 nBL = nc - up * hN - right * wN;
+
+                        glm::vec3 fTL = fc + up * hF - right * wF;
+                        glm::vec3 fTR = fc + up * hF + right * wF;
+                        glm::vec3 fBR = fc - up * hF + right * wF;
+                        glm::vec3 fBL = fc - up * hF - right * wF;
+
+                        glm::vec2 sNTL, sNTR, sNBR, sNBL, sFTL, sFTR, sFBR, sFBL;
+                        float zNTL, zNTR, zNBR, zNBL, zFTL, zFTR, zFBR, zFBL;
+                        bool vNTL = WorldToScreen(nTL, sNTL, &zNTL);
+                        bool vNTR = WorldToScreen(nTR, sNTR, &zNTR);
+                        bool vNBR = WorldToScreen(nBR, sNBR, &zNBR);
+                        bool vNBL = WorldToScreen(nBL, sNBL, &zNBL);
+                        bool vFTL = WorldToScreen(fTL, sFTL, &zFTL);
+                        bool vFTR = WorldToScreen(fTR, sFTR, &zFTR);
+                        bool vFBR = WorldToScreen(fBR, sFBR, &zFBR);
+                        bool vFBL = WorldToScreen(fBL, sFBL, &zFBL);
+
+                        if (vFTL || vFTR || vFBR || vFBL || vNTL || vNTR || vNBR || vNBL) {
+                            // occlusion test at far center
+                            glm::vec2 scrFc; float zFc;
+                            bool vFc = WorldToScreen(fc, scrFc, &zFc);
+                            bool fcOccluded = false;
+                            if (vFc) fcOccluded = IsOccluded((int)scrFc.x, (int)scrFc.y, zFc);
+
+                            ImU32 fillCol = ImGui::GetColorU32(ImVec4(0.4f,0.6f,1.0f, fcOccluded ? 0.18f : 0.45f));
+                            ImU32 outlineCol = ImGui::GetColorU32(ImVec4(0.4f,0.6f,1.0f, fcOccluded ? 0.12f : 1.0f));
+
+                            // Draw far plane if fully visible
+                            if (vFTL && vFTR && vFBR && vFBL) {
+                                ImVec2 farPts[4] = { ImVec2((float)sFTL.x,(float)sFTL.y), ImVec2((float)sFTR.x,(float)sFTR.y), ImVec2((float)sFBR.x,(float)sFBR.y), ImVec2((float)sFBL.x,(float)sFBL.y) };
+                                dl->AddConvexPolyFilled(farPts, 4, fillCol);
+                                dl->AddPolyline(farPts, 4, outlineCol, true, 1.5f);
+                            } else {
+                                // draw visible segments between far corners
+                                if (vFTL && vFTR) dl->AddLine(ImVec2((float)sFTL.x,(float)sFTL.y), ImVec2((float)sFTR.x,(float)sFTR.y), outlineCol, 1.0f);
+                                if (vFTR && vFBR) dl->AddLine(ImVec2((float)sFTR.x,(float)sFTR.y), ImVec2((float)sFBR.x,(float)sFBR.y), outlineCol, 1.0f);
+                                if (vFBR && vFBL) dl->AddLine(ImVec2((float)sFBR.x,(float)sFBR.y), ImVec2((float)sFBL.x,(float)sFBL.y), outlineCol, 1.0f);
+                                if (vFBL && vFTL) dl->AddLine(ImVec2((float)sFBL.x,(float)sFBL.y), ImVec2((float)sFTL.x,(float)sFTL.y), outlineCol, 1.0f);
+                            }
+
+                            // draw edges from camera apex to far corners
+                            if (vFTL) dl->AddLine(p, ImVec2((float)sFTL.x,(float)sFTL.y), outlineCol, 1.0f);
+                            if (vFTR) dl->AddLine(p, ImVec2((float)sFTR.x,(float)sFTR.y), outlineCol, 1.0f);
+                            if (vFBR) dl->AddLine(p, ImVec2((float)sFBR.x,(float)sFBR.y), outlineCol, 1.0f);
+                            if (vFBL) dl->AddLine(p, ImVec2((float)sFBL.x,(float)sFBL.y), outlineCol, 1.0f);
+
+                            // near plane outline (thin)
+                            if (vNTL && vNTR && vNBR && vNBL) {
+                                ImVec2 nearPts[4] = { ImVec2((float)sNTL.x,(float)sNTL.y), ImVec2((float)sNTR.x,(float)sNTR.y), ImVec2((float)sNBR.x,(float)sNBR.y), ImVec2((float)sNBL.x,(float)sNBL.y) };
+                                dl->AddPolyline(nearPts, 4, IM_COL32(200,200,255,200), true, 1.0f);
+                            }
                         }
                     }
 
