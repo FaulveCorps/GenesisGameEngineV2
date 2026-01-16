@@ -268,6 +268,7 @@ int main(int argc, char** argv) {
     bool showParticles = true;
     bool showPhysicsBodies = true;
     bool showCameraFOV = true;
+    bool reloadSceneIcons = false; // one-shot: set true to regenerate in-memory overlay icons at runtime
     char commandSearchBuffer[128] = "";
     int selectedCommandIndex = 0;
 
@@ -718,6 +719,7 @@ int main(int argc, char** argv) {
                 ImGui::MenuItem("Show Particle Systems", nullptr, &showParticles);
                 ImGui::MenuItem("Show Camera FOV", nullptr, &showCameraFOV);
                 ImGui::MenuItem("Show Physics Bodies", nullptr, &showPhysicsBodies);
+                if (ImGui::MenuItem("Reload Scene Icons")) reloadSceneIcons = true;
                 if (ImGui::MenuItem("Reset Layout")) { requestResetLayout = true; }
                 ImGui::EndMenu();
             }
@@ -1097,6 +1099,10 @@ int main(int argc, char** argv) {
                 static std::shared_ptr<Genesis::Engine::Texture> s_audioIcon;
                 static std::shared_ptr<Genesis::Engine::Texture> s_particleIcon;
                 static std::shared_ptr<Genesis::Engine::Texture> s_rbIcon;
+                if (reloadSceneIcons) {
+                    s_camIcon.reset(); s_lightIcon.reset(); s_audioIcon.reset(); s_particleIcon.reset(); s_rbIcon.reset();
+                    reloadSceneIcons = false;
+                }
                 auto CreateCameraIcon = [&]() -> std::shared_ptr<Genesis::Engine::Texture> {
                     if (s_camIcon) return s_camIcon;
                     const int iw = 64, ih = 64;
