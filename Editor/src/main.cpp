@@ -1926,6 +1926,24 @@ int main(int argc, char** argv) {
                             if (editorState == EditorState::Edit) sceneDirty = true;
                         }
                     }
+                    if (ImGui::MenuItem("Rigid Body")) {
+                        if (!activeScene->Registry().all_of<Genesis::Engine::RigidBodyComponent>(selectedEntity)) {
+                            activeScene->Registry().emplace<Genesis::Engine::RigidBodyComponent>(selectedEntity);
+                            if (editorState == EditorState::Edit) sceneDirty = true;
+                        }
+                    }
+                    if (ImGui::MenuItem("Audio")) {
+                        if (!activeScene->Registry().all_of<Genesis::Engine::AudioComponent>(selectedEntity)) {
+                            activeScene->Registry().emplace<Genesis::Engine::AudioComponent>(selectedEntity);
+                            if (editorState == EditorState::Edit) sceneDirty = true;
+                        }
+                    }
+                    if (ImGui::MenuItem("Particle System")) {
+                        if (!activeScene->Registry().all_of<Genesis::Engine::ParticleSystemComponent>(selectedEntity)) {
+                            activeScene->Registry().emplace<Genesis::Engine::ParticleSystemComponent>(selectedEntity);
+                            if (editorState == EditorState::Edit) sceneDirty = true;
+                        }
+                    }
                     if (ImGui::MenuItem("Script")) {
                         if (!activeScene->Registry().all_of<Genesis::Engine::ScriptComponent>(selectedEntity)) {
                             activeScene->Registry().emplace<Genesis::Engine::ScriptComponent>(selectedEntity);
