@@ -1269,18 +1269,21 @@ int main(int argc, char** argv) {
                         drewTex = true;
                     }
                     if (!drewTex) {
-                        // Simple camera icon: block (█) + left-pointing triangle placed on the RIGHT (█◀)
+                        // Simple camera icon ensured to read '█◀' — block left, triangle right
                         ImU32 col = IM_COL32(70,70,80,255);
-                        ImVec2 bodyTL(p.x - half * 0.1f, p.y - half * 0.35f);
-                        ImVec2 bodyBR(p.x + half * 0.6f, p.y + half * 0.35f);
+                        float blockW = iconSize * 0.42f;
+                        float blockH = iconSize * 0.36f;
+                        float gap = 6.0f;
+                        ImVec2 bodyTL(p.x - blockW - gap, p.y - blockH * 0.5f);
+                        ImVec2 bodyBR(p.x - gap, p.y + blockH * 0.5f);
                         dl->AddRectFilled(bodyTL, bodyBR, col, 4.0f);
                         dl->AddRect(bodyTL, bodyBR, IM_COL32(30,30,35,255), 2.0f);
 
-                        // Triangle tip on the right side (pointing left)
-                        ImVec2 tA(bodyBR.x + half * 0.28f, p.y);
-                        ImVec2 tB(bodyBR.x, p.y - half * 0.22f);
-                        ImVec2 tC(bodyBR.x, p.y + half * 0.22f);
-                        dl->AddTriangleFilled(tA, tB, tC, col);
+                        // Triangle to the right of the block (points left)
+                        ImVec2 tTip(bodyBR.x + blockW * 0.45f, p.y);
+                        ImVec2 tBase(bodyBR.x + 2.0f, p.y - blockH * 0.45f);
+                        ImVec2 tBase2(bodyBR.x + 2.0f, p.y + blockH * 0.45f);
+                        dl->AddTriangleFilled(tTip, tBase, tBase2, col);
                     }
 
                     // Forward indicator (same as before)
