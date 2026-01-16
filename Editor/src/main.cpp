@@ -1178,21 +1178,50 @@ int main(int argc, char** argv) {
                     if (s_audioIcon) return s_audioIcon;
                     const int iw = 64, ih = 64;
                     std::vector<uint8_t> px((size_t)iw * ih * 4, 0);
-                    // simple speaker + cone
-                    for (int y = 0; y < ih; ++y) {
-                        for (int x = 0; x < iw; ++x) {
-                            int i = (y * iw + x) * 4;
-                            if (x >= iw/10 && x <= iw/2 && y >= ih/4 && y <= 3*ih/4) {
-                                px[i+0] = 80; px[i+1] = 80; px[i+2] = 90; px[i+3] = 255;
-                            }
-                            int tx0 = iw/2 + 2;
-                            int dx = x - tx0;
-                            int dy = y - ih/2;
-                            if (dx >= 0 && abs(dy) * 4 <= dx * ih / (iw/2)) {
-                                px[i+0] = 200; px[i+1] = 200; px[i+2] = 120; px[i+3] = 255;
+
+                    auto setPixel = [&](int x, int y, uint8_t r, uint8_t g, uint8_t b, uint8_t a) {
+                        if (x < 0 || x >= iw || y < 0 || y >= ih) return;
+                        int idx = (y * iw + x) * 4;
+                        px[idx+0] = r; px[idx+1] = g; px[idx+2] = b; px[idx+3] = a;
+                    };
+
+                    // Speaker body (left)
+                    int bodyW = 18;
+                    int bodyH = 24;
+                    int bodyX = 8;
+                    int bodyY = (ih - bodyH) / 2;
+                    for (int y = bodyY; y < bodyY + bodyH; ++y) for (int x = bodyX; x < bodyX + bodyW; ++x) setPixel(x, y, 70, 70, 80, 255);
+
+                    // Speaker cone (triangle) inside body pointing right
+                    for (int y = 0; y < bodyH; ++y) {
+                        float t = (float)y / (float)(bodyH - 1);
+                        int left = bodyX + 2;
+                        int right = bodyX + bodyW - 2 + (int)(6.0f * (0.5f - fabsf(t - 0.5f)) );
+                        for (int x = left; x <= right; ++x) setPixel(x, bodyY + y, 180, 180, 190, 255);
+                    }
+
+                    // Sound wave arcs to the right of the speaker
+                    int cx = bodyX + bodyW + 6;
+                    int cy = ih / 2;
+                    for (int ring = 0; ring < 3; ++ring) {
+                        float r = 8.0f + ring * 6.0f;
+                        for (int y = cy - (int)r - 1; y <= cy + (int)r + 1; ++y) {
+                            for (int x = cx; x <= cx + (int)r + 6; ++x) {
+                                float dx = (float)x - (float)cx;
+                                float dy = (float)y - (float)cy;
+                                float dist = sqrtf(dx*dx + dy*dy);
+                                // only right-side arcs, thin band
+                                if (dist >= r - 1.2f && dist <= r + 1.2f && dx >= -2.0f) {
+                                    uint8_t alpha = (uint8_t)std::max(60, 220 - ring * 60 - (int)(fabsf(dist - r) * 80));
+                                    setPixel(x, y, 255, 200, 120, alpha);
+                                }
                             }
                         }
                     }
+
+                    // small accent dot near speaker
+                    setPixel(cx + 2, cy - 8, 255, 255, 255, 220);
+
                     s_audioIcon = Genesis::Engine::Texture::CreateFromMemory(iw, ih, px);
                     return s_audioIcon;
                 };
@@ -1524,9 +1553,39 @@ int main(int argc, char** argv) {
                             drewTex = true;
                         }
                         if (!drewTex) {
-                            ImU32 acol = IM_COL32(200,200,200,255);
-                            dl->AddCircleFilled(p, half * 0.6f, acol, 16);
-                            dl->AddCircle(p, half * 0.6f + 3.0f, acol, 16, 2.0f);
+                            // Speaker body
+                            ImU32 bodyCol = IM_COL32(70,70,80,255);
+                            ImU32 coneCol = IM_COL32(200,200,210,255);
+                            ImVec2 bodyTL(p.x - half * 0.8f, p.y - half * 0.35f);
+                            ImVec2 bodyBR(p.x - half * 0.3f, p.y + half * 0.35f);
+                            dl->AddRectFilled(bodyTL, bodyBR, bodyCol, 3.0f);
+
+                            // cone triangle (points right)
+                            ImVec2 triA(bodyTL.x + 2.0f, p.y);
+                            ImVec2 triB(bodyBR.x + 2.0f, p.y - half * 0.22f);
+                            ImVec2 triC(bodyBR.x + 2.0f, p.y + half * 0.22f);
+                            dl->AddTriangleFilled(triA, triB, triC, coneCol);
+
+                            // waves (three arcs to the right)
+                            ImU32 waveCol = IM_COL32(255,200,120,200);
+                            const int segments = 24;
+                            for (int ring = 0; ring < 3; ++ring) {
+                                float r = half * 0.45f + ring * (half * 0.22f);
+                                std::vector<ImVec2> pts;
+                                pts.reserve(segments+1);
+                                float ang0 = glm::radians(-35.0f);
+                                float ang1 = glm::radians(35.0f);
+                                for (int i = 0; i <= segments; ++i) {
+                                    float t = (float)i / (float)segments;
+                                    float a = ang0 + (ang1 - ang0) * t;
+                                    ImVec2 pt(p.x + cosf(a) * r + half * 0.1f, p.y + sinf(a) * r);
+                                    pts.push_back(pt);
+                                }
+                                dl->AddPolyline(pts.data(), (int)pts.size(), waveCol, false, 2.0f);
+                            }
+
+                            // small accent
+                            dl->AddCircleFilled(ImVec2(bodyBR.x + 4.0f, p.y - half * 0.28f), half * 0.06f, IM_COL32(255,255,255,220));
                         }
 
                         // Ranges for spatial audio
