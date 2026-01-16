@@ -2110,6 +2110,12 @@ int main(int argc, char** argv) {
                             if (editorState == EditorState::Edit) sceneDirty = true;
                         }
                     }
+                    if (ImGui::MenuItem("Camera")) {
+                        if (!activeScene->Registry().all_of<Genesis::Engine::CameraComponent>(selectedEntity)) {
+                            activeScene->Registry().emplace<Genesis::Engine::CameraComponent>(selectedEntity);
+                            if (editorState == EditorState::Edit) sceneDirty = true;
+                        }
+                    }
                     if (ImGui::MenuItem("Rigid Body")) {
                         if (!activeScene->Registry().all_of<Genesis::Engine::RigidBodyComponent>(selectedEntity)) {
                             activeScene->Registry().emplace<Genesis::Engine::RigidBodyComponent>(selectedEntity);
