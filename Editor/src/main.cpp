@@ -1275,22 +1275,18 @@ int main(int argc, char** argv) {
                         drewTex = true;
                     }
                     if (!drewTex) {
-                        // Minimal block (right) + left-point triangle (█◀)
-                        ImU32 camCol = IM_COL32(70,70,70,255);
-
+                        // Simple camera icon: block (█) + left-pointing triangle (◀)
+                        ImU32 col = IM_COL32(70,70,80,255);
                         ImVec2 bodyTL(p.x - half * 0.1f, p.y - half * 0.35f);
                         ImVec2 bodyBR(p.x + half * 0.6f, p.y + half * 0.35f);
-                        dl->AddRectFilled(bodyTL, bodyBR, camCol, 3.0f);
-                        dl->AddRect(bodyTL, bodyBR, IM_COL32(30,30,35,255), 3.0f, 0, 1.0f);
+                        dl->AddRectFilled(bodyTL, bodyBR, col, 4.0f);
+                        dl->AddRect(bodyTL, bodyBR, IM_COL32(30,30,35,255), 2.0f);
 
-                        // Left-pointing triangle
-                        ImVec2 a(p.x - half * 0.75f, p.y);
-                        ImVec2 b(p.x - half * 0.1f, p.y - half * 0.28f);
-                        ImVec2 c(p.x - half * 0.1f, p.y + half * 0.28f);
-                        dl->AddTriangleFilled(a, b, c, camCol);
-
-                        // Small REC dot
-                        dl->AddCircleFilled(ImVec2(bodyBR.x - half * 0.08f, bodyTL.y + half * 0.08f), half * 0.06f, IM_COL32(220,40,40,255), 8);
+                        // Triangle tip on left
+                        ImVec2 tA(bodyTL.x - half * 0.28f, p.y);
+                        ImVec2 tB(bodyTL.x, p.y - half * 0.22f);
+                        ImVec2 tC(bodyTL.x, p.y + half * 0.22f);
+                        dl->AddTriangleFilled(tA, tB, tC, col);
                     }
 
                     // Forward indicator (same as before)
