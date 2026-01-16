@@ -1275,31 +1275,22 @@ int main(int argc, char** argv) {
                         drewTex = true;
                     }
                     if (!drewTex) {
-                        // Camcorder body (right side)
+                        // Minimal block (right) + left-point triangle (█◀)
+                        ImU32 camCol = IM_COL32(70,70,70,255);
+
                         ImVec2 bodyTL(p.x - half * 0.1f, p.y - half * 0.35f);
-                        ImVec2 bodyBR(p.x + half * 0.9f, p.y + half * 0.35f);
-                        dl->AddRectFilled(bodyTL, bodyBR, IM_COL32(60,70,80,255), 4.0f);
-                        dl->AddRect(bodyTL, bodyBR, IM_COL32(30,30,35,255), 2.0f, 0, 1.0f);
+                        ImVec2 bodyBR(p.x + half * 0.6f, p.y + half * 0.35f);
+                        dl->AddRectFilled(bodyTL, bodyBR, camCol, 3.0f);
+                        dl->AddRect(bodyTL, bodyBR, IM_COL32(30,30,35,255), 3.0f, 0, 1.0f);
 
-                        // Lens on left (cylinder)
-                        ImVec2 lens = ImVec2(p.x - half * 0.65f, p.y);
-                        float lensROuter = half * 0.35f;
-                        float lensRInner = half * 0.22f;
-                        float lensCenter = half * 0.12f;
-                        dl->AddCircleFilled(lens, lensROuter, IM_COL32(170,170,180,255), 16);
-                        dl->AddCircleFilled(lens, lensRInner, IM_COL32(110,110,120,255), 12);
-                        dl->AddCircleFilled(lens, lensCenter, IM_COL32(10,10,12,255), 12);
-                        dl->AddCircleFilled(ImVec2(lens.x - half*0.06f, lens.y - half*0.06f), lensRInner*0.25f, IM_COL32(255,255,255,200), 8);
-
-                        // Top handle / viewfinder
-                        dl->AddRectFilled(ImVec2(bodyTL.x - half*0.08f, bodyTL.y - half*0.25f), ImVec2(bodyTL.x + half*0.16f, bodyTL.y - half*0.08f), IM_COL32(120,130,140,255), 3.0f);
-
-                        // Film reels (small circles on top-right)
-                        dl->AddCircleFilled(ImVec2(p.x + half*0.15f, p.y - half*0.5f), half*0.16f, IM_COL32(200,200,210,255), 12);
-                        dl->AddCircleFilled(ImVec2(p.x + half*0.33f, p.y - half*0.4f), half*0.12f, IM_COL32(180,180,190,255), 12);
+                        // Left-pointing triangle
+                        ImVec2 a(p.x - half * 0.75f, p.y);
+                        ImVec2 b(p.x - half * 0.1f, p.y - half * 0.28f);
+                        ImVec2 c(p.x - half * 0.1f, p.y + half * 0.28f);
+                        dl->AddTriangleFilled(a, b, c, camCol);
 
                         // Small REC dot
-                        dl->AddCircleFilled(ImVec2(p.x + half*0.46f, p.y - half*0.12f), half*0.06f, IM_COL32(220,40,40,255), 8);
+                        dl->AddCircleFilled(ImVec2(bodyBR.x - half * 0.08f, bodyTL.y + half * 0.08f), half * 0.06f, IM_COL32(220,40,40,255), 8);
                     }
 
                     // Forward indicator (same as before)
