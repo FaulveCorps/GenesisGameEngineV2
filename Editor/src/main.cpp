@@ -1119,32 +1119,33 @@ int main(int argc, char** argv) {
                         px[i+0] = r; px[i+1] = g; px[i+2] = b; px[i+3] = a;
                     };
 
-                    // Simple block (█)
-                    int bodyLeft = 12, bodyRight = 46;
-                    int bodyTop = 18, bodyBottom = 46;
-                    for (int y = bodyTop; y <= bodyBottom; ++y) {
-                        for (int x = bodyLeft; x <= bodyRight; ++x) setPixel(x, y, 70, 70, 80, 255);
+                    // Block (█) on the left
+                    const int blockW = 26, blockH = 22;
+                    const int blockLeft = 12;
+                    const int blockTop = (ih - blockH) / 2;
+                    for (int y = blockTop; y < blockTop + blockH; ++y) {
+                        for (int x = blockLeft; x < blockLeft + blockW; ++x) setPixel(x, y, 70, 70, 80, 255);
                     }
 
-                    // Left-pointing triangle to the RIGHT of the block (█◀)
-                    int tipX = bodyRight + 2, tipY = ih / 2;
-                    int halfH = 10;
-                    int baseX = bodyRight + 12;
-                    int topY = tipY - halfH, bottomY = tipY + halfH;
+                    // Left-pointing triangle (◀) immediately to the RIGHT of the block
+                    const int tipX = blockLeft + blockW + 2;
+                    const int tipY = ih / 2;
+                    const int halfTriH = 10;
+                    const int baseX = blockLeft + blockW + 12;
+                    const int topY = tipY - halfTriH;
+                    const int bottomY = tipY + halfTriH;
                     for (int y = topY; y <= bottomY; ++y) {
                         float f = float(y - topY) / float(bottomY - topY);
-                        int xRight = tipX + (int)(f * (baseX - tipX));
-                        for (int x = tipX; x <= xRight; ++x) setPixel(x, y, 70, 70, 80, 255);
+                        int xMax = tipX + (int)(f * (baseX - tipX));
+                        for (int x = tipX; x <= xMax; ++x) setPixel(x, y, 70, 70, 80, 255);
                     }
 
-                    // Small highlight
-                    for (int y = bodyTop + 3; y < bodyTop + 8; ++y) {
-                        for (int x = bodyLeft + 3; x < bodyLeft + 12; ++x) setPixel(x, y, 110, 110, 120, 120);
-                    }
+                    // Small highlight on the block
+                    for (int y = blockTop + 3; y < blockTop + 8; ++y) for (int x = blockLeft + 3; x < blockLeft + 12; ++x) setPixel(x, y, 110, 110, 120, 140);
 
                     // Outline
-                    for (int x = bodyLeft; x <= bodyRight; ++x) { setPixel(x, bodyTop, 30,30,35,255); setPixel(x, bodyBottom, 30,30,35,255); }
-                    for (int y = bodyTop; y <= bodyBottom; ++y) { setPixel(bodyLeft, y, 30,30,35,255); setPixel(bodyRight, y, 30,30,35,255); }
+                    for (int x = blockLeft; x < blockLeft + blockW; ++x) { setPixel(x, blockTop, 30,30,35,255); setPixel(x, blockTop + blockH - 1, 30,30,35,255); }
+                    for (int y = blockTop; y < blockTop + blockH; ++y) { setPixel(blockLeft, y, 30,30,35,255); setPixel(blockLeft + blockW - 1, y, 30,30,35,255); }
 
                     s_camIcon = Genesis::Engine::Texture::CreateFromMemory(iw, ih, px);
                     return s_camIcon;
@@ -1230,8 +1231,9 @@ int main(int argc, char** argv) {
                 };
 
                 // Ensure textures exist and are uploaded when we have a renderer
-                CreateCameraIcon(); CreateLightIcon(); CreateAudioIcon(); CreateParticleIcon(); CreateRigidBodyIcon();
-                if (s_camIcon && currentRenderer) s_camIcon->UploadToRenderer(currentRenderer);
+                // Camera icon replaced by a canonical block+triangle vector/fallback; clear any prior camera texture to avoid remnants.
+                s_camIcon.reset();
+                CreateLightIcon(); CreateAudioIcon(); CreateParticleIcon(); CreateRigidBodyIcon();
                 if (s_lightIcon && currentRenderer) s_lightIcon->UploadToRenderer(currentRenderer);
                 if (s_audioIcon && currentRenderer) s_audioIcon->UploadToRenderer(currentRenderer);
                 if (s_particleIcon && currentRenderer) s_particleIcon->UploadToRenderer(currentRenderer);
@@ -1264,6 +1266,7 @@ int main(int argc, char** argv) {
                     if (IsOccluded((int)p.x, (int)p.y, winZ)) continue;
 
                     bool drewTex = false;
+                    // We prefer the canonical fallback '█◀' design; only use texture if explicitly allowed and present
                     if (!forceSimpleCameraIcon && s_camIcon && s_camIcon->GetID() != 0) {
                         ImVec2 tl = ImVec2(p.x - half, p.y - half);
                         ImVec2 br = ImVec2(p.x + half, p.y + half);
@@ -1271,37 +1274,41 @@ int main(int argc, char** argv) {
                         drewTex = true;
                     }
                     if (!drewTex) {
-                        // Simple camera icon ensured to read '█◀' — block left, triangle right
+                        // Canonical symbol: block (█) on the left, left-pointing triangle (◀) immediately to its right
                         ImU32 col = IM_COL32(70,70,80,255);
                         float blockW = iconSize * 0.42f;
                         float blockH = iconSize * 0.36f;
-                        float gap = 6.0f;
-                        ImVec2 bodyTL(p.x - blockW - gap, p.y - blockH * 0.5f);
-                        ImVec2 bodyBR(p.x - gap, p.y + blockH * 0.5f);
+                        float triW = blockW * 0.6f;
+
+                        // Place block slightly to the left of p and triangle to the right of the block
+                        ImVec2 bodyTL(p.x - blockW - triW * 0.5f, p.y - blockH * 0.5f);
+                        ImVec2 bodyBR(bodyTL.x + blockW, bodyTL.y + blockH);
                         dl->AddRectFilled(bodyTL, bodyBR, col, 4.0f);
                         dl->AddRect(bodyTL, bodyBR, IM_COL32(30,30,35,255), 2.0f);
 
-                        // Triangle to the right of the block (points left)
-                        ImVec2 tTip(bodyBR.x + blockW * 0.45f, p.y);
-                        ImVec2 tBase(bodyBR.x + 2.0f, p.y - blockH * 0.45f);
-                        ImVec2 tBase2(bodyBR.x + 2.0f, p.y + blockH * 0.45f);
-                        dl->AddTriangleFilled(tTip, tBase, tBase2, col);
+                        // Triangle pointing left, tip near the block
+                        ImVec2 triTip(bodyBR.x + 2.0f, p.y);
+                        ImVec2 triBase1(bodyBR.x + 2.0f + triW, p.y - blockH * 0.45f);
+                        ImVec2 triBase2(bodyBR.x + 2.0f + triW, p.y + blockH * 0.45f);
+                        dl->AddTriangleFilled(triTip, triBase1, triBase2, col);
 
-                        // Debug: block/triangle centers and label
+                        // Debug markers
                         if (showCameraIconDebug) {
                             ImVec2 bCenter((bodyTL.x + bodyBR.x) * 0.5f, (bodyTL.y + bodyBR.y) * 0.5f);
-                            ImVec2 tCenter((tTip.x + tBase.x + tBase2.x) / 3.0f, (tTip.y + tBase.y + tBase2.y) / 3.0f);
+                            ImVec2 tCenter((triTip.x + triBase1.x + triBase2.x) / 3.0f, (triTip.y + triBase1.y + triBase2.y) / 3.0f);
                             dl->AddCircleFilled(bCenter, 3.0f, IM_COL32(0,255,0,255), 12);
                             dl->AddCircleFilled(tCenter, 3.0f, IM_COL32(255,0,0,255), 12);
                             dl->AddText(ImVec2(bCenter.x + 6.0f, bCenter.y - 6.0f), IM_COL32(0,255,0,255), "B");
                             dl->AddText(ImVec2(tCenter.x + 6.0f, tCenter.y - 6.0f), IM_COL32(255,0,0,255), "T");
-                            // Which draw path
                             dl->AddText(ImVec2(p.x + 6.0f, p.y + blockH * 0.6f), IM_COL32(255,200,0,255), "Fb");
                             dl->AddLine(bCenter, tCenter, IM_COL32(255,255,0,160), 1.0f);
+                            // Numeric sanity check
+                            char buf[64];
+                            sprintf_s(buf, "B.x=%.1f T.x=%.1f", bCenter.x, tCenter.x);
+                            dl->AddText(ImVec2(p.x - 8.0f, p.y + blockH), IM_COL32(255,255,255,200), buf);
                         }
                     }
                     else {
-                        // If texture was used, optionally show 'Tex' label for debugging
                         if (showCameraIconDebug) {
                             dl->AddText(ImVec2(p.x + 6.0f, p.y + 6.0f), IM_COL32(0,200,255,255), "Tex");
                         }
