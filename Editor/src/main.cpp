@@ -1092,6 +1092,9 @@ int main(int argc, char** argv) {
                 // Simple in-memory icon generation (lazy). Keep these local to editor scope.
                 static std::shared_ptr<Genesis::Engine::Texture> s_camIcon;
                 static std::shared_ptr<Genesis::Engine::Texture> s_lightIcon;
+                static std::shared_ptr<Genesis::Engine::Texture> s_audioIcon;
+                static std::shared_ptr<Genesis::Engine::Texture> s_particleIcon;
+                static std::shared_ptr<Genesis::Engine::Texture> s_rbIcon;
                 auto CreateCameraIcon = [&]() -> std::shared_ptr<Genesis::Engine::Texture> {
                     if (s_camIcon) return s_camIcon;
                     const int iw = 64, ih = 64;
@@ -1143,10 +1146,70 @@ int main(int argc, char** argv) {
                     return s_lightIcon;
                 };
 
+                // Audio/Particle/RigidBody icons
+                auto CreateAudioIcon = [&]() -> std::shared_ptr<Genesis::Engine::Texture> {
+                    if (s_audioIcon) return s_audioIcon;
+                    const int iw = 64, ih = 64;
+                    std::vector<uint8_t> px((size_t)iw * ih * 4, 0);
+                    // simple speaker + cone
+                    for (int y = 0; y < ih; ++y) {
+                        for (int x = 0; x < iw; ++x) {
+                            int i = (y * iw + x) * 4;
+                            if (x >= iw/10 && x <= iw/2 && y >= ih/4 && y <= 3*ih/4) {
+                                px[i+0] = 80; px[i+1] = 80; px[i+2] = 90; px[i+3] = 255;
+                            }
+                            int tx0 = iw/2 + 2;
+                            int dx = x - tx0;
+                            int dy = y - ih/2;
+                            if (dx >= 0 && abs(dy) * 4 <= dx * ih / (iw/2)) {
+                                px[i+0] = 200; px[i+1] = 200; px[i+2] = 120; px[i+3] = 255;
+                            }
+                        }
+                    }
+                    s_audioIcon = Genesis::Engine::Texture::CreateFromMemory(iw, ih, px);
+                    return s_audioIcon;
+                };
+
+                auto CreateParticleIcon = [&]() -> std::shared_ptr<Genesis::Engine::Texture> {
+                    if (s_particleIcon) return s_particleIcon;
+                    const int iw = 64, ih = 64;
+                    std::vector<uint8_t> px((size_t)iw * ih * 4, 0);
+                    int cx = iw/2, cy = ih/2;
+                    for (int y = 0; y < ih; ++y) {
+                        for (int x = 0; x < iw; ++x) {
+                            int i = (y * iw + x) * 4;
+                            int dx = x - cx, dy = y - cy; int r2 = dx*dx + dy*dy;
+                            if (r2 <= (iw/10)*(iw/10)) { px[i+0]=255; px[i+1]=255; px[i+2]=200; px[i+3]=255; }
+                            if ((abs(dx)==6 && abs(dy)<3) || (abs(dy)==6 && abs(dx)<3)) { px[i+0]=255; px[i+1]=200; px[i+2]=255; px[i+3]=255; }
+                        }
+                    }
+                    s_particleIcon = Genesis::Engine::Texture::CreateFromMemory(iw, ih, px);
+                    return s_particleIcon;
+                };
+
+                auto CreateRigidBodyIcon = [&]() -> std::shared_ptr<Genesis::Engine::Texture> {
+                    if (s_rbIcon) return s_rbIcon;
+                    const int iw = 64, ih = 64;
+                    std::vector<uint8_t> px((size_t)iw * ih * 4, 0);
+                    int bx0 = iw/4, bx1 = iw - iw/4;
+                    int by0 = ih/3, by1 = ih - ih/3;
+                    for (int y = 0; y < ih; ++y) {
+                        for (int x = 0; x < iw; ++x) {
+                            int i = (y * iw + x) * 4;
+                            if (x >= bx0 && x <= bx1 && y >= by0 && y <= by1) { px[i+0]=160; px[i+1]=160; px[i+2]=200; px[i+3]=255; }
+                        }
+                    }
+                    s_rbIcon = Genesis::Engine::Texture::CreateFromMemory(iw, ih, px);
+                    return s_rbIcon;
+                };
+
                 // Ensure textures exist and are uploaded when we have a renderer
-                CreateCameraIcon(); CreateLightIcon();
+                CreateCameraIcon(); CreateLightIcon(); CreateAudioIcon(); CreateParticleIcon(); CreateRigidBodyIcon();
                 if (s_camIcon && currentRenderer) s_camIcon->UploadToRenderer(currentRenderer);
                 if (s_lightIcon && currentRenderer) s_lightIcon->UploadToRenderer(currentRenderer);
+                if (s_audioIcon && currentRenderer) s_audioIcon->UploadToRenderer(currentRenderer);
+                if (s_particleIcon && currentRenderer) s_particleIcon->UploadToRenderer(currentRenderer);
+                if (s_rbIcon && currentRenderer) s_rbIcon->UploadToRenderer(currentRenderer);
 
                 auto IsOccluded = [&](int sx, int sy, float windowZ) {
                     if (!iconOcclusion) return false;
