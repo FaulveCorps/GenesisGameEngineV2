@@ -269,6 +269,7 @@ int main(int argc, char** argv) {
     bool showPhysicsBodies = true;
     bool showCameraFOV = true;
     bool reloadSceneIcons = false; // one-shot: set true to regenerate in-memory overlay icons at runtime
+    bool forceSimpleCameraIcon = true; // when true, always draw simple block+triangle for camera icons (no texture)
     char commandSearchBuffer[128] = "";
     int selectedCommandIndex = 0;
 
@@ -719,6 +720,8 @@ int main(int argc, char** argv) {
                 ImGui::MenuItem("Show Particle Systems", nullptr, &showParticles);
                 ImGui::MenuItem("Show Camera FOV", nullptr, &showCameraFOV);
                 ImGui::MenuItem("Show Physics Bodies", nullptr, &showPhysicsBodies);
+                ImGui::Separator();
+                ImGui::MenuItem("Force Simple Camera Icon (█◀)", nullptr, &forceSimpleCameraIcon);
                 if (ImGui::MenuItem("Reload Scene Icons")) reloadSceneIcons = true;
                 if (ImGui::MenuItem("Reset Layout")) { requestResetLayout = true; }
                 ImGui::EndMenu();
@@ -1274,7 +1277,7 @@ int main(int argc, char** argv) {
                     if (IsOccluded((int)p.x, (int)p.y, winZ)) continue;
 
                     bool drewTex = false;
-                    if (s_camIcon && s_camIcon->GetID() != 0) {
+                    if (!forceSimpleCameraIcon && s_camIcon && s_camIcon->GetID() != 0) {
                         ImVec2 tl = ImVec2(p.x - half, p.y - half);
                         ImVec2 br = ImVec2(p.x + half, p.y + half);
                         dl->AddImage((ImTextureID)(uintptr_t)s_camIcon->GetID(), tl, br, ImVec2(0, 1), ImVec2(1, 0));
