@@ -1108,47 +1108,45 @@ int main(int argc, char** argv) {
                         px[i+0] = r; px[i+1] = g; px[i+2] = b; px[i+3] = a;
                     };
 
-                    // Body rectangle
-                    int bx0 = 6, bx1 = iw - 7;
-                    int by0 = 18, by1 = ih - 12;
-                    for (int y = by0; y <= by1; ++y) {
-                        for (int x = bx0; x <= bx1; ++x) setPixel(x, y, 50, 60, 70, 255);
-                    }
-
-                    // Top hump / viewfinder (left side)
-                    for (int y = 8; y < 18; ++y) {
-                        for (int x = 10; x < 32; ++x) setPixel(x, y, 70, 90, 110, 255);
-                    }
-
-                    // Small flash rect (right)
-                    for (int y = 12; y < 20; ++y) {
-                        for (int x = iw - 16; x < iw - 8; ++x) setPixel(x, y, 255, 220, 80, 255);
-                    }
-
-                    // Lens (rings + pupil + highlight)
-                    const int cx = 30, cy = 30;
-                    const int rOuter = 12;
-                    const int rRing = 9;
-                    const int rCenter = 6;
-                    for (int y = cy - rOuter; y <= cy + rOuter; ++y) {
-                        for (int x = cx - rOuter; x <= cx + rOuter; ++x) {
-                            int dx = x - cx, dy = y - cy; int r2 = dx*dx + dy*dy;
-                            if (r2 <= rOuter*rOuter && r2 >= (rRing-1)*(rRing-1)) {
-                                setPixel(x,y, 160,160,170,255); // outer rim
-                            }
-                            if (r2 <= rRing*rRing && r2 >= (rCenter)*(rCenter)) {
-                                setPixel(x,y, 100,100,110,255); // inner ring
-                            }
-                            if (r2 <= rCenter*rCenter) {
-                                setPixel(x,y, 22,22,26,255); // pupil
-                            }
-                            // small highlight
-                            int hx = cx - 3, hy = cy - 3;
-                            if ((x - hx)*(x - hx) + (y - hy)*(y - hy) <= 3) setPixel(x,y,255,255,255,200);
+                    // Lens (left side, pronounced cylinder)
+                    const int lx = 12, ly = 32;
+                    const int lrOuter = 11;
+                    const int lrInner = 7;
+                    const int lrCenter = 4;
+                    for (int y = ly - lrOuter; y <= ly + lrOuter; ++y) {
+                        for (int x = lx - lrOuter; x <= lx + lrOuter; ++x) {
+                            int dx = x - lx, dy = y - ly; int r2 = dx*dx + dy*dy;
+                            if (r2 <= lrOuter*lrOuter && r2 >= (lrInner-1)*(lrInner-1)) setPixel(x,y,170,170,180,255);
+                            if (r2 <= lrInner*lrInner && r2 >= lrCenter*lrCenter) setPixel(x,y,110,110,120,255);
+                            if (r2 <= lrCenter*lrCenter) setPixel(x,y,10,10,12,255);
                         }
                     }
 
-                    // Body outline for readability
+                    // Body rectangle (right side)
+                    int bx0 = 22, bx1 = 58;
+                    int by0 = 20, by1 = 44;
+                    for (int y = by0; y <= by1; ++y) {
+                        for (int x = bx0; x <= bx1; ++x) setPixel(x, y, 60, 70, 80, 255);
+                    }
+
+                    // Top handle / viewfinder
+                    for (int y = 8; y < 16; ++y) {
+                        for (int x = 18; x < 34; ++x) setPixel(x, y, 120, 130, 140, 255);
+                    }
+
+                    // Small film reels / top circles
+                    auto drawCircle = [&](int cx, int cy, int r, uint8_t rr, uint8_t gg, uint8_t bb) {
+                        for (int y = cy - r; y <= cy + r; ++y) for (int x = cx - r; x <= cx + r; ++x) {
+                            int dx = x - cx, dy = y - cy; if (dx*dx + dy*dy <= r*r) setPixel(x,y, rr, gg, bb, 255);
+                        }
+                    };
+                    drawCircle(40, 12, 6, 200,200,210);
+                    drawCircle(50, 12, 4, 180,180,190);
+
+                    // Small REC indicator (red dot)
+                    drawCircle(54, 20, 3, 220, 40, 40);
+
+                    // Outline for body
                     for (int x = bx0; x <= bx1; ++x) { setPixel(x,by0,30,30,35,255); setPixel(x,by1,30,30,35,255); }
                     for (int y = by0; y <= by1; ++y) { setPixel(bx0,y,30,30,35,255); setPixel(bx1,y,30,30,35,255); }
 
@@ -1277,24 +1275,31 @@ int main(int argc, char** argv) {
                         drewTex = true;
                     }
                     if (!drewTex) {
-                        // Camera body
-                        ImU32 bodyCol = IM_COL32(50,60,70,255);
-                        ImVec2 bodyTL(p.x - half, p.y - half * 0.7f);
-                        ImVec2 bodyBR(p.x + half, p.y + half * 0.7f);
-                        dl->AddRectFilled(bodyTL, bodyBR, bodyCol, 4.0f);
+                        // Camcorder body (right side)
+                        ImVec2 bodyTL(p.x - half * 0.1f, p.y - half * 0.35f);
+                        ImVec2 bodyBR(p.x + half * 0.9f, p.y + half * 0.35f);
+                        dl->AddRectFilled(bodyTL, bodyBR, IM_COL32(60,70,80,255), 4.0f);
+                        dl->AddRect(bodyTL, bodyBR, IM_COL32(30,30,35,255), 2.0f, 0, 1.0f);
 
-                        // viewfinder hump (left)
-                        dl->AddRectFilled(ImVec2(bodyTL.x + 8.0f, bodyTL.y - 12.0f), ImVec2(bodyTL.x + 28.0f, bodyTL.y), IM_COL32(70,90,110,255), 3.0f);
+                        // Lens on left (cylinder)
+                        ImVec2 lens = ImVec2(p.x - half * 0.65f, p.y);
+                        float lensROuter = half * 0.35f;
+                        float lensRInner = half * 0.22f;
+                        float lensCenter = half * 0.12f;
+                        dl->AddCircleFilled(lens, lensROuter, IM_COL32(170,170,180,255), 16);
+                        dl->AddCircleFilled(lens, lensRInner, IM_COL32(110,110,120,255), 12);
+                        dl->AddCircleFilled(lens, lensCenter, IM_COL32(10,10,12,255), 12);
+                        dl->AddCircleFilled(ImVec2(lens.x - half*0.06f, lens.y - half*0.06f), lensRInner*0.25f, IM_COL32(255,255,255,200), 8);
 
-                        // flash (right)
-                        dl->AddRectFilled(ImVec2(bodyBR.x - 18.0f, bodyTL.y + 6.0f), ImVec2(bodyBR.x - 6.0f, bodyTL.y + 16.0f), IM_COL32(255,220,80,255), 2.0f);
+                        // Top handle / viewfinder
+                        dl->AddRectFilled(ImVec2(bodyTL.x - half*0.08f, bodyTL.y - half*0.25f), ImVec2(bodyTL.x + half*0.16f, bodyTL.y - half*0.08f), IM_COL32(120,130,140,255), 3.0f);
 
-                        // lens (rings + pupil + highlight)
-                        ImVec2 lens = ImVec2(p.x - half * 0.1f, p.y);
-                        dl->AddCircleFilled(lens, half * 0.35f, IM_COL32(160,160,170,255), 16);
-                        dl->AddCircleFilled(lens, half * 0.225f, IM_COL32(100,100,110,255), 12);
-                        dl->AddCircleFilled(lens, half * 0.14f, IM_COL32(22,22,26,255), 12);
-                        dl->AddCircleFilled(ImVec2(lens.x - half*0.08f, lens.y - half*0.08f), half*0.06f, IM_COL32(255,255,255,200), 8);
+                        // Film reels (small circles on top-right)
+                        dl->AddCircleFilled(ImVec2(p.x + half*0.15f, p.y - half*0.5f), half*0.16f, IM_COL32(200,200,210,255), 12);
+                        dl->AddCircleFilled(ImVec2(p.x + half*0.33f, p.y - half*0.4f), half*0.12f, IM_COL32(180,180,190,255), 12);
+
+                        // Small REC dot
+                        dl->AddCircleFilled(ImVec2(p.x + half*0.46f, p.y - half*0.12f), half*0.06f, IM_COL32(220,40,40,255), 8);
                     }
 
                     // Forward indicator (same as before)
