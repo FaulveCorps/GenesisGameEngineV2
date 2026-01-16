@@ -1101,27 +1101,57 @@ int main(int argc, char** argv) {
                     if (s_camIcon) return s_camIcon;
                     const int iw = 64, ih = 64;
                     std::vector<uint8_t> px((size_t)iw * ih * 4, 0);
-                    // Camera body (scaled proportions)
-                    int bodyLeft = std::max(1, iw / 8);
-                    int bodyRight = iw - std::max(1, iw / 8) - 1;
-                    int bodyTop = ih * 9 / 64;
-                    int bodyBottom = ih * 42 / 64;
-                    for (int y = 0; y < ih; ++y) {
-                        for (int x = 0; x < iw; ++x) {
-                            int i = (y * iw + x) * 4;
-                            if (x >= bodyLeft && x <= bodyRight && y >= bodyTop && y <= bodyBottom) {
-                                px[i+0] = 60; px[i+1] = 120; px[i+2] = 200; px[i+3] = 255;
-                            }
-                            // Lens (scaled)
-                            int cx = iw / 2 + std::max(1, iw / 16);
-                            int cy = ih / 2 + std::max(1, ih / 16);
+
+                    auto setPixel = [&](int x, int y, uint8_t r, uint8_t g, uint8_t b, uint8_t a) {
+                        if (x < 0 || x >= iw || y < 0 || y >= ih) return;
+                        int i = (y * iw + x) * 4;
+                        px[i+0] = r; px[i+1] = g; px[i+2] = b; px[i+3] = a;
+                    };
+
+                    // Body rectangle
+                    int bx0 = 6, bx1 = iw - 7;
+                    int by0 = 18, by1 = ih - 12;
+                    for (int y = by0; y <= by1; ++y) {
+                        for (int x = bx0; x <= bx1; ++x) setPixel(x, y, 50, 60, 70, 255);
+                    }
+
+                    // Top hump / viewfinder (left side)
+                    for (int y = 8; y < 18; ++y) {
+                        for (int x = 10; x < 32; ++x) setPixel(x, y, 70, 90, 110, 255);
+                    }
+
+                    // Small flash rect (right)
+                    for (int y = 12; y < 20; ++y) {
+                        for (int x = iw - 16; x < iw - 8; ++x) setPixel(x, y, 255, 220, 80, 255);
+                    }
+
+                    // Lens (rings + pupil + highlight)
+                    const int cx = 30, cy = 30;
+                    const int rOuter = 12;
+                    const int rRing = 9;
+                    const int rCenter = 6;
+                    for (int y = cy - rOuter; y <= cy + rOuter; ++y) {
+                        for (int x = cx - rOuter; x <= cx + rOuter; ++x) {
                             int dx = x - cx, dy = y - cy; int r2 = dx*dx + dy*dy;
-                            int lensR1 = std::max(1, iw / 6);
-                            int lensR2 = std::max(1, iw / 10);
-                            if (r2 <= lensR1 * lensR1) { px[i+0] = 240; px[i+1] = 240; px[i+2] = 240; px[i+3] = 255; }
-                            if (r2 <= lensR2 * lensR2) { px[i+0] = 30; px[i+1] = 30; px[i+2] = 40; px[i+3] = 255; }
+                            if (r2 <= rOuter*rOuter && r2 >= (rRing-1)*(rRing-1)) {
+                                setPixel(x,y, 160,160,170,255); // outer rim
+                            }
+                            if (r2 <= rRing*rRing && r2 >= (rCenter)*(rCenter)) {
+                                setPixel(x,y, 100,100,110,255); // inner ring
+                            }
+                            if (r2 <= rCenter*rCenter) {
+                                setPixel(x,y, 22,22,26,255); // pupil
+                            }
+                            // small highlight
+                            int hx = cx - 3, hy = cy - 3;
+                            if ((x - hx)*(x - hx) + (y - hy)*(y - hy) <= 3) setPixel(x,y,255,255,255,200);
                         }
                     }
+
+                    // Body outline for readability
+                    for (int x = bx0; x <= bx1; ++x) { setPixel(x,by0,30,30,35,255); setPixel(x,by1,30,30,35,255); }
+                    for (int y = by0; y <= by1; ++y) { setPixel(bx0,y,30,30,35,255); setPixel(bx1,y,30,30,35,255); }
+
                     s_camIcon = Genesis::Engine::Texture::CreateFromMemory(iw, ih, px);
                     return s_camIcon;
                 };
@@ -1247,9 +1277,24 @@ int main(int argc, char** argv) {
                         drewTex = true;
                     }
                     if (!drewTex) {
-                        ImU32 col = ImGui::GetColorU32(ImVec4(0.4f, 0.6f, 1.0f, 1.0f));
-                        dl->AddRectFilled(ImVec2(p.x - half, p.y - half * 0.7f), ImVec2(p.x + half, p.y + half * 0.7f), col, 3.0f);
-                        dl->AddCircleFilled(ImVec2(p.x + half * 0.4f, p.y), half * 0.35f, IM_COL32(30, 30, 40, 255));
+                        // Camera body
+                        ImU32 bodyCol = IM_COL32(50,60,70,255);
+                        ImVec2 bodyTL(p.x - half, p.y - half * 0.7f);
+                        ImVec2 bodyBR(p.x + half, p.y + half * 0.7f);
+                        dl->AddRectFilled(bodyTL, bodyBR, bodyCol, 4.0f);
+
+                        // viewfinder hump (left)
+                        dl->AddRectFilled(ImVec2(bodyTL.x + 8.0f, bodyTL.y - 12.0f), ImVec2(bodyTL.x + 28.0f, bodyTL.y), IM_COL32(70,90,110,255), 3.0f);
+
+                        // flash (right)
+                        dl->AddRectFilled(ImVec2(bodyBR.x - 18.0f, bodyTL.y + 6.0f), ImVec2(bodyBR.x - 6.0f, bodyTL.y + 16.0f), IM_COL32(255,220,80,255), 2.0f);
+
+                        // lens (rings + pupil + highlight)
+                        ImVec2 lens = ImVec2(p.x - half * 0.1f, p.y);
+                        dl->AddCircleFilled(lens, half * 0.35f, IM_COL32(160,160,170,255), 16);
+                        dl->AddCircleFilled(lens, half * 0.225f, IM_COL32(100,100,110,255), 12);
+                        dl->AddCircleFilled(lens, half * 0.14f, IM_COL32(22,22,26,255), 12);
+                        dl->AddCircleFilled(ImVec2(lens.x - half*0.08f, lens.y - half*0.08f), half*0.06f, IM_COL32(255,255,255,200), 8);
                     }
 
                     // Forward indicator (same as before)
