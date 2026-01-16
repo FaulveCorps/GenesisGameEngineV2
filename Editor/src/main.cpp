@@ -12,6 +12,7 @@
 #include "engine/SceneLoader.h"
 #include "engine/ShaderRegistry.h"
 #include "engine/TextureRegistry.h"
+#include "engine/Texture.h"
 #include "engine/OpenGLRenderer.h"
 #include "imgui_impl_sdl3.h"
 #include "imgui_impl_opengl3.h"
@@ -259,6 +260,13 @@ int main(int argc, char** argv) {
     bool showCommandPalette = false;
     bool zenMode = false;
     bool showGrid = true;
+    bool showSceneIcons = true;
+    bool iconOcclusion = true;
+    // Additional overlay toggles
+    bool showColliders = true;
+    bool showAudioSources = true;
+    bool showParticles = true;
+    bool showPhysicsBodies = true;
     char commandSearchBuffer[128] = "";
     int selectedCommandIndex = 0;
 
@@ -351,12 +359,60 @@ int main(int argc, char** argv) {
         cubeTrans.y = 0.0f;
         editorScene.Registry().emplace<Genesis::Engine::Transform>(cubeEntity, cubeTrans);
         
-        auto& modelComp = editorScene.Registry().emplace<Genesis::Engine::ModelComponent>(cubeEntity);
+        auto modelComp = editorScene.Registry().emplace<Genesis::Engine::ModelComponent>(cubeEntity);
         modelComp.model = std::make_shared<Genesis::Engine::Model>();
-        modelComp.sourcePath = "Assets/models/cube.obj";
-        if (!modelComp.model->Load(modelComp.sourcePath)) {
-            std::cerr << "Failed to load default cube model: " << modelComp.sourcePath << std::endl;
-        }
+        modelComp.sourcePath.clear();
+        
+        // Manually create a cube mesh
+        Genesis::Engine::Mesh cubeMesh;
+        std::vector<float> vertices = {
+            // Front face
+            -0.5f, -0.5f,  0.5f,  0.5f, -0.5f,  0.5f,  0.5f,  0.5f,  0.5f, -0.5f,  0.5f,  0.5f,
+            // Back face
+            -0.5f, -0.5f, -0.5f, -0.5f,  0.5f, -0.5f,  0.5f,  0.5f, -0.5f,  0.5f, -0.5f, -0.5f,
+            // Top face
+            -0.5f,  0.5f, -0.5f, -0.5f,  0.5f,  0.5f,  0.5f,  0.5f,  0.5f,  0.5f,  0.5f, -0.5f,
+            // Bottom face
+            -0.5f, -0.5f, -0.5f,  0.5f, -0.5f, -0.5f,  0.5f, -0.5f,  0.5f, -0.5f, -0.5f,  0.5f,
+            // Right face
+             0.5f, -0.5f, -0.5f,  0.5f,  0.5f, -0.5f,  0.5f,  0.5f,  0.5f,  0.5f, -0.5f,  0.5f,
+            // Left face
+            -0.5f, -0.5f, -0.5f, -0.5f, -0.5f,  0.5f, -0.5f,  0.5f,  0.5f, -0.5f,  0.5f, -0.5f
+        };
+        std::vector<float> normals = {
+            // Front
+             0.0f,  0.0f,  1.0f,  0.0f,  0.0f,  1.0f,  0.0f,  0.0f,  1.0f,  0.0f,  0.0f,  1.0f,
+            // Back
+             0.0f,  0.0f, -1.0f,  0.0f,  0.0f, -1.0f,  0.0f,  0.0f, -1.0f,  0.0f,  0.0f, -1.0f,
+            // Top
+             0.0f,  1.0f,  0.0f,  0.0f,  1.0f,  0.0f,  0.0f,  1.0f,  0.0f,  0.0f,  1.0f,  0.0f,
+            // Bottom
+             0.0f, -1.0f,  0.0f,  0.0f, -1.0f,  0.0f,  0.0f, -1.0f,  0.0f,  0.0f, -1.0f,  0.0f,
+            // Right
+             1.0f,  0.0f,  0.0f,  1.0f,  0.0f,  0.0f,  1.0f,  0.0f,  0.0f,  1.0f,  0.0f,  0.0f,
+            // Left
+            -1.0f,  0.0f,  0.0f, -1.0f,  0.0f,  0.0f, -1.0f,  0.0f,  0.0f, -1.0f,  0.0f,  0.0f
+        };
+        std::vector<uint32_t> indices = {
+             0,  1,  2,  2,  3,  0, // Front
+             4,  5,  6,  6,  7,  4, // Back
+             8,  9, 10, 10, 11,  8, // Top
+            12, 13, 14, 14, 15, 12, // Bottom
+            16, 17, 18, 18, 19, 16, // Right
+            20, 21, 22, 22, 23, 20  // Left
+        };
+        // Add dummy UVs
+        std::vector<float> uvs(vertices.size() / 3 * 2, 0.0f);
+
+        cubeMesh.SetData(vertices, normals, uvs, indices);
+        
+        // We need to access the private m_meshes of Model to add this mesh
+        // But Model::m_meshes is private. 
+        // We should probably add a method to Model to add a mesh, or just use a public method if available.
+        // Checking Model.h... m_meshes is private.
+        // Let's modify Model.h to allow adding a mesh manually or make m_meshes public/protected.
+        // For now, I'll just modify Model.h to add `AddMesh(Mesh&& mesh)`.
+        modelComp.model->AddMesh(std::move(cubeMesh));
     }
     else {
         currentScenePath = "Assets/scenes/default.scene";
@@ -430,31 +486,6 @@ int main(int argc, char** argv) {
         if (!MaybePromptUnsaved(PendingSceneAction::Quit)) {
             running = false;
         }
-    };
-
-    auto MatDifferent = [](const glm::mat4& m1, const glm::mat4& m2) {
-        const float* p1 = glm::value_ptr(m1);
-        const float* p2 = glm::value_ptr(m2);
-        for (int i = 0; i < 16; i++) {
-            if (fabsf(p1[i] - p2[i]) > 0.0001f) return true;
-        }
-        return false;
-    };
-
-    auto ApplyViewMatrixToCamera = [&](const glm::mat4& newView) {
-        glm::mat4 inverseView = glm::inverse(newView);
-        cameraPos = glm::vec3(inverseView[3]);
-        
-        glm::vec3 scale;
-        glm::quat rotation;
-        glm::vec3 translation;
-        glm::vec3 skew;
-        glm::vec4 perspective;
-        glm::decompose(inverseView, scale, rotation, translation, skew, perspective);
-        glm::vec3 euler = glm::degrees(glm::eulerAngles(rotation));
-        cameraRot.x = euler.x; 
-        cameraRot.y = euler.y;
-        cameraRot.z = euler.z;
     };
 
     while (running) {
@@ -677,6 +708,14 @@ int main(int argc, char** argv) {
             if (ImGui::BeginMenu("View")) {
                 if (ImGui::MenuItem("Toggle Zen Mode", "Ctrl+K Z", &zenMode)) {}
                 if (ImGui::MenuItem("Toggle Grid", "G", &showGrid)) {}
+                // Scene icon toggles
+                ImGui::MenuItem("Show Scene Icons", "Ctrl+K I", &showSceneIcons);
+                ImGui::MenuItem("Icon Occlusion", nullptr, &iconOcclusion);
+                ImGui::Separator();
+                ImGui::MenuItem("Show Colliders", nullptr, &showColliders);
+                ImGui::MenuItem("Show Audio Sources", nullptr, &showAudioSources);
+                ImGui::MenuItem("Show Particle Systems", nullptr, &showParticles);
+                ImGui::MenuItem("Show Physics Bodies", nullptr, &showPhysicsBodies);
                 if (ImGui::MenuItem("Reset Layout")) { requestResetLayout = true; }
                 ImGui::EndMenu();
             }
@@ -698,7 +737,7 @@ int main(int argc, char** argv) {
                 ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 16.0f);
                 
                 if (editorState == EditorState::Edit) {
-                    if (ImGui::Button(" Play ", ImVec2(60, 0))) {
+                    if (ImGui::Button("Play", ImVec2(80, 0))) {
                         // Enter Play Mode
                         // 1. Save Scene to temp
                         if (Genesis::Engine::SceneLoader::SaveScene(editorScene, "tmp/play_backup.scene")) {
@@ -720,17 +759,17 @@ int main(int argc, char** argv) {
                 } else {
                     // Play / Pause / Stop controls
                     if (editorState == EditorState::Play) {
-                        if (ImGui::Button(" Pause ", ImVec2(60, 0))) {
+                        if (ImGui::Button("Pause", ImVec2(80, 0))) {
                             editorState = EditorState::Pause;
                         }
                     } else if (editorState == EditorState::Pause) {
-                        if (ImGui::Button(" Resume ", ImVec2(60, 0))) {
+                        if (ImGui::Button("Resume", ImVec2(80, 0))) {
                             editorState = EditorState::Play;
                         }
                     }
 
                     ImGui::SameLine();
-                    if (ImGui::Button(" Stop ", ImVec2(60, 0))) {
+                    if (ImGui::Button("Stop", ImVec2(80, 0))) {
                          // Stop Play Mode
                          if (activeScene) activeScene->OnRuntimeStop();
                          activeScene = &editorScene;
@@ -1024,6 +1063,216 @@ int main(int argc, char** argv) {
             ImGui::Image((ImTextureID)texID, viewportSize, ImVec2(0, 1), ImVec2(1, 0));
         }
 
+        // Draw overlay icons for non-visible objects (camera, lights)
+        // Uses small texture assets for icons when available, and supports occlusion testing
+        // (based on sampling the renderer's depth buffer) controlled by the View menu toggle.
+        {
+            if (!showSceneIcons) {
+                // Skip whole overlay if toggled off
+            } else {
+                auto WorldToScreen = [&](const glm::vec3& worldPos, glm::vec2& out, float* outWindowZ = nullptr) -> bool {
+                    glm::vec4 clip = projection * view * glm::vec4(worldPos, 1.0f);
+                    if (clip.w == 0.0f) return false;
+                    glm::vec3 ndc = glm::vec3(clip) / clip.w;
+                    // Cull if behind near/far planes
+                    if (ndc.z < -1.0f || ndc.z > 1.0f) return false;
+                    out.x = viewportTopLeft.x + (ndc.x * 0.5f + 0.5f) * viewportSize.x;
+                    out.y = viewportTopLeft.y + (0.5f - ndc.y * 0.5f) * viewportSize.y;
+                    if (outWindowZ) *outWindowZ = ndc.z * 0.5f + 0.5f;
+                    // Quick screen bounds cull (small padding)
+                    const float pad = 24.0f;
+                    if (out.x < viewportTopLeft.x - pad || out.x > viewportTopLeft.x + viewportSize.x + pad ||
+                        out.y < viewportTopLeft.y - pad || out.y > viewportTopLeft.y + viewportSize.y + pad) return false;
+                    return true;
+                };
+
+                ImDrawList* dl = ImGui::GetWindowDrawList();
+                auto io = ImGui::GetIO();
+
+                // Simple in-memory icon generation (lazy). Keep these local to editor scope.
+                static std::shared_ptr<Genesis::Engine::Texture> s_camIcon;
+                static std::shared_ptr<Genesis::Engine::Texture> s_lightIcon;
+                auto CreateCameraIcon = [&]() -> std::shared_ptr<Genesis::Engine::Texture> {
+                    if (s_camIcon) return s_camIcon;
+                    const int iw = 64, ih = 64;
+                    std::vector<uint8_t> px((size_t)iw * ih * 4, 0);
+                    // Camera body (scaled proportions)
+                    int bodyLeft = std::max(1, iw / 8);
+                    int bodyRight = iw - std::max(1, iw / 8) - 1;
+                    int bodyTop = ih * 9 / 64;
+                    int bodyBottom = ih * 42 / 64;
+                    for (int y = 0; y < ih; ++y) {
+                        for (int x = 0; x < iw; ++x) {
+                            int i = (y * iw + x) * 4;
+                            if (x >= bodyLeft && x <= bodyRight && y >= bodyTop && y <= bodyBottom) {
+                                px[i+0] = 60; px[i+1] = 120; px[i+2] = 200; px[i+3] = 255;
+                            }
+                            // Lens (scaled)
+                            int cx = iw / 2 + std::max(1, iw / 16);
+                            int cy = ih / 2 + std::max(1, ih / 16);
+                            int dx = x - cx, dy = y - cy; int r2 = dx*dx + dy*dy;
+                            int lensR1 = std::max(1, iw / 6);
+                            int lensR2 = std::max(1, iw / 10);
+                            if (r2 <= lensR1 * lensR1) { px[i+0] = 240; px[i+1] = 240; px[i+2] = 240; px[i+3] = 255; }
+                            if (r2 <= lensR2 * lensR2) { px[i+0] = 30; px[i+1] = 30; px[i+2] = 40; px[i+3] = 255; }
+                        }
+                    }
+                    s_camIcon = Genesis::Engine::Texture::CreateFromMemory(iw, ih, px);
+                    return s_camIcon;
+                };
+                auto CreateLightIcon = [&]() -> std::shared_ptr<Genesis::Engine::Texture> {
+                    if (s_lightIcon) return s_lightIcon;
+                    const int iw = 64, ih = 64;
+                    std::vector<uint8_t> px((size_t)iw * ih * 4, 0);
+                    int cx = iw/2, cy = ih/2;
+                    for (int y = 0; y < ih; ++y) {
+                        for (int x = 0; x < iw; ++x) {
+                            int i = (y * iw + x) * 4;
+                            int dx = x - cx, dy = y - cy; int r2 = dx*dx + dy*dy;
+                            int coreR = std::max(2, iw / 5);
+                            if (r2 <= coreR * coreR) { px[i+0] = 255; px[i+1] = 210; px[i+2] = 60; px[i+3] = 255; }
+                            // simple rays (8 directions) scaled
+                            int rayStart = iw / 5; // start distance for rays
+                            int rayEnd = iw / 3;   // end distance for rays
+                            if ((abs(dx) == abs(dy) && abs(dx) > rayStart && abs(dx) < rayEnd) || (abs(dx) > rayStart && dy==0) || (abs(dy) > rayStart && dx==0)) {
+                                px[i+0] = 255; px[i+1] = 235; px[i+2] = 120; px[i+3] = 255;
+                            }
+                        }
+                    }
+                    s_lightIcon = Genesis::Engine::Texture::CreateFromMemory(iw, ih, px);
+                    return s_lightIcon;
+                };
+
+                // Ensure textures exist and are uploaded when we have a renderer
+                CreateCameraIcon(); CreateLightIcon();
+                if (s_camIcon && currentRenderer) s_camIcon->UploadToRenderer(currentRenderer);
+                if (s_lightIcon && currentRenderer) s_lightIcon->UploadToRenderer(currentRenderer);
+
+                auto IsOccluded = [&](int sx, int sy, float windowZ) {
+                    if (!iconOcclusion) return false;
+                    if (auto glr = dynamic_cast<Genesis::Engine::OpenGLRenderer*>(currentRenderer)) {
+                        float d = 1.0f;
+                        if (glr->ReadDepthAtWindowCoord(sx, sy, d)) {
+                            // if depth is closer than the object, we're occluded
+                            if (d < windowZ - 1e-5f) return true;
+                        }
+                    }
+                    return false;
+                };
+
+                const float iconSize = 64.0f; // larger icons for visibility (try 64×64)
+                const float half = iconSize * 0.5f;
+
+                // Camera icons
+                auto camView = activeScene->Registry().view<Genesis::Engine::CameraComponent, Genesis::Engine::Transform>();
+                for (auto entity : camView) {
+                    const auto& tc = camView.get<Genesis::Engine::Transform>(entity);
+                    glm::vec3 wp(tc.x, tc.y, tc.z);
+                    glm::vec2 sp; float winZ = 0.0f;
+                    if (!WorldToScreen(wp, sp, &winZ)) continue;
+                    ImVec2 p((float)sp.x, (float)sp.y);
+
+                    if (IsOccluded((int)p.x, (int)p.y, winZ)) continue;
+
+                    bool drewTex = false;
+                    if (s_camIcon && s_camIcon->GetID() != 0) {
+                        ImVec2 tl = ImVec2(p.x - half, p.y - half);
+                        ImVec2 br = ImVec2(p.x + half, p.y + half);
+                        dl->AddImage((ImTextureID)(uintptr_t)s_camIcon->GetID(), tl, br, ImVec2(0, 1), ImVec2(1, 0));
+                        drewTex = true;
+                    }
+                    if (!drewTex) {
+                        ImU32 col = ImGui::GetColorU32(ImVec4(0.4f, 0.6f, 1.0f, 1.0f));
+                        dl->AddRectFilled(ImVec2(p.x - half, p.y - half * 0.7f), ImVec2(p.x + half, p.y + half * 0.7f), col, 3.0f);
+                        dl->AddCircleFilled(ImVec2(p.x + half * 0.4f, p.y), half * 0.35f, IM_COL32(30, 30, 40, 255));
+                    }
+
+                    // Forward indicator (same as before)
+                    glm::mat4 rotX = glm::rotate(glm::mat4(1.0f), tc.rx, glm::vec3(1,0,0));
+                    glm::mat4 rotY = glm::rotate(glm::mat4(1.0f), tc.ry, glm::vec3(0,1,0));
+                    glm::mat4 rotZ = glm::rotate(glm::mat4(1.0f), tc.rz, glm::vec3(0,0,1));
+                    glm::mat4 rot = rotZ * rotY * rotX;
+                    glm::vec3 fwd = glm::vec3(rot * glm::vec4(0, 0, -1, 0));
+                    if (glm::length(fwd) > 1e-6f) {
+                        glm::vec3 arrowWorld = wp + glm::normalize(fwd) * 1.2f;
+                        glm::vec2 arrowScr;
+                        if (WorldToScreen(arrowWorld, arrowScr)) {
+                            ImVec2 end((float)arrowScr.x, (float)arrowScr.y);
+                            dl->AddLine(p, end, ImGui::GetColorU32(ImVec4(0.4f,0.6f,1.0f,1.0f)), 2.0f);
+                        }
+                    }
+
+                    // Selection hit test
+                    if (viewportHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+                        ImVec2 m = io.MousePos;
+                        if (m.x >= p.x - half && m.x <= p.x + half && m.y >= p.y - half && m.y <= p.y + half) {
+                            selectedEntity = entity;
+                        }
+                    }
+                }
+
+                // Light icons
+                auto lightView = activeScene->Registry().view<Genesis::Engine::LightComponent, Genesis::Engine::Transform>();
+                for (auto entity : lightView) {
+                    const auto& tc = lightView.get<Genesis::Engine::Transform>(entity);
+                    const auto& lc = lightView.get<Genesis::Engine::LightComponent>(entity);
+                    glm::vec3 wp(tc.x, tc.y, tc.z);
+                    glm::vec2 sp; float winZ = 0.0f;
+                    if (!WorldToScreen(wp, sp, &winZ)) continue;
+                    ImVec2 p((float)sp.x, (float)sp.y);
+
+                    if (IsOccluded((int)p.x, (int)p.y, winZ)) continue;
+
+                    bool drewTex = false;
+                    if (s_lightIcon && s_lightIcon->GetID() != 0) {
+                        ImVec2 tl = ImVec2(p.x - half, p.y - half);
+                        ImVec2 br = ImVec2(p.x + half, p.y + half);
+                        dl->AddImage((ImTextureID)(uintptr_t)s_lightIcon->GetID(), tl, br, ImVec2(0, 1), ImVec2(1, 0));
+                        drewTex = true;
+                    }
+                    if (!drewTex) {
+                        ImU32 col = ImGui::GetColorU32(ImVec4(lc.color[0], lc.color[1], lc.color[2], 1.0f));
+                        dl->AddCircleFilled(p, half * 0.6f, col, 16);
+                        dl->AddCircle(p, half * 0.6f + 3.0f, col, 16, 2.0f);
+                    }
+
+                    if (lc.type == Genesis::Engine::LightType::Directional) {
+                        // Direction arrow
+                        glm::mat4 rotX = glm::rotate(glm::mat4(1.0f), tc.rx, glm::vec3(1,0,0));
+                        glm::mat4 rotY = glm::rotate(glm::mat4(1.0f), tc.ry, glm::vec3(0,1,0));
+                        glm::mat4 rotZ = glm::rotate(glm::mat4(1.0f), tc.rz, glm::vec3(0,0,1));
+                        glm::mat4 rot = rotZ * rotY * rotX;
+                        glm::vec3 fwd = glm::vec3(rot * glm::vec4(0, 0, -1, 0));
+                        if (glm::length(fwd) > 1e-6f) {
+                            glm::vec3 arrowWorld = wp + glm::normalize(fwd) * 1.5f;
+                            glm::vec2 arrowScr;
+                            if (WorldToScreen(arrowWorld, arrowScr)) {
+                                ImVec2 end((float)arrowScr.x, (float)arrowScr.y);
+                                dl->AddLine(p, end, ImGui::GetColorU32(ImVec4(lc.color[0], lc.color[1], lc.color[2], 1.0f)), 2.0f);
+                            }
+                        }
+                    } else {
+                        // Show range ring for point lights
+                        if (lc.range > 0.0f) {
+                            glm::vec3 rworld = wp + glm::vec3(lc.range, 0, 0);
+                            glm::vec2 rscr;
+                            if (WorldToScreen(rworld, rscr)) {
+                                float pixelR = sqrtf((rscr.x - p.x)*(rscr.x - p.x) + (rscr.y - p.y)*(rscr.y - p.y));
+                                dl->AddCircle(p, pixelR, IM_COL32(255,255,255,100), 64, 1.5f);
+                            }
+                        }
+                    }
+
+                    if (viewportHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+                        ImVec2 m = io.MousePos;
+                        if (m.x >= p.x - half && m.x <= p.x + half && m.y >= p.y - half && m.y <= p.y + half) {
+                            selectedEntity = entity;
+                        }
+                    }
+                }
+            }
+        }
+
         // Drag/drop onto the viewport: create entity from a model, or open a dropped .scene
         if (ImGui::BeginDragDropTarget()) {
             if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("CONTENT_BROWSER_ITEM")) {
@@ -1069,56 +1318,108 @@ int main(int argc, char** argv) {
             ImGui::EndDragDropTarget();
         }
 
-        if (showGrid && editorState == EditorState::Edit) {
+        // Draw Grid
+        if (showGrid) {
             ImGuizmo::SetDrawlist();
             ImGuizmo::SetRect(viewportTopLeft.x, viewportTopLeft.y, viewportSize.x, viewportSize.y);
             glm::mat4 identityMatrix = glm::mat4(1.0f);
             ImGuizmo::DrawGrid(glm::value_ptr(view), glm::value_ptr(projection), glm::value_ptr(identityMatrix), 100.f);
         }
 
-        // View Manipulate (View Cube) - only in Edit Mode
-        // Position still calculated above for conflict detection, but we only draw/interact in Edit.
-        if (editorState == EditorState::Edit) {
-            glm::mat4 viewCopy = view; // Make a copy to pass to ViewManipulate
-            ImGuizmo::SetDrawlist();
-            ImGuizmo::ViewManipulate(glm::value_ptr(viewCopy), 5.0f, viewManipulatePos, ImVec2(viewManipulateSize, viewManipulateSize), 0x10101010);
+        // View Manipulate (View Cube) - position already calculated above for conflict detection
+        glm::mat4 viewCopy = view; // Make a copy to pass to ViewManipulate
+        ImGuizmo::SetDrawlist();
+        ImGuizmo::ViewManipulate(glm::value_ptr(viewCopy), 5.0f, viewManipulatePos, ImVec2(viewManipulateSize, viewManipulateSize), 0x10101010);
 
-            // Axis labels (X/Y/Z) around the cube
-            {
-                ImDrawList* dl = ImGui::GetWindowDrawList();
-                const ImU32 shadow = IM_COL32(0, 0, 0, 160);
-                const ImU32 textFront = IM_COL32(235, 235, 235, 230);
-                const ImU32 textBack = IM_COL32(170, 170, 170, 180);
-                const ImVec2 center = ImVec2(viewManipulatePos.x + viewManipulateSize * 0.5f, viewManipulatePos.y + viewManipulateSize * 0.5f);
+        // Axis labels (X/Y/Z) around the cube (overlay, positioned based on current view orientation)
+        {
+            ImDrawList* dl = ImGui::GetWindowDrawList();
+            const ImU32 shadow = IM_COL32(0, 0, 0, 160);
+            const ImU32 textFront = IM_COL32(235, 235, 235, 230);
+            const ImU32 textBack = IM_COL32(170, 170, 170, 180);
+            const ImVec2 center = ImVec2(viewManipulatePos.x + viewManipulateSize * 0.5f, viewManipulatePos.y + viewManipulateSize * 0.5f);
 
-                const glm::mat3 viewRot = glm::mat3(view);
+            // View matrix transforms World -> View (camera). Use its rotation part to estimate
+            // where the world axes point on the view-cube overlay.
+            const glm::mat3 viewRot = glm::mat3(view);
 
-                auto DrawAxisLabel = [&](const char* label, const glm::vec3& worldAxis) {
-                    const glm::vec3 axisView = viewRot * worldAxis;
-                    glm::vec2 axis2(axisView.x, -axisView.y);
-                    float len = glm::length(axis2);
-                    if (len < 1e-6f) return;
-                    axis2 /= len;
+            auto DrawAxisLabel = [&](const char* label, const glm::vec3& worldAxis) {
+                // Axis direction in view/camera space.
+                const glm::vec3 axisView = viewRot * worldAxis;
 
-                    const float radius = viewManipulateSize * 0.42f;
-                    ImVec2 pos = ImVec2(center.x + axis2.x * radius, center.y + axis2.y * radius);
+                // Map to 2D (screen y down). Normalize to avoid huge/NaN offsets.
+                glm::vec2 axis2(axisView.x, -axisView.y);
+                float len = glm::length(axis2);
+                if (len < 1e-6f) {
+                    return;
+                }
+                axis2 /= len;
 
-                    const bool frontFacing = (axisView.z < 0.0f);
-                    const ImU32 text = frontFacing ? textFront : textBack;
+                // Place near the edge of the view cube.
+                const float radius = viewManipulateSize * 0.42f;
+                ImVec2 pos = ImVec2(center.x + axis2.x * radius, center.y + axis2.y * radius);
 
-                    dl->AddText(ImVec2(pos.x + 1.0f, pos.y + 1.0f), shadow, label);
-                    dl->AddText(pos, text, label);
-                };
+                // In OpenGL view space, points "in front" typically have negative Z.
+                const bool frontFacing = (axisView.z < 0.0f);
+                const ImU32 text = frontFacing ? textFront : textBack;
 
-                DrawAxisLabel("X", glm::vec3(1.0f, 0.0f, 0.0f));
-                DrawAxisLabel("Y", glm::vec3(0.0f, 1.0f, 0.0f));
-                DrawAxisLabel("Z", glm::vec3(0.0f, 0.0f, 1.0f));
+                dl->AddText(ImVec2(pos.x + 1.0f, pos.y + 1.0f), shadow, label);
+                dl->AddText(pos, text, label);
+            };
+
+            DrawAxisLabel("X", glm::vec3(1.0f, 0.0f, 0.0f));
+            DrawAxisLabel("Y", glm::vec3(0.0f, 1.0f, 0.0f));
+            DrawAxisLabel("Z", glm::vec3(0.0f, 0.0f, 1.0f));
+        }
+
+        auto MatDifferent = [](const glm::mat4& a, const glm::mat4& b) {
+            constexpr float eps = 1e-5f;
+            for (int c = 0; c < 4; ++c) {
+                for (int r = 0; r < 4; ++r) {
+                    if (fabs(a[c][r] - b[c][r]) > eps) return true;
+                }
+            }
+            return false;
+        };
+
+        // Apply view-cube camera changes while ImGuizmo is animating.
+        // We intentionally convert to yaw/pitch and force roll=0 to avoid the camera ending up upside-down.
+        auto ApplyViewMatrixToCamera = [&](const glm::mat4& targetView) {
+            glm::mat4 inv = glm::inverse(targetView);
+            glm::vec3 scale;
+            glm::quat rotation;
+            glm::vec3 translation;
+            glm::vec3 skew;
+            glm::vec4 perspective;
+            glm::decompose(inv, scale, rotation, translation, skew, perspective);
+
+            cameraPos = translation;
+
+            glm::vec3 forward = rotation * glm::vec3(0.0f, 0.0f, -1.0f);
+            if (glm::dot(forward, forward) < 1e-8f) {
+                return;
+            }
+            forward = glm::normalize(forward);
+
+            // Our navigation forward convention uses: forward.y = -sin(pitch).
+            const float clampedY = glm::clamp(forward.y, -1.0f, 1.0f);
+            float pitchRad = -asinf(clampedY);
+
+            // For near-vertical views, yaw becomes underdetermined. Pick a stable yaw that
+            // matches common editor behavior (top/bottom aligned; avoids "upside-down" feel).
+            float yawRad = 0.0f;
+            if (fabsf(forward.y) <= 0.999f) {
+                yawRad = atan2f(forward.x, -forward.z);
             }
 
-            const bool viewCubeDrivingCamera = ImGuizmo::IsUsingViewManipulate();
-            if ((viewCubeDrivingCamera || applyViewCubeThisFrame) && MatDifferent(viewCopy, view)) {
-                ApplyViewMatrixToCamera(viewCopy);
-            }
+            cameraRot.x = glm::degrees(pitchRad);
+            cameraRot.y = glm::degrees(yawRad);
+            cameraRot.z = 0.0f;
+        };
+
+        const bool viewCubeDrivingCamera = ImGuizmo::IsUsingViewManipulate();
+        if ((viewCubeDrivingCamera || applyViewCubeThisFrame) && MatDifferent(viewCopy, view)) {
+            ApplyViewMatrixToCamera(viewCopy);
         }
 
         // Gizmos
@@ -1438,6 +1739,108 @@ int main(int argc, char** argv) {
                             }
                             ImGui::EndDragDropTarget();
                         }
+
+                        if (mc.model && ImGui::TreeNode("Materials")) {
+                            const auto& materials = mc.model->Materials();
+                            for (int i = 0; i < (int)materials.size(); ++i) {
+                                if (ImGui::TreeNode((void*)(intptr_t)i, "Material %d", i)) {
+                                    bool isOverridden = mc.materialOverrides.find(i) != mc.materialOverrides.end();
+                                    Genesis::Engine::Material currentMat = isOverridden ? mc.materialOverrides[i] : materials[i];
+                                    
+                                    bool changed = false;
+                                    if (ImGui::ColorEdit4("Base Color", currentMat.baseColor.data())) changed = true;
+                                    
+                                    float metallic = currentMat.metallic;
+                                    if (ImGui::SliderFloat("Metallic", &metallic, 0.0f, 1.0f)) {
+                                        currentMat.metallic = metallic;
+                                        changed = true;
+                                    }
+                                    
+                                    float roughness = currentMat.roughness;
+                                    if (ImGui::SliderFloat("Roughness", &roughness, 0.0f, 1.0f)) {
+                                        currentMat.roughness = roughness;
+                                        changed = true;
+                                    }
+                                    
+                                    // Base Texture
+                                    char buf[256];
+                                    if (currentMat.baseColorTexture.length() >= 256) buf[0] = 0; else strcpy_s(buf, currentMat.baseColorTexture.c_str());
+                                    if (ImGui::InputText("Base Texture", buf, 256)) {
+                                        currentMat.baseColorTexture = buf;
+                                        if (!currentMat.baseColorTexture.empty())
+                                             currentMat.baseColorTextureObj = Genesis::Engine::Texture::CreateFromFile(buf);
+                                        else
+                                             currentMat.baseColorTextureObj.reset();
+                                        changed = true;
+                                    }
+                                    if (ImGui::BeginDragDropTarget()) {
+                                        if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("CONTENT_BROWSER_ITEM")) {
+                                            const char* droppedPath = (const char*)payload->Data;
+                                            currentMat.baseColorTexture = droppedPath;
+                                            currentMat.baseColorTextureObj = Genesis::Engine::Texture::CreateFromFile(droppedPath);
+                                            changed = true;
+                                        }
+                                        ImGui::EndDragDropTarget();
+                                    }
+                                    
+                                    // Normal Texture
+                                    char bufNorm[256];
+                                    if (currentMat.normalTexture.length() >= 256) bufNorm[0] = 0; else strcpy_s(bufNorm, currentMat.normalTexture.c_str());
+                                    if (ImGui::InputText("Normal Texture", bufNorm, 256)) {
+                                        currentMat.normalTexture = bufNorm;
+                                        if (!currentMat.normalTexture.empty())
+                                             currentMat.normalTextureObj = Genesis::Engine::Texture::CreateFromFile(bufNorm);
+                                        else
+                                             currentMat.normalTextureObj.reset();
+                                        changed = true;
+                                    }
+                                    if (ImGui::BeginDragDropTarget()) {
+                                        if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("CONTENT_BROWSER_ITEM")) {
+                                            const char* droppedPath = (const char*)payload->Data;
+                                            currentMat.normalTexture = droppedPath;
+                                            currentMat.normalTextureObj = Genesis::Engine::Texture::CreateFromFile(droppedPath);
+                                            changed = true;
+                                        }
+                                        ImGui::EndDragDropTarget();
+                                    }
+
+                                    if (changed) {
+                                        mc.materialOverrides[i] = currentMat;
+                                        if (editorState == EditorState::Edit) sceneDirty = true;
+                                    }
+                                    
+                                    if (isOverridden) {
+                                        if (ImGui::Button("Reset to Original")) {
+                                            mc.materialOverrides.erase(i);
+                                            if (editorState == EditorState::Edit) sceneDirty = true;
+                                        }
+                                    }
+                                    
+                                    ImGui::TreePop();
+                                }
+                            }
+                            ImGui::TreePop();
+                        }
+                    }
+                }
+
+                if (activeScene->Registry().all_of<Genesis::Engine::ScriptComponent>(selectedEntity)) {
+                    if (ImGui::CollapsingHeader("Script", ImGuiTreeNodeFlags_DefaultOpen)) {
+                        ImGui::Text("Native Script Attached");
+                        if (ImGui::Button("Remove")) {
+                            activeScene->Registry().remove<Genesis::Engine::ScriptComponent>(selectedEntity);
+                            if (editorState == EditorState::Edit) sceneDirty = true;
+                        }
+                    }
+                }
+
+                if (activeScene->Registry().all_of<Genesis::Engine::ScriptComponent>(selectedEntity)) {
+                    if (ImGui::CollapsingHeader("Script", ImGuiTreeNodeFlags_DefaultOpen)) {
+                        ImGui::Text("Native Script Attached");
+                        if (ImGui::Button("Remove")) {
+                            activeScene->Registry().remove<Genesis::Engine::ScriptComponent>(selectedEntity);
+                            if (editorState == EditorState::Edit) sceneDirty = true;
+                        }
                     }
                 }
 
@@ -1457,6 +1860,12 @@ int main(int argc, char** argv) {
                             mc.model = std::make_shared<Genesis::Engine::Model>();
                             mc.sourcePath.clear();
                             activeScene->Registry().emplace<Genesis::Engine::ModelComponent>(selectedEntity, mc);
+                            if (editorState == EditorState::Edit) sceneDirty = true;
+                        }
+                    }
+                    if (ImGui::MenuItem("Script")) {
+                        if (!activeScene->Registry().all_of<Genesis::Engine::ScriptComponent>(selectedEntity)) {
+                            activeScene->Registry().emplace<Genesis::Engine::ScriptComponent>(selectedEntity);
                             if (editorState == EditorState::Edit) sceneDirty = true;
                         }
                     }

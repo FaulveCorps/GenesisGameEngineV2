@@ -141,11 +141,28 @@ bool Model::Load(const std::string& path) {
     return true;
 }
 
-void Model::Draw(const float* transform) {
+void Model::Draw(const float* transform, const std::map<int, Material>* overrides) {
     for (size_t i = 0; i < m_meshes.size(); ++i) {
         const auto& m = m_meshes[i];
         int matIndex = GetMaterialIndexForMesh(i);
-        Material* mat = (matIndex >= 0 && matIndex < (int)m_materials.size()) ? &m_materials[matIndex] : nullptr;
+        
+        Material* mat = nullptr;
+        
+        // Check for override
+        if (overrides) {
+            auto it = overrides->find(matIndex);
+            if (it != overrides->end()) {
+                // Cast const away temporarily or change mesh interface?
+                // Mesh::Draw usually takes non-const Material* probably to bind textures?
+                // Let's check Mesh::Draw. If it takes non-const, we might need a workaround since iterates map values are const in const method...
+                // Actually overrides is const map.
+                mat = const_cast<Material*>(&it->second); 
+            }
+        }
+
+        if (!mat && matIndex >= 0 && matIndex < (int)m_materials.size()) {
+            mat = &m_materials[matIndex];
+        }
         
         m.Draw(mat, transform);
         Genesis::Engine::Stats::AddDrawCalls((int)m.GetTriangleCount());
