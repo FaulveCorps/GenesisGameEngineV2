@@ -2,9 +2,26 @@
 
 #include <memory>
 #include <string>
+#include <map>
 #include "engine/Model.h"
+#include "engine/Material.h"
 
 namespace Genesis::Engine {
+
+class ScriptableEntity;
+
+struct ScriptComponent {
+    ScriptableEntity* Instance = nullptr;
+
+    ScriptableEntity* (*InstantiateScript)() = nullptr;
+    void (*DestroyScript)(ScriptComponent*) = nullptr;
+
+    template<typename T>
+    void Bind() {
+        InstantiateScript = []() { return static_cast<ScriptableEntity*>(new T()); };
+        DestroyScript = [](ScriptComponent* sc) { delete sc->Instance; sc->Instance = nullptr; };
+    }
+};
 
 struct Transform {
     float x = 0.f, y = 0.f, z = 0.f;
@@ -24,6 +41,10 @@ struct ModelComponent {
     // Optional source asset path used for scene save/reload.
     // (If empty, the model cannot be serialized by SceneLoader::SaveScene.)
     std::string sourcePath;
+
+    // Material overrides tailored for this instance.
+    // Key: material index in the model.
+    std::map<int, Material> materialOverrides;
 };
 
 enum class LightType {

@@ -1729,6 +1729,108 @@ int main(int argc, char** argv) {
                             }
                             ImGui::EndDragDropTarget();
                         }
+
+                        if (mc.model && ImGui::TreeNode("Materials")) {
+                            const auto& materials = mc.model->Materials();
+                            for (int i = 0; i < (int)materials.size(); ++i) {
+                                if (ImGui::TreeNode((void*)(intptr_t)i, "Material %d", i)) {
+                                    bool isOverridden = mc.materialOverrides.find(i) != mc.materialOverrides.end();
+                                    Genesis::Engine::Material currentMat = isOverridden ? mc.materialOverrides[i] : materials[i];
+                                    
+                                    bool changed = false;
+                                    if (ImGui::ColorEdit4("Base Color", currentMat.baseColor.data())) changed = true;
+                                    
+                                    float metallic = currentMat.metallic;
+                                    if (ImGui::SliderFloat("Metallic", &metallic, 0.0f, 1.0f)) {
+                                        currentMat.metallic = metallic;
+                                        changed = true;
+                                    }
+                                    
+                                    float roughness = currentMat.roughness;
+                                    if (ImGui::SliderFloat("Roughness", &roughness, 0.0f, 1.0f)) {
+                                        currentMat.roughness = roughness;
+                                        changed = true;
+                                    }
+                                    
+                                    // Base Texture
+                                    char buf[256];
+                                    if (currentMat.baseColorTexture.length() >= 256) buf[0] = 0; else strcpy_s(buf, currentMat.baseColorTexture.c_str());
+                                    if (ImGui::InputText("Base Texture", buf, 256)) {
+                                        currentMat.baseColorTexture = buf;
+                                        if (!currentMat.baseColorTexture.empty())
+                                             currentMat.baseColorTextureObj = Genesis::Engine::Texture::CreateFromFile(buf);
+                                        else
+                                             currentMat.baseColorTextureObj.reset();
+                                        changed = true;
+                                    }
+                                    if (ImGui::BeginDragDropTarget()) {
+                                        if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("CONTENT_BROWSER_ITEM")) {
+                                            const char* droppedPath = (const char*)payload->Data;
+                                            currentMat.baseColorTexture = droppedPath;
+                                            currentMat.baseColorTextureObj = Genesis::Engine::Texture::CreateFromFile(droppedPath);
+                                            changed = true;
+                                        }
+                                        ImGui::EndDragDropTarget();
+                                    }
+                                    
+                                    // Normal Texture
+                                    char bufNorm[256];
+                                    if (currentMat.normalTexture.length() >= 256) bufNorm[0] = 0; else strcpy_s(bufNorm, currentMat.normalTexture.c_str());
+                                    if (ImGui::InputText("Normal Texture", bufNorm, 256)) {
+                                        currentMat.normalTexture = bufNorm;
+                                        if (!currentMat.normalTexture.empty())
+                                             currentMat.normalTextureObj = Genesis::Engine::Texture::CreateFromFile(bufNorm);
+                                        else
+                                             currentMat.normalTextureObj.reset();
+                                        changed = true;
+                                    }
+                                    if (ImGui::BeginDragDropTarget()) {
+                                        if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("CONTENT_BROWSER_ITEM")) {
+                                            const char* droppedPath = (const char*)payload->Data;
+                                            currentMat.normalTexture = droppedPath;
+                                            currentMat.normalTextureObj = Genesis::Engine::Texture::CreateFromFile(droppedPath);
+                                            changed = true;
+                                        }
+                                        ImGui::EndDragDropTarget();
+                                    }
+
+                                    if (changed) {
+                                        mc.materialOverrides[i] = currentMat;
+                                        if (editorState == EditorState::Edit) sceneDirty = true;
+                                    }
+                                    
+                                    if (isOverridden) {
+                                        if (ImGui::Button("Reset to Original")) {
+                                            mc.materialOverrides.erase(i);
+                                            if (editorState == EditorState::Edit) sceneDirty = true;
+                                        }
+                                    }
+                                    
+                                    ImGui::TreePop();
+                                }
+                            }
+                            ImGui::TreePop();
+                        }
+                    }
+                }
+
+                if (activeScene->Registry().all_of<Genesis::Engine::ScriptComponent>(selectedEntity)) {
+                    if (ImGui::CollapsingHeader("Script", ImGuiTreeNodeFlags_DefaultOpen)) {
+                        ImGui::Text("Native Script Attached");
+                        if (ImGui::Button("Remove")) {
+                            activeScene->Registry().remove<Genesis::Engine::ScriptComponent>(selectedEntity);
+                            if (editorState == EditorState::Edit) sceneDirty = true;
+                        }
+                    }
+                }
+
+                if (activeScene->Registry().all_of<Genesis::Engine::ScriptComponent>(selectedEntity)) {
+                    if (ImGui::CollapsingHeader("Script", ImGuiTreeNodeFlags_DefaultOpen)) {
+                        ImGui::Text("Native Script Attached");
+                        if (ImGui::Button("Remove")) {
+                            activeScene->Registry().remove<Genesis::Engine::ScriptComponent>(selectedEntity);
+                            if (editorState == EditorState::Edit) sceneDirty = true;
+                        }
                     }
                 }
 
@@ -1748,6 +1850,12 @@ int main(int argc, char** argv) {
                             mc.model = std::make_shared<Genesis::Engine::Model>();
                             mc.sourcePath.clear();
                             activeScene->Registry().emplace<Genesis::Engine::ModelComponent>(selectedEntity, mc);
+                            if (editorState == EditorState::Edit) sceneDirty = true;
+                        }
+                    }
+                    if (ImGui::MenuItem("Script")) {
+                        if (!activeScene->Registry().all_of<Genesis::Engine::ScriptComponent>(selectedEntity)) {
+                            activeScene->Registry().emplace<Genesis::Engine::ScriptComponent>(selectedEntity);
                             if (editorState == EditorState::Edit) sceneDirty = true;
                         }
                     }

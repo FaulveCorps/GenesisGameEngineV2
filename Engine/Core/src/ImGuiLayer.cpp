@@ -9,8 +9,38 @@
 #include "imgui_impl_opengl3.h"
 #include <string>
 #include <iostream>
+#include <typeinfo>
 
 namespace Genesis::Engine {
+
+// Helper to draw components with a consistent style
+template<typename T, typename UIFunction>
+static void DrawComponent(const std::string& name, entt::registry& registry, entt::entity entity, UIFunction uiFunction) {
+    if (registry.all_of<T>(entity)) {
+        auto& component = registry.get<T>(entity);
+        
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2{ 4, 4 });
+        ImGuiTreeNodeFlags treeNodeFlags = ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_AllowOverlap | ImGuiTreeNodeFlags_FramePadding;
+        
+        bool open = ImGui::TreeNodeEx((void*)typeid(T).hash_code(), treeNodeFlags, name.c_str());
+        ImGui::PopStyleVar();
+
+        bool removeComponent = false;
+        if (ImGui::BeginPopupContextItem()) {
+            if (ImGui::MenuItem("Remove Component"))
+                removeComponent = true;
+            ImGui::EndPopup();
+        }
+
+        if (open) {
+            uiFunction(component);
+            ImGui::TreePop();
+        }
+
+        if (removeComponent)
+            registry.remove<T>(entity);
+    }
+}
 
 struct ImGuiLayer::Impl {
     SDL_Window* window = nullptr;
@@ -120,6 +150,62 @@ void ImGuiLayer::Render(Profiler& /*profiler*/, Scene* scene) {
                 if (ImGui::CollapsingHeader("Model", ImGuiTreeNodeFlags_DefaultOpen)) {
                     ImGui::Text("Model Loaded");
                 }
+            }
+
+            auto& registry = scene->Registry();
+
+            DrawComponent<CameraComponent>("Camera", registry, entity, [](auto& component) {
+                ImGui::Checkbox("Primary", &component.primary);
+                ImGui::DragFloat("FOV", &component.fov, 0.1f);
+                ImGui::DragFloat("Near Plane", &component.nearPlane, 0.1f);
+                ImGui::DragFloat("Far Plane", &component.farPlane, 0.1f);
+            });
+
+            DrawComponent<RigidBodyComponent>("Rigid Body", registry, entity, [](auto& component) {
+                ImGui::DragFloat("Mass", &component.mass, 0.1f);
+                ImGui::Checkbox("Use Gravity", &component.useGravity);
+                ImGui::Checkbox("Is Kinematic", &component.isKinematic);
+            });
+
+            DrawComponent<BoxColliderComponent>("Box Collider", registry, entity, [](auto& component) {
+                ImGui::DragFloat3("Size", component.size, 0.1f);
+                ImGui::DragFloat3("Offset", component.offset, 0.1f);
+                ImGui::Checkbox("Is Trigger", &component.isTrigger);
+            });
+
+            DrawComponent<SphereColliderComponent>("Sphere Collider", registry, entity, [](auto& component) {
+                ImGui::DragFloat("Radius", &component.radius, 0.1f);
+                ImGui::DragFloat3("Offset", component.offset, 0.1f);
+                ImGui::Checkbox("Is Trigger", &component.isTrigger);
+            });
+
+            ImGui::Separator();
+
+            if (ImGui::Button("Add Component"))
+                ImGui::OpenPopup("AddComponent");
+
+            if (ImGui::BeginPopup("AddComponent")) {
+                if (!registry.all_of<CameraComponent>(entity) && ImGui::MenuItem("Camera")) {
+                    registry.emplace<CameraComponent>(entity);
+                    ImGui::CloseCurrentPopup();
+                }
+                if (!registry.all_of<RigidBodyComponent>(entity) && ImGui::MenuItem("Rigid Body")) {
+                    registry.emplace<RigidBodyComponent>(entity);
+                    ImGui::CloseCurrentPopup();
+                }
+                if (!registry.all_of<BoxColliderComponent>(entity) && ImGui::MenuItem("Box Collider")) {
+                    registry.emplace<BoxColliderComponent>(entity);
+                    ImGui::CloseCurrentPopup();
+                }
+                if (!registry.all_of<SphereColliderComponent>(entity) && ImGui::MenuItem("Sphere Collider")) {
+                    registry.emplace<SphereColliderComponent>(entity);
+                    ImGui::CloseCurrentPopup();
+                }
+                if (!registry.all_of<LightComponent>(entity) && ImGui::MenuItem("Light")) {
+                    registry.emplace<LightComponent>(entity);
+                    ImGui::CloseCurrentPopup();
+                }
+                ImGui::EndPopup();
             }
         }
         ImGui::End();

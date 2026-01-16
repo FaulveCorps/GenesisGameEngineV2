@@ -4,6 +4,7 @@
 #include <assimp/scene.h>
 #include <assimp/Importer.hpp>
 #include <vector>
+#include <map>
 #include "Engine/Mesh.h"
 #include "Engine/Material.h"
 
@@ -15,7 +16,7 @@ public:
     ~Model() = default;
 
     bool Load(const std::string& path);
-    void Draw(const float* transform = nullptr);
+    void Draw(const float* transform = nullptr, const std::map<int, Material>* overrides = nullptr);
 
     // Material accessors (parsed from scene materials)
     const std::vector<Material>& Materials() const { return m_materials; }

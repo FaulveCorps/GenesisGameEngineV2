@@ -49,6 +49,8 @@ public:
                      float u0 = 0.f, float v0 = 0.f, float u1 = 1.f, float v1 = 1.f,
                      uint32_t color = 0xFFFFFFFF) override;
 
+    void DrawLines(const std::vector<float>& vertices, const std::vector<float>& colors) override;
+
     void SetPresentEnabled(bool enabled) { m_presentEnabled = enabled; }
     
     // Returns the texture ID of the final rendered frame (for Editor Viewport)
@@ -75,10 +77,13 @@ private:
 
     // Simple PBR shader (prototype)
     std::shared_ptr<Shader> m_pbrShader;
+    std::shared_ptr<Shader> m_debugShader;
 
     // Debug draw resources
     unsigned int m_debugVAO = 0;
     unsigned int m_debugVBO = 0;
+    std::vector<float> m_debugVertices;
+    std::vector<float> m_debugColors;
 
     struct GLMesh {
         unsigned int vao = 0;
