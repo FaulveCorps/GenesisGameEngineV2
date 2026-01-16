@@ -270,6 +270,7 @@ int main(int argc, char** argv) {
     bool showCameraFOV = true;
     bool reloadSceneIcons = false; // one-shot: set true to regenerate in-memory overlay icons at runtime
     bool forceSimpleCameraIcon = true; // when true, always draw simple block+triangle for camera icons (no texture)
+    bool showCameraIconDebug = false; // draw debug markers near camera icons (B/T and Tex/Fb label)
     char commandSearchBuffer[128] = "";
     int selectedCommandIndex = 0;
 
@@ -722,6 +723,7 @@ int main(int argc, char** argv) {
                 ImGui::MenuItem("Show Physics Bodies", nullptr, &showPhysicsBodies);
                 ImGui::Separator();
                 ImGui::MenuItem("Force Simple Camera Icon (█◀)", nullptr, &forceSimpleCameraIcon);
+                ImGui::MenuItem("Show Camera Icon Debug", nullptr, &showCameraIconDebug);
                 if (ImGui::MenuItem("Reload Scene Icons")) reloadSceneIcons = true;
                 if (ImGui::MenuItem("Reset Layout")) { requestResetLayout = true; }
                 ImGui::EndMenu();
@@ -1284,6 +1286,25 @@ int main(int argc, char** argv) {
                         ImVec2 tBase(bodyBR.x + 2.0f, p.y - blockH * 0.45f);
                         ImVec2 tBase2(bodyBR.x + 2.0f, p.y + blockH * 0.45f);
                         dl->AddTriangleFilled(tTip, tBase, tBase2, col);
+
+                        // Debug: block/triangle centers and label
+                        if (showCameraIconDebug) {
+                            ImVec2 bCenter((bodyTL.x + bodyBR.x) * 0.5f, (bodyTL.y + bodyBR.y) * 0.5f);
+                            ImVec2 tCenter((tTip.x + tBase.x + tBase2.x) / 3.0f, (tTip.y + tBase.y + tBase2.y) / 3.0f);
+                            dl->AddCircleFilled(bCenter, 3.0f, IM_COL32(0,255,0,255), 12);
+                            dl->AddCircleFilled(tCenter, 3.0f, IM_COL32(255,0,0,255), 12);
+                            dl->AddText(ImVec2(bCenter.x + 6.0f, bCenter.y - 6.0f), IM_COL32(0,255,0,255), "B");
+                            dl->AddText(ImVec2(tCenter.x + 6.0f, tCenter.y - 6.0f), IM_COL32(255,0,0,255), "T");
+                            // Which draw path
+                            dl->AddText(ImVec2(p.x + 6.0f, p.y + blockH * 0.6f), IM_COL32(255,200,0,255), "Fb");
+                            dl->AddLine(bCenter, tCenter, IM_COL32(255,255,0,160), 1.0f);
+                        }
+                    }
+                    else {
+                        // If texture was used, optionally show 'Tex' label for debugging
+                        if (showCameraIconDebug) {
+                            dl->AddText(ImVec2(p.x + 6.0f, p.y + 6.0f), IM_COL32(0,200,255,255), "Tex");
+                        }
                     }
 
                     // Forward indicator (same as before)
