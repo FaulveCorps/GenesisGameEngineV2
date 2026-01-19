@@ -267,6 +267,10 @@ int main(int argc, char** argv) {
     bool showAudioSources = true;
     bool showParticles = true;
     bool showPhysicsBodies = true;
+    bool showCameraFOV = true;
+    bool reloadSceneIcons = false; // one-shot: set true to regenerate in-memory overlay icons at runtime
+    bool forceSimpleCameraIcon = true; // when true, always draw simple block+triangle for camera icons (no texture)
+    bool showCameraIconDebug = false; // draw debug markers near camera icons (B/T and Tex/Fb label)
     char commandSearchBuffer[128] = "";
     int selectedCommandIndex = 0;
 
@@ -715,7 +719,12 @@ int main(int argc, char** argv) {
                 ImGui::MenuItem("Show Colliders", nullptr, &showColliders);
                 ImGui::MenuItem("Show Audio Sources", nullptr, &showAudioSources);
                 ImGui::MenuItem("Show Particle Systems", nullptr, &showParticles);
+                ImGui::MenuItem("Show Camera FOV", nullptr, &showCameraFOV);
                 ImGui::MenuItem("Show Physics Bodies", nullptr, &showPhysicsBodies);
+                ImGui::Separator();
+                ImGui::MenuItem("Force Simple Camera Icon (█◀)", nullptr, &forceSimpleCameraIcon);
+                ImGui::MenuItem("Show Camera Icon Debug", nullptr, &showCameraIconDebug);
+                if (ImGui::MenuItem("Reload Scene Icons")) reloadSceneIcons = true;
                 if (ImGui::MenuItem("Reset Layout")) { requestResetLayout = true; }
                 ImGui::EndMenu();
             }
@@ -1092,31 +1101,52 @@ int main(int argc, char** argv) {
                 // Simple in-memory icon generation (lazy). Keep these local to editor scope.
                 static std::shared_ptr<Genesis::Engine::Texture> s_camIcon;
                 static std::shared_ptr<Genesis::Engine::Texture> s_lightIcon;
+                static std::shared_ptr<Genesis::Engine::Texture> s_audioIcon;
+                static std::shared_ptr<Genesis::Engine::Texture> s_particleIcon;
+                static std::shared_ptr<Genesis::Engine::Texture> s_rbIcon;
+                if (reloadSceneIcons) {
+                    s_camIcon.reset(); s_lightIcon.reset(); s_audioIcon.reset(); s_particleIcon.reset(); s_rbIcon.reset();
+                    reloadSceneIcons = false;
+                }
                 auto CreateCameraIcon = [&]() -> std::shared_ptr<Genesis::Engine::Texture> {
                     if (s_camIcon) return s_camIcon;
                     const int iw = 64, ih = 64;
                     std::vector<uint8_t> px((size_t)iw * ih * 4, 0);
-                    // Camera body (scaled proportions)
-                    int bodyLeft = std::max(1, iw / 8);
-                    int bodyRight = iw - std::max(1, iw / 8) - 1;
-                    int bodyTop = ih * 9 / 64;
-                    int bodyBottom = ih * 42 / 64;
-                    for (int y = 0; y < ih; ++y) {
-                        for (int x = 0; x < iw; ++x) {
-                            int i = (y * iw + x) * 4;
-                            if (x >= bodyLeft && x <= bodyRight && y >= bodyTop && y <= bodyBottom) {
-                                px[i+0] = 60; px[i+1] = 120; px[i+2] = 200; px[i+3] = 255;
-                            }
-                            // Lens (scaled)
-                            int cx = iw / 2 + std::max(1, iw / 16);
-                            int cy = ih / 2 + std::max(1, ih / 16);
-                            int dx = x - cx, dy = y - cy; int r2 = dx*dx + dy*dy;
-                            int lensR1 = std::max(1, iw / 6);
-                            int lensR2 = std::max(1, iw / 10);
-                            if (r2 <= lensR1 * lensR1) { px[i+0] = 240; px[i+1] = 240; px[i+2] = 240; px[i+3] = 255; }
-                            if (r2 <= lensR2 * lensR2) { px[i+0] = 30; px[i+1] = 30; px[i+2] = 40; px[i+3] = 255; }
-                        }
+
+                    auto setPixel = [&](int x, int y, uint8_t r, uint8_t g, uint8_t b, uint8_t a) {
+                        if (x < 0 || x >= iw || y < 0 || y >= ih) return;
+                        int i = (y * iw + x) * 4;
+                        px[i+0] = r; px[i+1] = g; px[i+2] = b; px[i+3] = a;
+                    };
+
+                    // Block (█) on the left
+                    const int blockW = 26, blockH = 22;
+                    const int blockLeft = 12;
+                    const int blockTop = (ih - blockH) / 2;
+                    for (int y = blockTop; y < blockTop + blockH; ++y) {
+                        for (int x = blockLeft; x < blockLeft + blockW; ++x) setPixel(x, y, 70, 70, 80, 255);
                     }
+
+                    // Left-pointing triangle (◀) immediately to the RIGHT of the block
+                    const int tipX = blockLeft + blockW + 2;
+                    const int tipY = ih / 2;
+                    const int halfTriH = 10;
+                    const int baseX = blockLeft + blockW + 12;
+                    const int topY = tipY - halfTriH;
+                    const int bottomY = tipY + halfTriH;
+                    for (int y = topY; y <= bottomY; ++y) {
+                        float f = float(y - topY) / float(bottomY - topY);
+                        int xMax = tipX + (int)(f * (baseX - tipX));
+                        for (int x = tipX; x <= xMax; ++x) setPixel(x, y, 70, 70, 80, 255);
+                    }
+
+                    // Small highlight on the block
+                    for (int y = blockTop + 3; y < blockTop + 8; ++y) for (int x = blockLeft + 3; x < blockLeft + 12; ++x) setPixel(x, y, 110, 110, 120, 140);
+
+                    // Outline
+                    for (int x = blockLeft; x < blockLeft + blockW; ++x) { setPixel(x, blockTop, 30,30,35,255); setPixel(x, blockTop + blockH - 1, 30,30,35,255); }
+                    for (int y = blockTop; y < blockTop + blockH; ++y) { setPixel(blockLeft, y, 30,30,35,255); setPixel(blockLeft + blockW - 1, y, 30,30,35,255); }
+
                     s_camIcon = Genesis::Engine::Texture::CreateFromMemory(iw, ih, px);
                     return s_camIcon;
                 };
@@ -1143,10 +1173,127 @@ int main(int argc, char** argv) {
                     return s_lightIcon;
                 };
 
+                // Audio/Particle/RigidBody icons
+                auto CreateAudioIcon = [&]() -> std::shared_ptr<Genesis::Engine::Texture> {
+                    if (s_audioIcon) return s_audioIcon;
+                    const int iw = 64, ih = 64;
+                    std::vector<uint8_t> px((size_t)iw * ih * 4, 0);
+
+                    auto setPixel = [&](int x, int y, uint8_t r, uint8_t g, uint8_t b, uint8_t a) {
+                        if (x < 0 || x >= iw || y < 0 || y >= ih) return;
+                        int idx = (y * iw + x) * 4;
+                        px[idx+0] = r; px[idx+1] = g; px[idx+2] = b; px[idx+3] = a;
+                    };
+
+                    // Speaker body (left)
+                    int bodyW = 18;
+                    int bodyH = 24;
+                    int bodyX = 8;
+                    int bodyY = (ih - bodyH) / 2;
+                    for (int y = bodyY; y < bodyY + bodyH; ++y) for (int x = bodyX; x < bodyX + bodyW; ++x) setPixel(x, y, 70, 70, 80, 255);
+
+                    // Speaker cone (triangle) inside body pointing right
+                    for (int y = 0; y < bodyH; ++y) {
+                        float t = (float)y / (float)(bodyH - 1);
+                        int left = bodyX + 2;
+                        int right = bodyX + bodyW - 2 + (int)(6.0f * (0.5f - fabsf(t - 0.5f)) );
+                        for (int x = left; x <= right; ++x) setPixel(x, bodyY + y, 180, 180, 190, 255);
+                    }
+
+                    // Sound wave arcs to the right of the speaker
+                    int cx = bodyX + bodyW + 6;
+                    int cy = ih / 2;
+                    for (int ring = 0; ring < 3; ++ring) {
+                        float r = 8.0f + ring * 6.0f;
+                        for (int y = cy - (int)r - 1; y <= cy + (int)r + 1; ++y) {
+                            for (int x = cx; x <= cx + (int)r + 6; ++x) {
+                                float dx = (float)x - (float)cx;
+                                float dy = (float)y - (float)cy;
+                                float dist = sqrtf(dx*dx + dy*dy);
+                                // only right-side arcs, thin band
+                                if (dist >= r - 1.2f && dist <= r + 1.2f && dx >= -2.0f) {
+                                    uint8_t alpha = (uint8_t)std::max(60, 220 - ring * 60 - (int)(fabsf(dist - r) * 80));
+                                    setPixel(x, y, 255, 200, 120, alpha);
+                                }
+                            }
+                        }
+                    }
+
+                    // small accent dot near speaker
+                    setPixel(cx + 2, cy - 8, 255, 255, 255, 220);
+
+                    s_audioIcon = Genesis::Engine::Texture::CreateFromMemory(iw, ih, px);
+                    return s_audioIcon;
+                };
+
+                auto CreateParticleIcon = [&]() -> std::shared_ptr<Genesis::Engine::Texture> {
+                    if (s_particleIcon) return s_particleIcon;
+                    const int iw = 64, ih = 64;
+                    std::vector<uint8_t> px((size_t)iw * ih * 4, 0);
+
+                    auto setPixel = [&](int x, int y, uint8_t r, uint8_t g, uint8_t b, uint8_t a) {
+                        if (x < 0 || x >= iw || y < 0 || y >= ih) return;
+                        int idx = (y * iw + x) * 4;
+                        px[idx+0] = r; px[idx+1] = g; px[idx+2] = b; px[idx+3] = a;
+                    };
+
+                    // Sparkle core (diamond / soft gradient)
+                    int cx = iw / 2, cy = ih / 2;
+                    for (int y = 0; y < ih; ++y) {
+                        for (int x = 0; x < iw; ++x) {
+                            int dx = x - cx, dy = y - cy;
+                            int man = abs(dx) + abs(dy);
+                            if (man <= 8) {
+                                uint8_t a = (uint8_t)std::max(0, 255 - man * 24);
+                                // warm golden core
+                                setPixel(x, y, 255, 230, 140, a);
+                            }
+                            // diagonal glints
+                            if (abs(dx - dy) <= 1 && abs(dx) <= 14) {
+                                int d = abs(dx);
+                                uint8_t a = (uint8_t)std::max(0, 160 - d * 10);
+                                if (a > 16) setPixel(x, y, 255, 210, 120, a);
+                            }
+                            if (abs(dx + dy) <= 1 && abs(dx) <= 14) {
+                                int d = abs(dx);
+                                uint8_t a = (uint8_t)std::max(0, 160 - d * 10);
+                                if (a > 16) setPixel(x, y, 255, 210, 120, a);
+                            }
+                            // small accent dots
+                            if ((dx == 11 && dy == -10) || (dx == -10 && dy == -6) || (dx == 9 && dy == 6)) {
+                                setPixel(x, y, 255, 255, 255, 220);
+                            }
+                        }
+                    }
+
+                    s_particleIcon = Genesis::Engine::Texture::CreateFromMemory(iw, ih, px);
+                    return s_particleIcon;
+                };
+
+                auto CreateRigidBodyIcon = [&]() -> std::shared_ptr<Genesis::Engine::Texture> {
+                    if (s_rbIcon) return s_rbIcon;
+                    const int iw = 64, ih = 64;
+                    std::vector<uint8_t> px((size_t)iw * ih * 4, 0);
+                    int bx0 = iw/4, bx1 = iw - iw/4;
+                    int by0 = ih/3, by1 = ih - ih/3;
+                    for (int y = 0; y < ih; ++y) {
+                        for (int x = 0; x < iw; ++x) {
+                            int i = (y * iw + x) * 4;
+                            if (x >= bx0 && x <= bx1 && y >= by0 && y <= by1) { px[i+0]=160; px[i+1]=160; px[i+2]=200; px[i+3]=255; }
+                        }
+                    }
+                    s_rbIcon = Genesis::Engine::Texture::CreateFromMemory(iw, ih, px);
+                    return s_rbIcon;
+                };
+
                 // Ensure textures exist and are uploaded when we have a renderer
-                CreateCameraIcon(); CreateLightIcon();
-                if (s_camIcon && currentRenderer) s_camIcon->UploadToRenderer(currentRenderer);
+                // Camera icon replaced by a canonical block+triangle vector/fallback; clear any prior camera texture to avoid remnants.
+                s_camIcon.reset();
+                CreateLightIcon(); CreateAudioIcon(); CreateParticleIcon(); CreateRigidBodyIcon();
                 if (s_lightIcon && currentRenderer) s_lightIcon->UploadToRenderer(currentRenderer);
+                if (s_audioIcon && currentRenderer) s_audioIcon->UploadToRenderer(currentRenderer);
+                if (s_particleIcon && currentRenderer) s_particleIcon->UploadToRenderer(currentRenderer);
+                if (s_rbIcon && currentRenderer) s_rbIcon->UploadToRenderer(currentRenderer);
 
                 auto IsOccluded = [&](int sx, int sy, float windowZ) {
                     if (!iconOcclusion) return false;
@@ -1175,16 +1322,52 @@ int main(int argc, char** argv) {
                     if (IsOccluded((int)p.x, (int)p.y, winZ)) continue;
 
                     bool drewTex = false;
-                    if (s_camIcon && s_camIcon->GetID() != 0) {
+                    // We prefer the canonical fallback '█◀' design; only use texture if explicitly allowed and present
+                    if (!forceSimpleCameraIcon && s_camIcon && s_camIcon->GetID() != 0) {
                         ImVec2 tl = ImVec2(p.x - half, p.y - half);
                         ImVec2 br = ImVec2(p.x + half, p.y + half);
                         dl->AddImage((ImTextureID)(uintptr_t)s_camIcon->GetID(), tl, br, ImVec2(0, 1), ImVec2(1, 0));
                         drewTex = true;
                     }
                     if (!drewTex) {
-                        ImU32 col = ImGui::GetColorU32(ImVec4(0.4f, 0.6f, 1.0f, 1.0f));
-                        dl->AddRectFilled(ImVec2(p.x - half, p.y - half * 0.7f), ImVec2(p.x + half, p.y + half * 0.7f), col, 3.0f);
-                        dl->AddCircleFilled(ImVec2(p.x + half * 0.4f, p.y), half * 0.35f, IM_COL32(30, 30, 40, 255));
+                        // Canonical symbol: block (█) on the left, left-pointing triangle (◀) immediately to its right
+                        ImU32 col = IM_COL32(70,70,80,255);
+                        float blockW = iconSize * 0.42f;
+                        float blockH = iconSize * 0.36f;
+                        float triW = blockW * 0.6f;
+
+                        // Place block slightly to the left of p and triangle to the right of the block
+                        ImVec2 bodyTL(p.x - blockW - triW * 0.5f, p.y - blockH * 0.5f);
+                        ImVec2 bodyBR(bodyTL.x + blockW, bodyTL.y + blockH);
+                        dl->AddRectFilled(bodyTL, bodyBR, col, 4.0f);
+                        dl->AddRect(bodyTL, bodyBR, IM_COL32(30,30,35,255), 2.0f);
+
+                        // Triangle pointing left, tip near the block
+                        ImVec2 triTip(bodyBR.x + 2.0f, p.y);
+                        ImVec2 triBase1(bodyBR.x + 2.0f + triW, p.y - blockH * 0.45f);
+                        ImVec2 triBase2(bodyBR.x + 2.0f + triW, p.y + blockH * 0.45f);
+                        dl->AddTriangleFilled(triTip, triBase1, triBase2, col);
+
+                        // Debug markers
+                        if (showCameraIconDebug) {
+                            ImVec2 bCenter((bodyTL.x + bodyBR.x) * 0.5f, (bodyTL.y + bodyBR.y) * 0.5f);
+                            ImVec2 tCenter((triTip.x + triBase1.x + triBase2.x) / 3.0f, (triTip.y + triBase1.y + triBase2.y) / 3.0f);
+                            dl->AddCircleFilled(bCenter, 3.0f, IM_COL32(0,255,0,255), 12);
+                            dl->AddCircleFilled(tCenter, 3.0f, IM_COL32(255,0,0,255), 12);
+                            dl->AddText(ImVec2(bCenter.x + 6.0f, bCenter.y - 6.0f), IM_COL32(0,255,0,255), "B");
+                            dl->AddText(ImVec2(tCenter.x + 6.0f, tCenter.y - 6.0f), IM_COL32(255,0,0,255), "T");
+                            dl->AddText(ImVec2(p.x + 6.0f, p.y + blockH * 0.6f), IM_COL32(255,200,0,255), "Fb");
+                            dl->AddLine(bCenter, tCenter, IM_COL32(255,255,0,160), 1.0f);
+                            // Numeric sanity check
+                            char buf[64];
+                            sprintf_s(buf, "B.x=%.1f T.x=%.1f", bCenter.x, tCenter.x);
+                            dl->AddText(ImVec2(p.x - 8.0f, p.y + blockH), IM_COL32(255,255,255,200), buf);
+                        }
+                    }
+                    else {
+                        if (showCameraIconDebug) {
+                            dl->AddText(ImVec2(p.x + 6.0f, p.y + 6.0f), IM_COL32(0,200,255,255), "Tex");
+                        }
                     }
 
                     // Forward indicator (same as before)
@@ -1199,6 +1382,84 @@ int main(int argc, char** argv) {
                         if (WorldToScreen(arrowWorld, arrowScr)) {
                             ImVec2 end((float)arrowScr.x, (float)arrowScr.y);
                             dl->AddLine(p, end, ImGui::GetColorU32(ImVec4(0.4f,0.6f,1.0f,1.0f)), 2.0f);
+                        }
+                    }
+
+                    // Camera FOV visualization
+                    if (showCameraFOV) {
+                        // Also get the camera component fields
+                        const auto& cc = camView.get<Genesis::Engine::CameraComponent>(entity);
+
+                        glm::vec3 dir = glm::normalize(fwd);
+                        glm::vec3 right = glm::vec3(rot * glm::vec4(1,0,0,0));
+                        glm::vec3 up = glm::vec3(rot * glm::vec4(0,1,0,0));
+
+                        float aspect = viewportSize.x / viewportSize.y;
+                        float tanHalf = tanf(glm::radians(cc.fov * 0.5f));
+                        float n = cc.nearPlane;
+                        float f = cc.farPlane;
+
+                        glm::vec3 nc = wp + dir * n;
+                        glm::vec3 fc = wp + dir * f;
+
+                        float hN = tanHalf * n; float wN = hN * aspect;
+                        float hF = tanHalf * f; float wF = hF * aspect;
+
+                        glm::vec3 nTL = nc + up * hN - right * wN;
+                        glm::vec3 nTR = nc + up * hN + right * wN;
+                        glm::vec3 nBR = nc - up * hN + right * wN;
+                        glm::vec3 nBL = nc - up * hN - right * wN;
+
+                        glm::vec3 fTL = fc + up * hF - right * wF;
+                        glm::vec3 fTR = fc + up * hF + right * wF;
+                        glm::vec3 fBR = fc - up * hF + right * wF;
+                        glm::vec3 fBL = fc - up * hF - right * wF;
+
+                        glm::vec2 sNTL, sNTR, sNBR, sNBL, sFTL, sFTR, sFBR, sFBL;
+                        float zNTL, zNTR, zNBR, zNBL, zFTL, zFTR, zFBR, zFBL;
+                        bool vNTL = WorldToScreen(nTL, sNTL, &zNTL);
+                        bool vNTR = WorldToScreen(nTR, sNTR, &zNTR);
+                        bool vNBR = WorldToScreen(nBR, sNBR, &zNBR);
+                        bool vNBL = WorldToScreen(nBL, sNBL, &zNBL);
+                        bool vFTL = WorldToScreen(fTL, sFTL, &zFTL);
+                        bool vFTR = WorldToScreen(fTR, sFTR, &zFTR);
+                        bool vFBR = WorldToScreen(fBR, sFBR, &zFBR);
+                        bool vFBL = WorldToScreen(fBL, sFBL, &zFBL);
+
+                        if (vFTL || vFTR || vFBR || vFBL || vNTL || vNTR || vNBR || vNBL) {
+                            // occlusion test at far center
+                            glm::vec2 scrFc; float zFc;
+                            bool vFc = WorldToScreen(fc, scrFc, &zFc);
+                            bool fcOccluded = false;
+                            if (vFc) fcOccluded = IsOccluded((int)scrFc.x, (int)scrFc.y, zFc);
+
+                            ImU32 fillCol = ImGui::GetColorU32(ImVec4(0.4f,0.6f,1.0f, fcOccluded ? 0.18f : 0.45f));
+                            ImU32 outlineCol = ImGui::GetColorU32(ImVec4(0.4f,0.6f,1.0f, fcOccluded ? 0.12f : 1.0f));
+
+                            // Draw far plane if fully visible
+                            if (vFTL && vFTR && vFBR && vFBL) {
+                                ImVec2 farPts[4] = { ImVec2((float)sFTL.x,(float)sFTL.y), ImVec2((float)sFTR.x,(float)sFTR.y), ImVec2((float)sFBR.x,(float)sFBR.y), ImVec2((float)sFBL.x,(float)sFBL.y) };
+                                dl->AddConvexPolyFilled(farPts, 4, fillCol);
+                                dl->AddPolyline(farPts, 4, outlineCol, true, 1.5f);
+                            } else {
+                                // draw visible segments between far corners
+                                if (vFTL && vFTR) dl->AddLine(ImVec2((float)sFTL.x,(float)sFTL.y), ImVec2((float)sFTR.x,(float)sFTR.y), outlineCol, 1.0f);
+                                if (vFTR && vFBR) dl->AddLine(ImVec2((float)sFTR.x,(float)sFTR.y), ImVec2((float)sFBR.x,(float)sFBR.y), outlineCol, 1.0f);
+                                if (vFBR && vFBL) dl->AddLine(ImVec2((float)sFBR.x,(float)sFBR.y), ImVec2((float)sFBL.x,(float)sFBL.y), outlineCol, 1.0f);
+                                if (vFBL && vFTL) dl->AddLine(ImVec2((float)sFBL.x,(float)sFBL.y), ImVec2((float)sFTL.x,(float)sFTL.y), outlineCol, 1.0f);
+                            }
+
+                            // draw edges from camera apex to far corners
+                            if (vFTL) dl->AddLine(p, ImVec2((float)sFTL.x,(float)sFTL.y), outlineCol, 1.0f);
+                            if (vFTR) dl->AddLine(p, ImVec2((float)sFTR.x,(float)sFTR.y), outlineCol, 1.0f);
+                            if (vFBR) dl->AddLine(p, ImVec2((float)sFBR.x,(float)sFBR.y), outlineCol, 1.0f);
+                            if (vFBL) dl->AddLine(p, ImVec2((float)sFBL.x,(float)sFBL.y), outlineCol, 1.0f);
+
+                            // near plane outline (thin)
+                            if (vNTL && vNTR && vNBR && vNBL) {
+                                ImVec2 nearPts[4] = { ImVec2((float)sNTL.x,(float)sNTL.y), ImVec2((float)sNTR.x,(float)sNTR.y), ImVec2((float)sNBR.x,(float)sNBR.y), ImVec2((float)sNBL.x,(float)sNBL.y) };
+                                dl->AddPolyline(nearPts, 4, IM_COL32(200,200,255,200), true, 1.0f);
+                            }
                         }
                     }
 
@@ -1267,6 +1528,163 @@ int main(int argc, char** argv) {
                         ImVec2 m = io.MousePos;
                         if (m.x >= p.x - half && m.x <= p.x + half && m.y >= p.y - half && m.y <= p.y + half) {
                             selectedEntity = entity;
+                        }
+                    }
+                }
+
+                // Audio sources (icons + ranges)
+                if (showAudioSources) {
+                    auto audioView = activeScene->Registry().view<Genesis::Engine::AudioComponent, Genesis::Engine::Transform>();
+                    for (auto entity : audioView) {
+                        const auto& tc = audioView.get<Genesis::Engine::Transform>(entity);
+                        const auto& ac = audioView.get<Genesis::Engine::AudioComponent>(entity);
+                        glm::vec3 wp(tc.x, tc.y, tc.z);
+                        glm::vec2 sp; float winZ = 0.0f;
+                        if (!WorldToScreen(wp, sp, &winZ)) continue;
+                        ImVec2 p((float)sp.x, (float)sp.y);
+
+                        if (IsOccluded((int)p.x, (int)p.y, winZ)) continue;
+
+                        bool drewTex = false;
+                        if (s_audioIcon && s_audioIcon->GetID() != 0) {
+                            ImVec2 tl = ImVec2(p.x - half, p.y - half);
+                            ImVec2 br = ImVec2(p.x + half, p.y + half);
+                            dl->AddImage((ImTextureID)(uintptr_t)s_audioIcon->GetID(), tl, br, ImVec2(0, 1), ImVec2(1, 0));
+                            drewTex = true;
+                        }
+                        if (!drewTex) {
+                            // Speaker body
+                            ImU32 bodyCol = IM_COL32(70,70,80,255);
+                            ImU32 coneCol = IM_COL32(200,200,210,255);
+                            ImVec2 bodyTL(p.x - half * 0.8f, p.y - half * 0.35f);
+                            ImVec2 bodyBR(p.x - half * 0.3f, p.y + half * 0.35f);
+                            dl->AddRectFilled(bodyTL, bodyBR, bodyCol, 3.0f);
+
+                            // cone triangle (points right)
+                            ImVec2 triA(bodyTL.x + 2.0f, p.y);
+                            ImVec2 triB(bodyBR.x + 2.0f, p.y - half * 0.22f);
+                            ImVec2 triC(bodyBR.x + 2.0f, p.y + half * 0.22f);
+                            dl->AddTriangleFilled(triA, triB, triC, coneCol);
+
+                            // waves (three arcs to the right)
+                            ImU32 waveCol = IM_COL32(255,200,120,200);
+                            const int segments = 24;
+                            for (int ring = 0; ring < 3; ++ring) {
+                                float r = half * 0.45f + ring * (half * 0.22f);
+                                std::vector<ImVec2> pts;
+                                pts.reserve(segments+1);
+                                float ang0 = glm::radians(-35.0f);
+                                float ang1 = glm::radians(35.0f);
+                                for (int i = 0; i <= segments; ++i) {
+                                    float t = (float)i / (float)segments;
+                                    float a = ang0 + (ang1 - ang0) * t;
+                                    ImVec2 pt(p.x + cosf(a) * r + half * 0.1f, p.y + sinf(a) * r);
+                                    pts.push_back(pt);
+                                }
+                                dl->AddPolyline(pts.data(), (int)pts.size(), waveCol, false, 2.0f);
+                            }
+
+                            // small accent
+                            dl->AddCircleFilled(ImVec2(bodyBR.x + 4.0f, p.y - half * 0.28f), half * 0.06f, IM_COL32(255,255,255,220));
+                        }
+
+                        // Ranges for spatial audio
+                        if (ac.spatial) {
+                            if (ac.minDistance > 0.0f) {
+                                glm::vec3 rworld = wp + glm::vec3(ac.minDistance, 0, 0);
+                                glm::vec2 rscr;
+                                if (WorldToScreen(rworld, rscr)) {
+                                    float pixelR = sqrtf((rscr.x - p.x)*(rscr.x - p.x) + (rscr.y - p.y)*(rscr.y - p.y));
+                                    dl->AddCircle(p, pixelR, IM_COL32(255,255,255,80), 64, 1.0f);
+                                }
+                            }
+                            if (ac.maxDistance > ac.minDistance) {
+                                glm::vec3 rworld = wp + glm::vec3(ac.maxDistance, 0, 0);
+                                glm::vec2 rscr;
+                                if (WorldToScreen(rworld, rscr)) {
+                                    float pixelR = sqrtf((rscr.x - p.x)*(rscr.x - p.x) + (rscr.y - p.y)*(rscr.y - p.y));
+                                    dl->AddCircle(p, pixelR, IM_COL32(255,255,255,60), 64, 1.5f);
+                                }
+                            }
+                        }
+
+                        // selection hit test
+                        if (viewportHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+                            ImVec2 m = io.MousePos;
+                            if (m.x >= p.x - half && m.x <= p.x + half && m.y >= p.y - half && m.y <= p.y + half) {
+                                selectedEntity = entity;
+                            }
+                        }
+                    }
+                }
+
+                // Particle systems (icons + emitter radius)
+                if (showParticles) {
+                    auto partView = activeScene->Registry().view<Genesis::Engine::ParticleSystemComponent, Genesis::Engine::Transform>();
+                    for (auto entity : partView) {
+                        const auto& tc = partView.get<Genesis::Engine::Transform>(entity);
+                        const auto& pc = partView.get<Genesis::Engine::ParticleSystemComponent>(entity);
+                        glm::vec3 wp(tc.x, tc.y, tc.z);
+                        glm::vec2 sp; float winZ = 0.0f;
+                        if (!WorldToScreen(wp, sp, &winZ)) continue;
+                        ImVec2 p((float)sp.x, (float)sp.y);
+
+                        if (IsOccluded((int)p.x, (int)p.y, winZ)) continue;
+
+                        bool drewTex = false;
+                        if (s_particleIcon && s_particleIcon->GetID() != 0) {
+                            ImVec2 tl = ImVec2(p.x - half, p.y - half);
+                            ImVec2 br = ImVec2(p.x + half, p.y + half);
+                            // Prefer the generated texture when available and not forcing fallback
+                            if (!forceSimpleCameraIcon) {
+                                dl->AddImage((ImTextureID)(uintptr_t)s_particleIcon->GetID(), tl, br, ImVec2(0, 1), ImVec2(1, 0));
+                                drewTex = true;
+                            }
+                        }
+                        if (!drewTex) {
+                            // Sparkle fallback (✨): diamond core + glint arms + small accent dots
+                            ImU32 coreCol = IM_COL32(255,220,110,220);
+                            ImU32 outlineCol = IM_COL32(255,180,60,200);
+                            ImU32 whiteCol = IM_COL32(255,255,255,220);
+
+                            float r = half * 0.36f;
+                            ImVec2 top(p.x, p.y - r);
+                            ImVec2 right(p.x + r, p.y);
+                            ImVec2 bottom(p.x, p.y + r);
+                            ImVec2 left(p.x - r, p.y);
+                            ImVec2 diamond[4] = { top, right, bottom, left };
+
+                            dl->AddConvexPolyFilled(diamond, 4, coreCol);
+                            dl->AddPolyline(diamond, 4, outlineCol, true, 1.6f);
+
+                            // subtle glint arms
+                            float arm = r * 1.1f;
+                            dl->AddLine(ImVec2(p.x - arm * 0.2f, p.y - arm), ImVec2(p.x + arm * 0.2f, p.y - arm * 0.3f), whiteCol, 1.0f);
+                            dl->AddLine(ImVec2(p.x - arm * 0.2f, p.y + arm), ImVec2(p.x + arm * 0.2f, p.y + arm * 0.3f), whiteCol, 1.0f);
+                            dl->AddLine(ImVec2(p.x - arm, p.y - arm * 0.2f), ImVec2(p.x - arm * 0.3f, p.y + arm * 0.2f), whiteCol, 1.0f);
+                            dl->AddLine(ImVec2(p.x + arm, p.y - arm * 0.2f), ImVec2(p.x + arm * 0.3f, p.y + arm * 0.2f), whiteCol, 1.0f);
+
+                            // small accent dots
+                            dl->AddCircleFilled(ImVec2(p.x + r * 0.6f, p.y - r * 0.6f), half * 0.06f, whiteCol);
+                            dl->AddCircleFilled(ImVec2(p.x - r * 0.6f, p.y - r * 0.4f), half * 0.05f, IM_COL32(255,200,255,200));
+                        }
+
+                        // emitter radius
+                        if (pc.emitterRadius > 0.0f) {
+                            glm::vec3 rworld = wp + glm::vec3(pc.emitterRadius, 0, 0);
+                            glm::vec2 rscr;
+                            if (WorldToScreen(rworld, rscr)) {
+                                float pixelR = sqrtf((rscr.x - p.x)*(rscr.x - p.x) + (rscr.y - p.y)*(rscr.y - p.y));
+                                dl->AddCircle(p, pixelR, IM_COL32(255,255,255,100), 64, 1.5f);
+                            }
+                        }
+
+                        // selection hit test
+                        if (viewportHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+                            ImVec2 m = io.MousePos;
+                            if (m.x >= p.x - half && m.x <= p.x + half && m.y >= p.y - half && m.y <= p.y + half) {
+                                selectedEntity = entity;
+                            }
                         }
                     }
                 }
@@ -1860,6 +2278,30 @@ int main(int argc, char** argv) {
                             mc.model = std::make_shared<Genesis::Engine::Model>();
                             mc.sourcePath.clear();
                             activeScene->Registry().emplace<Genesis::Engine::ModelComponent>(selectedEntity, mc);
+                            if (editorState == EditorState::Edit) sceneDirty = true;
+                        }
+                    }
+                    if (ImGui::MenuItem("Camera")) {
+                        if (!activeScene->Registry().all_of<Genesis::Engine::CameraComponent>(selectedEntity)) {
+                            activeScene->Registry().emplace<Genesis::Engine::CameraComponent>(selectedEntity);
+                            if (editorState == EditorState::Edit) sceneDirty = true;
+                        }
+                    }
+                    if (ImGui::MenuItem("Rigid Body")) {
+                        if (!activeScene->Registry().all_of<Genesis::Engine::RigidBodyComponent>(selectedEntity)) {
+                            activeScene->Registry().emplace<Genesis::Engine::RigidBodyComponent>(selectedEntity);
+                            if (editorState == EditorState::Edit) sceneDirty = true;
+                        }
+                    }
+                    if (ImGui::MenuItem("Audio")) {
+                        if (!activeScene->Registry().all_of<Genesis::Engine::AudioComponent>(selectedEntity)) {
+                            activeScene->Registry().emplace<Genesis::Engine::AudioComponent>(selectedEntity);
+                            if (editorState == EditorState::Edit) sceneDirty = true;
+                        }
+                    }
+                    if (ImGui::MenuItem("Particle System")) {
+                        if (!activeScene->Registry().all_of<Genesis::Engine::ParticleSystemComponent>(selectedEntity)) {
+                            activeScene->Registry().emplace<Genesis::Engine::ParticleSystemComponent>(selectedEntity);
                             if (editorState == EditorState::Edit) sceneDirty = true;
                         }
                     }

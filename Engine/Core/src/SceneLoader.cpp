@@ -101,6 +101,33 @@ bool SceneLoader::LoadScene(Scene& scene, const std::string& filePath) {
             c.primary = (prim != 0);
             scene.Registry().emplace<CameraComponent>(currentEntity, c);
         }
+        else if (token == "AUDIO" && currentEntity != entt::null) {
+            AudioComponent a;
+            std::string path;
+            int loop = 0, play = 0, spatial = 0;
+            ss >> path >> a.volume >> a.pitch >> loop >> play >> spatial >> a.minDistance >> a.maxDistance;
+            if (path != "NONE") a.soundPath = path; else a.soundPath.clear();
+            a.loop = (loop != 0);
+            a.playOnAwake = (play != 0);
+            a.spatial = (spatial != 0);
+            scene.Registry().emplace<AudioComponent>(currentEntity, a);
+        }
+        else if (token == "PARTICLE" && currentEntity != entt::null) {
+            ParticleSystemComponent p;
+            int looping = 0, play = 0;
+            ss >> p.duration >> looping >> play >> p.startLifetime >> p.startSpeed >> p.startSize >> p.startColor[0] >> p.startColor[1] >> p.startColor[2] >> p.startColor[3] >> p.rateOverTime >> p.emitterRadius;
+            p.looping = (looping != 0);
+            p.playOnAwake = (play != 0);
+            scene.Registry().emplace<ParticleSystemComponent>(currentEntity, p);
+        }
+        else if (token == "RIGIDBODY" && currentEntity != entt::null) {
+            RigidBodyComponent r;
+            int useGrav = 1, kin = 0;
+            ss >> r.mass >> useGrav >> kin;
+            r.useGravity = (useGrav != 0);
+            r.isKinematic = (kin != 0);
+            scene.Registry().emplace<RigidBodyComponent>(currentEntity, r);
+        }
     }
     
     std::cout << "SceneLoader: Loaded scene from " << filePath << std::endl;
@@ -183,6 +210,22 @@ bool SceneLoader::SaveScene(const Scene& scene, const std::string& filePath) {
                      << c.nearPlane << " " 
                      << c.farPlane << " " 
                      << (c.primary ? 1 : 0) << "\n";
+            }
+
+            if (reg.any_of<AudioComponent>(entity)) {
+                const auto& a = reg.get<AudioComponent>(entity);
+                std::string path = a.soundPath.empty() ? "NONE" : a.soundPath;
+                file << "AUDIO " << path << " " << a.volume << " " << a.pitch << " " << (a.loop ? 1 : 0) << " " << (a.playOnAwake ? 1 : 0) << " " << (a.spatial ? 1 : 0) << " " << a.minDistance << " " << a.maxDistance << "\n";
+            }
+
+            if (reg.any_of<ParticleSystemComponent>(entity)) {
+                const auto& p = reg.get<ParticleSystemComponent>(entity);
+                file << "PARTICLE " << p.duration << " " << (p.looping ? 1 : 0) << " " << (p.playOnAwake ? 1 : 0) << " " << p.startLifetime << " " << p.startSpeed << " " << p.startSize << " " << p.startColor[0] << " " << p.startColor[1] << " " << p.startColor[2] << " " << p.startColor[3] << " " << p.rateOverTime << " " << p.emitterRadius << "\n";
+            }
+
+            if (reg.any_of<RigidBodyComponent>(entity)) {
+                const auto& r = reg.get<RigidBodyComponent>(entity);
+                file << "RIGIDBODY " << r.mass << " " << (r.useGravity ? 1 : 0) << " " << (r.isKinematic ? 1 : 0) << "\n";
             }
 
             file << "\n";
