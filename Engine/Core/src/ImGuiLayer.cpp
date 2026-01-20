@@ -60,15 +60,29 @@ ImGuiLayer::ImGuiLayer(SDL_Window* window, SDL_GLContext context)
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
     io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable; // Enable Multi-Viewport / Platform Windows
 
-    // Load Monoid font
-    ImFont* font = io.Fonts->AddFontFromFileTTF("Assets/fonts/Monoid.ttf", 18.0f);
-    if (font) {
-        // Build atlas now to ensure it works
-        // io.Fonts->Build(); // Normally handled by backend
-        std::cout << "Successfully loaded Monoid font." << std::endl;
-    } else {
-        std::cerr << "Failed to load Monoid font from Assets/fonts/Monoid.ttf" << std::endl;
-        // Fallback to default
+    // Load a modern UI font (with platform-aware fallbacks).
+    const float fontSize = 17.0f;
+    const char* fontCandidates[] = {
+#ifdef _WIN32
+        "C:/Windows/Fonts/SegoeUIVariable.ttf",
+        "C:/Windows/Fonts/segoeui.ttf",
+#endif
+        "Assets/fonts/Inter.ttf",
+        "Assets/fonts/Inter-Regular.ttf",
+        "Assets/fonts/Monoid.ttf"
+    };
+
+    ImFont* font = nullptr;
+    for (const char* path : fontCandidates) {
+        font = io.Fonts->AddFontFromFileTTF(path, fontSize);
+        if (font) {
+            std::cout << "Loaded editor font: " << path << std::endl;
+            break;
+        }
+    }
+
+    if (!font) {
+        std::cerr << "Failed to load editor fonts. Falling back to default." << std::endl;
         io.Fonts->AddFontDefault();
     }
 

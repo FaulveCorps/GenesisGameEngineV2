@@ -1377,6 +1377,14 @@ int main(int argc, char** argv) {
             ImGui::Image((ImTextureID)texID, viewportSize, ImVec2(0, 1), ImVec2(1, 0));
         }
 
+        // Draw Grid (keep under overlays)
+        if (showGrid) {
+            ImGuizmo::SetDrawlist();
+            ImGuizmo::SetRect(viewportTopLeft.x, viewportTopLeft.y, viewportSize.x, viewportSize.y);
+            glm::mat4 identityMatrix = glm::mat4(1.0f);
+            ImGuizmo::DrawGrid(glm::value_ptr(view), glm::value_ptr(projection), glm::value_ptr(identityMatrix), 100.f);
+        }
+
         // Draw overlay icons for non-visible objects (camera, lights)
         if (showSceneIcons && viewportSize.x > 1.0f && viewportSize.y > 1.0f) {
             auto WorldToScreen = [&](const glm::vec3& worldPos, glm::vec2& outScreen, glm::vec2& outUv, float& outDepth01) -> bool {
@@ -1424,11 +1432,77 @@ int main(int argc, char** argv) {
             ImGuiIO& io = ImGui::GetIO();
             const bool clicked = viewportHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left);
             bool consumedClick = false;
-            const float iconSize = 22.0f;
+            const float iconSize = 32.0f;
             const float hitRadiusSq = (iconSize * 0.5f) * (iconSize * 0.5f);
+            const bool useVectorIcons = true;
+
+            auto Clamp01 = [](float v) { return v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v); };
+            auto Shade = [&](const ImVec4& c, float mul, float alphaMul = 1.0f) -> ImU32 {
+                return ImGui::GetColorU32(ImVec4(
+                    Clamp01(c.x * mul),
+                    Clamp01(c.y * mul),
+                    Clamp01(c.z * mul),
+                    Clamp01(c.w * alphaMul)));
+            };
+            auto BoostColor = [&](const ImVec4& c, float add) {
+                return ImVec4(Clamp01(c.x + add), Clamp01(c.y + add), Clamp01(c.z + add), c.w);
+            };
+            auto DrawCameraIcon = [&](ImVec2 center, float size, const ImVec4& base) {
+                const float half = size * 0.5f;
+                const float bodyH = size * 0.58f;
+                const float bodyW = size * 0.92f;
+                const float rounding = size * 0.18f;
+                ImVec2 bodyMin(center.x - bodyW * 0.5f, center.y - bodyH * 0.5f);
+                ImVec2 bodyMax(center.x + bodyW * 0.5f, center.y + bodyH * 0.5f);
+                dl->AddRectFilled(ImVec2(bodyMin.x + 1.0f, bodyMin.y + 1.0f), ImVec2(bodyMax.x + 1.0f, bodyMax.y + 1.0f), IM_COL32(0, 0, 0, 80), rounding);
+                dl->AddRectFilled(bodyMin, bodyMax, Shade(base, 0.95f), rounding);
+                dl->AddRect(bodyMin, bodyMax, Shade(base, 1.25f), rounding, 0, 1.25f);
+
+                const float humpW = size * 0.46f;
+                const float humpH = size * 0.22f;
+                ImVec2 humpMin(center.x - humpW * 0.5f, bodyMin.y - humpH * 0.45f);
+                ImVec2 humpMax(center.x + humpW * 0.5f, bodyMin.y + humpH * 0.55f);
+                dl->AddRectFilled(humpMin, humpMax, Shade(base, 0.88f), rounding * 0.6f);
+                dl->AddRect(humpMin, humpMax, Shade(base, 1.18f), rounding * 0.6f, 0, 1.0f);
+
+                ImVec2 lensCenter(center.x + size * 0.18f, center.y);
+                float lensR = size * 0.21f;
+                dl->AddCircleFilled(lensCenter, lensR + 1.0f, IM_COL32(0, 0, 0, 80), 24);
+                dl->AddCircleFilled(lensCenter, lensR, IM_COL32(245, 245, 255, 220), 24);
+                dl->AddCircle(lensCenter, lensR, Shade(base, 1.35f), 24, 1.2f);
+                dl->AddCircleFilled(ImVec2(lensCenter.x - lensR * 0.35f, lensCenter.y - lensR * 0.35f), lensR * 0.28f, IM_COL32(255, 255, 255, 150), 16);
+            };
+            auto DrawDirectionalLightIcon = [&](ImVec2 center, float size, const ImVec4& base) {
+                constexpr float kPi = 3.1415926535f;
+                ImVec4 color = BoostColor(base, 0.15f);
+                const float sunR = size * 0.28f;
+                dl->AddCircleFilled(ImVec2(center.x + 1.0f, center.y + 1.0f), sunR + 1.0f, IM_COL32(0, 0, 0, 70), 24);
+                dl->AddCircleFilled(center, sunR, Shade(color, 1.0f), 24);
+                dl->AddCircle(center, sunR, Shade(color, 1.35f), 24, 1.1f);
+
+                const int rayCount = 8;
+                const float rayLen = size * 0.48f;
+                const float rayInner = sunR + size * 0.06f;
+                for (int i = 0; i < rayCount; ++i) {
+                    float a = (kPi * 2.0f * i) / rayCount;
+                    ImVec2 dir(std::cos(a), std::sin(a));
+                    ImVec2 p0(center.x + dir.x * rayInner, center.y + dir.y * rayInner);
+                    ImVec2 p1(center.x + dir.x * rayLen, center.y + dir.y * rayLen);
+                    dl->AddLine(p0, p1, Shade(color, 1.1f), 1.4f);
+                }
+            };
+            auto DrawPointLightIcon = [&](ImVec2 center, float size, const ImVec4& base) {
+                ImVec4 color = BoostColor(base, 0.1f);
+                const float coreR = size * 0.22f;
+                const float glowR = size * 0.42f;
+                dl->AddCircleFilled(ImVec2(center.x + 1.0f, center.y + 1.0f), glowR + 1.0f, IM_COL32(0, 0, 0, 70), 24);
+                dl->AddCircleFilled(center, coreR, Shade(color, 1.0f), 24);
+                dl->AddCircle(center, coreR, Shade(color, 1.35f), 24, 1.1f);
+                dl->AddCircle(center, glowR, IM_COL32(255, 255, 255, 140), 24, 1.2f);
+            };
 
             // Camera icons
-            if (cameraTexId) {
+            {
                 auto camView = activeScene->Registry().view<Genesis::Engine::CameraComponent, Genesis::Engine::Transform>();
                 for (auto entity : camView) {
                     const auto& tc = camView.get<Genesis::Engine::Transform>(entity);
@@ -1442,8 +1516,12 @@ int main(int argc, char** argv) {
                     ImVec2 half(iconSize * 0.5f, iconSize * 0.5f);
                     ImVec2 pMin(p.x - half.x, p.y - half.y);
                     ImVec2 pMax(p.x + half.x, p.y + half.y);
-                    ImU32 tint = ImGui::GetColorU32(ImVec4(0.6f, 0.8f, 1.0f, 1.0f));
-                    dl->AddImage(cameraTexId, pMin, pMax, ImVec2(0, 0), ImVec2(1, 1), tint);
+                    ImVec4 baseColor(0.58f, 0.8f, 1.0f, 1.0f);
+                    if (!useVectorIcons && cameraTexId) {
+                        dl->AddImage(cameraTexId, pMin, pMax, ImVec2(0, 0), ImVec2(1, 1), ImGui::GetColorU32(baseColor));
+                    } else {
+                        DrawCameraIcon(p, iconSize, baseColor);
+                    }
 
                     if (selectedEntity == entity) {
                         dl->AddRect(pMin, pMax, IM_COL32(255, 255, 255, 200), 2.0f, 0, 1.5f);
@@ -1472,14 +1550,22 @@ int main(int argc, char** argv) {
                 if (IsOccluded(uv, depth01)) continue;
 
                 ImTextureID lightTexId = (lc.type == Genesis::Engine::LightType::Directional) ? lightDirTexId : lightPointTexId;
-                if (!lightTexId) continue;
+                const bool hasLightIcon = (lightTexId != 0);
 
                 ImVec2 p(sp.x, sp.y);
                 ImVec2 half(iconSize * 0.5f, iconSize * 0.5f);
                 ImVec2 pMin(p.x - half.x, p.y - half.y);
                 ImVec2 pMax(p.x + half.x, p.y + half.y);
-                ImU32 tint = ImGui::GetColorU32(ImVec4(lc.color[0], lc.color[1], lc.color[2], 1.0f));
-                dl->AddImage(lightTexId, pMin, pMax, ImVec2(0, 0), ImVec2(1, 1), tint);
+                ImVec4 baseColor(lc.color[0], lc.color[1], lc.color[2], 1.0f);
+                if (!useVectorIcons && hasLightIcon) {
+                    dl->AddImage(lightTexId, pMin, pMax, ImVec2(0, 0), ImVec2(1, 1), ImGui::GetColorU32(baseColor));
+                } else {
+                    if (lc.type == Genesis::Engine::LightType::Directional) {
+                        DrawDirectionalLightIcon(p, iconSize, baseColor);
+                    } else {
+                        DrawPointLightIcon(p, iconSize, baseColor);
+                    }
+                }
 
                 if (selectedEntity == entity) {
                     dl->AddRect(pMin, pMax, IM_COL32(255, 255, 255, 200), 2.0f, 0, 1.5f);
@@ -1537,14 +1623,6 @@ int main(int argc, char** argv) {
                 }
             }
             ImGui::EndDragDropTarget();
-        }
-
-        // Draw Grid
-        if (showGrid) {
-            ImGuizmo::SetDrawlist();
-            ImGuizmo::SetRect(viewportTopLeft.x, viewportTopLeft.y, viewportSize.x, viewportSize.y);
-            glm::mat4 identityMatrix = glm::mat4(1.0f);
-            ImGuizmo::DrawGrid(glm::value_ptr(view), glm::value_ptr(projection), glm::value_ptr(identityMatrix), 100.f);
         }
 
         // View Manipulate (View Cube) - position already calculated above for conflict detection
