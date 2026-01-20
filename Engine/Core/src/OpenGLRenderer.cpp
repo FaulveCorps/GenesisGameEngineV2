@@ -5,6 +5,7 @@
 #include <SDL.h>
 #include <iostream>
 #include <cmath>
+#include <algorithm>
 #include <fstream>
 #include <sstream>
 #include <cstring>
@@ -74,7 +75,6 @@ static PFNGLENABLEPROC pglEnable = nullptr;
 static PFNGLCLEARPROC pglClear = nullptr;
 static PFNGLBLENDFUNCPROC pglBlendFunc = nullptr;
 static PFNGLDRAWBUFFERPROC pglDrawBuffer = nullptr;
-static PFNGLREADPIXELSPROC pglReadPixels = nullptr; 
 
 static PFNGLGENVERTEXARRAYSPROC pglGenVertexArrays = nullptr;
 static PFNGLBINDVERTEXARRAYPROC pglBindVertexArray = nullptr;
@@ -114,6 +114,7 @@ static PFNGLTEXIMAGE2DPROC pglTexImage2D = nullptr;
 static PFNGLTEXPARAMETERIPROC pglTexParameteri = nullptr;
 static PFNGLTEXPARAMETERFVPROC pglTexParameterfv = nullptr;
 static PFNGLREADBUFFERPROC pglReadBuffer = nullptr;
+static PFNGLREADPIXELSPROC pglReadPixels = nullptr;
 static PFNGLDRAWARRAYSPROC pglDrawArrays = nullptr;
 static PFNGLDISABLEPROC pglDisable = nullptr;
 static PFNGLBUFFERSUBDATAPROC pglBufferSubData = nullptr;
@@ -241,8 +242,6 @@ static std::string ReadFile(const std::string& path) {
 #define GL_DEPTH_BUFFER_BIT  0x00000100
 #define GL_COLOR_BUFFER_BIT  0x00004000
 #define GL_TRIANGLES         0x0004
-#define GL_LINES             0x0001
-
 
 namespace Genesis::Engine {
 
@@ -315,6 +314,8 @@ bool OpenGLRenderer::Init(SDL_Window* window, SDL_GLContext glContext) {
     glOk &= RequireGL((void**)&pglTexParameteri, "glTexParameteri");
     glOk &= RequireGL((void**)&pglTexParameterfv, "glTexParameterfv");
     glOk &= RequireGL((void**)&pglReadBuffer, "glReadBuffer");
+    // Optional: depth sampling for editor overlays
+    ResolveGL((void**)&pglReadPixels, "glReadPixels");
     glOk &= RequireGL((void**)&pglDrawArrays, "glDrawArrays");
     glOk &= RequireGL((void**)&pglDisable, "glDisable");
     // Optional (we have fallbacks)
@@ -402,34 +403,6 @@ bool OpenGLRenderer::Init(SDL_Window* window, SDL_GLContext glContext) {
             pglEnableVertexAttribArray(1);
             pglVertexAttribPointer(1, 2, GL_FLOAT, 0, sizeof(float) * 4, (const void*)(sizeof(float) * 2));
             pglBindVertexArray(0);
-        }
-    }
-
-    // Debug Shader
-    const std::string debugVert = R"(
-        #version 330 core
-        layout(location = 0) in vec3 aPos;
-        layout(location = 1) in vec3 aColor;
-        out vec3 vColor;
-        uniform mat4 uVP;
-        void main() {
-            gl_Position = uVP * vec4(aPos, 1.0);
-            vColor = aColor;
-        }
-    )";
-    const std::string debugFrag = R"(
-        #version 330 core
-        in vec3 vColor;
-        out vec4 FragColor;
-        void main() {
-            FragColor = vec4(vColor, 1.0);
-        }
-    )";
-    m_debugShader = Shader::FromSource(debugVert, debugFrag);
-    if (m_debugShader) {
-        if (pglGenVertexArrays && pglGenBuffers) {
-             pglGenVertexArrays(1, &m_debugVAO);
-             pglGenBuffers(1, &m_debugVBO);
         }
     }
 
@@ -886,49 +859,6 @@ void OpenGLRenderer::EndFrame() {
         }
     }
 
-    // 5b. Debug Draw Pass
-    if (!m_debugVertices.empty() && m_debugShader && m_debugVAO) {
-         m_debugShader->Use();
-         
-         Matrix4 view;
-         Matrix4 projection;
-         std::memcpy(view.m, m_view, sizeof(m_view));
-         std::memcpy(projection.m, m_projection, sizeof(m_projection));
-         Matrix4 vp = projection * view;
-         
-         int locVP = pglGetUniformLocation(m_debugShader->GetID(), "uVP");
-         if (locVP >= 0) pglUniformMatrix4fv(locVP, 1, GL_FALSE, vp.m);
-         
-         // Combine vertices/colors
-         std::vector<float> bufferData;
-         bufferData.reserve(m_debugVertices.size() * 2);
-         size_t count = m_debugVertices.size() / 3;
-         for (size_t i = 0; i < count; ++i) {
-             bufferData.push_back(m_debugVertices[i*3+0]);
-             bufferData.push_back(m_debugVertices[i*3+1]);
-             bufferData.push_back(m_debugVertices[i*3+2]);
-             bufferData.push_back(m_debugColors[i*3+0]);
-             bufferData.push_back(m_debugColors[i*3+1]);
-             bufferData.push_back(m_debugColors[i*3+2]);
-         }
-         
-         pglBindVertexArray(m_debugVAO);
-         pglBindBuffer(GL_ARRAY_BUFFER, m_debugVBO);
-         pglBufferData(GL_ARRAY_BUFFER, bufferData.size() * sizeof(float), bufferData.data(), GL_DYNAMIC_DRAW);
-         
-         size_t stride = 6 * sizeof(float);
-         pglEnableVertexAttribArray(0);
-         pglVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, (int)stride, (void*)0);
-         pglEnableVertexAttribArray(1);
-         pglVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, (int)stride, (void*)(3 * sizeof(float)));
-         
-         pglDrawArrays(GL_LINES, 0, (int)count);
-         pglBindVertexArray(0);
-         
-         m_debugVertices.clear();
-         m_debugColors.clear();
-    }
-
     // 6. Draw 2D Sprites / UI (Overlay)
     if (!m_textureDrawQueue.empty()) {
         // Ensure we are drawing to the default framebuffer
@@ -954,6 +884,31 @@ void OpenGLRenderer::EndFrame() {
     if (m_presentEnabled) {
         SDL_GL_SwapWindow(m_window);
     }
+}
+
+bool OpenGLRenderer::SampleSceneDepth(float u, float v, float& outDepth) {
+    if (!pglReadPixels || !pglBindFramebuffer || !m_gBuffer || m_screenWidth <= 0 || m_screenHeight <= 0) return false;
+    if (SDL_GL_GetCurrentContext() != m_context) {
+        if (SDL_GL_MakeCurrent(m_window, m_context) != 0) return false;
+    }
+
+    float clampedU = std::clamp(u, 0.0f, 1.0f);
+    float clampedV = std::clamp(v, 0.0f, 1.0f);
+    int px = (int)std::round(clampedU * (m_screenWidth - 1));
+    int py = (int)std::round((1.0f - clampedV) * (m_screenHeight - 1));
+
+    pglBindFramebuffer(GL_READ_FRAMEBUFFER, m_gBuffer);
+    if (pglReadBuffer) pglReadBuffer(GL_NONE);
+
+    float depth = 1.0f;
+    pglReadPixels(px, py, 1, 1, GL_DEPTH_COMPONENT, GL_FLOAT, &depth);
+    outDepth = depth;
+
+    pglBindFramebuffer(GL_FRAMEBUFFER, 0);
+    if (pglReadBuffer) pglReadBuffer(GL_BACK);
+    if (pglDrawBuffer) pglDrawBuffer(GL_BACK);
+
+    return true;
 }
 
 void OpenGLRenderer::Present() {
@@ -992,8 +947,6 @@ void OpenGLRenderer::Shutdown() {
 
     // Geometry buffers
     if (m_screenQuadVAO && pglDeleteVertexArrays) { pglDeleteVertexArrays(1, &m_screenQuadVAO); m_screenQuadVAO = 0; }
-    if (m_debugVAO && pglDeleteVertexArrays) { pglDeleteVertexArrays(1, &m_debugVAO); m_debugVAO = 0; }
-    if (m_debugVBO && pglDeleteBuffers) { pglDeleteBuffers(1, &m_debugVBO); m_debugVBO = 0; }
     if (m_screenQuadVBO && pglDeleteBuffers) { pglDeleteBuffers(1, &m_screenQuadVBO); m_screenQuadVBO = 0; }
     if (m_spriteVBO && pglDeleteBuffers) { pglDeleteBuffers(1, &m_spriteVBO); m_spriteVBO = 0; }
     if (m_spriteEBO && pglDeleteBuffers) { pglDeleteBuffers(1, &m_spriteEBO); m_spriteEBO = 0; }
@@ -1283,24 +1236,6 @@ void OpenGLRenderer::ExecuteDrawTexture(const TextureDrawCommand& cmd) {
     pglBindVertexArray(0);
 }
 
-void OpenGLRenderer::DrawLines(const std::vector<float>& vertices, const std::vector<float>& colors) {
-    if (vertices.empty()) return;
-    
-    // Accumulate lines for deferred rendering in EndFrame
-    size_t startSize = m_debugVertices.size();
-    m_debugVertices.insert(m_debugVertices.end(), vertices.begin(), vertices.end());
-    
-    if (colors.size() >= vertices.size()) {
-        m_debugColors.insert(m_debugColors.end(), colors.begin(), colors.end());
-    } else {
-        // Pad with default color (Green)
-        size_t count = vertices.size() / 3;
-        for (size_t i = 0; i < count; ++i) {
-            m_debugColors.push_back(0.0f); m_debugColors.push_back(1.0f); m_debugColors.push_back(0.0f);
-        }
-    }
-}
-
 void OpenGLRenderer::SetViewProjection(const float* view, const float* projection) {
     if (view) std::memcpy(m_view, view, sizeof(float) * 16);
     else {
@@ -1315,37 +1250,6 @@ void OpenGLRenderer::SetViewProjection(const float* view, const float* projectio
     }
 }
 
-bool OpenGLRenderer::ReadDepthAtWindowCoord(int x, int y, float& outDepth) {
-    if (!m_window) return false;
-    if (SDL_GL_MakeCurrent(m_window, m_context) != 0) return false;
-
-    // Resolve glReadPixels lazily
-    if (!pglReadPixels) {
-        auto addrReadPixels = (void*)SDL_GL_GetProcAddress("glReadPixels");
-        if (!addrReadPixels) return false;
-        pglReadPixels = (PFNGLREADPIXELSPROC)addrReadPixels;
-    }
-
-    // Prefer the g-buffer depth if available, otherwise fall back to the post-process FBO or default
-    unsigned int fboToRead = (m_gBuffer != 0) ? m_gBuffer : ((m_fbo != 0) ? m_fbo : 0);
-
-    // Bind framebuffer for read
-    if (pglBindFramebuffer) pglBindFramebuffer(GL_FRAMEBUFFER, fboToRead);
-
-    int ix = x;
-    int iy = y;
-    int readY = m_screenHeight - 1 - iy; // convert to GL lower-left origin
-
-    float depth = 1.0f;
-    pglReadPixels(ix, readY, 1, 1, GL_DEPTH_COMPONENT, GL_FLOAT, &depth);
-
-    // Restore default framebuffer binding
-    if (pglBindFramebuffer) pglBindFramebuffer(GL_FRAMEBUFFER, 0);
-
-    outDepth = depth;
-    return true;
-}
-
 void OpenGLRenderer::BindDefaultFramebuffer() {
     if (pglBindFramebuffer) pglBindFramebuffer(GL_FRAMEBUFFER, 0);
 
@@ -1353,7 +1257,7 @@ void OpenGLRenderer::BindDefaultFramebuffer() {
     // Shadow-map setup uses GL_NONE for draw/read buffers.
     if (pglDrawBuffer) pglDrawBuffer(GL_BACK);
     if (pglReadBuffer) pglReadBuffer(GL_BACK);
-} 
+}
 
 void OpenGLRenderer::Clear(float r, float g, float b, float a) {
     if (pglClearColor && pglClear) {

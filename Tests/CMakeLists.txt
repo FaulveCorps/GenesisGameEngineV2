@@ -96,6 +96,8 @@ if (WASM3_LIB_PATH)
   # Provide PROJECT_SOURCE_DIR to the smoke executable so it can locate sample mod files
   target_compile_definitions(WasmE2ESmoke PRIVATE PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
   add_test(NAME WasmE2ESmoke COMMAND WasmE2ESmoke)
+  # Ensure the smoke test is built whenever UnitTests is built (local build targets only UnitTests).
+  add_dependencies(UnitTests WasmE2ESmoke)
 else()
   message(STATUS "wasm3 not found in ${VCPKG_INSTALLED}; WasmE2ESmoke will be skipped locally.")
 endif()
@@ -216,6 +218,12 @@ if (TEST_RUNTIME_LIBS)
         COMMAND ${CMAKE_COMMAND} -E copy_if_different ${TEST_RUNTIME_LIBS} $<TARGET_FILE_DIR:UnitTests>
         COMMENT "Copying runtime libs to test output directory"
     )
+  if (TARGET WasmE2ESmoke)
+    add_custom_command(TARGET WasmE2ESmoke POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E copy_if_different ${TEST_RUNTIME_LIBS} $<TARGET_FILE_DIR:WasmE2ESmoke>
+      COMMENT "Copying runtime libs to WasmE2ESmoke output directory"
+    )
+  endif()
 endif()
 
 # Optionally include Bullet shared libs if present in vcpkg to support runtime tests that rely on dynamic libs

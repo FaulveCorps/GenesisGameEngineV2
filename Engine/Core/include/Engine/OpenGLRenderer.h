@@ -49,16 +49,15 @@ public:
                      float u0 = 0.f, float v0 = 0.f, float u1 = 1.f, float v1 = 1.f,
                      uint32_t color = 0xFFFFFFFF) override;
 
-    void DrawLines(const std::vector<float>& vertices, const std::vector<float>& colors) override;
-
     void SetPresentEnabled(bool enabled) { m_presentEnabled = enabled; }
     
     // Returns the texture ID of the final rendered frame (for Editor Viewport)
     // If 0, the frame was rendered to the default framebuffer.
     uint64_t GetFinalTextureID() const { return (uint64_t)m_finalTexture; }
 
-    // Read depth buffer at window coordinates (origin top-left). Returns true on success and sets depth in [0,1].
-    bool ReadDepthAtWindowCoord(int x, int y, float& outDepth);
+    // Sample depth from the scene G-Buffer at normalized viewport coords (u,v in [0,1]).
+    // Returns true if a depth sample was retrieved.
+    bool SampleSceneDepth(float u, float v, float& outDepth);
 
     void BindDefaultFramebuffer();
     void Clear(float r, float g, float b, float a);
@@ -77,13 +76,10 @@ private:
 
     // Simple PBR shader (prototype)
     std::shared_ptr<Shader> m_pbrShader;
-    std::shared_ptr<Shader> m_debugShader;
 
     // Debug draw resources
     unsigned int m_debugVAO = 0;
     unsigned int m_debugVBO = 0;
-    std::vector<float> m_debugVertices;
-    std::vector<float> m_debugColors;
 
     struct GLMesh {
         unsigned int vao = 0;

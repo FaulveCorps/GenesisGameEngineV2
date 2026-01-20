@@ -20,8 +20,10 @@
 #include <cmath>
 #include <algorithm>
 #include <filesystem>
+#include <fstream>
 #include <string>
 #include <vector>
+#include <cstdlib>
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -66,6 +68,218 @@ SDL_HitTestResult SDLCALL HitTestCallback(SDL_Window* win, const SDL_Point* area
     }
 
     return SDL_HITTEST_NORMAL;
+}
+
+static bool ReadPpmToken(std::istream& in, std::string& out) {
+    while (in >> out) {
+        if (!out.empty() && out[0] == '#') {
+            std::string ignored;
+            std::getline(in, ignored);
+            continue;
+        }
+        return true;
+    }
+    return false;
+}
+
+static std::shared_ptr<Genesis::Engine::Texture> LoadIconTexturePPM(const std::string& path) {
+    std::ifstream file(path, std::ios::in);
+    if (!file.is_open()) {
+        std::cerr << "Icon texture missing: " << path << std::endl;
+        return nullptr;
+    }
+
+    std::string token;
+    if (!ReadPpmToken(file, token) || token != "P3") {
+        std::cerr << "Icon texture not P3 PPM: " << path << std::endl;
+        return nullptr;
+    }
+
+    if (!ReadPpmToken(file, token)) return nullptr;
+    int width = std::stoi(token);
+    if (!ReadPpmToken(file, token)) return nullptr;
+    int height = std::stoi(token);
+    if (!ReadPpmToken(file, token)) return nullptr;
+    int maxVal = std::stoi(token);
+    if (width <= 0 || height <= 0 || maxVal <= 0) return nullptr;
+
+    std::vector<uint8_t> pixels(static_cast<size_t>(width) * height * 4, 0);
+    const float scale = 255.0f / static_cast<float>(maxVal);
+    for (int i = 0; i < width * height; ++i) {
+        if (!ReadPpmToken(file, token)) return nullptr;
+        int r = std::stoi(token);
+        if (!ReadPpmToken(file, token)) return nullptr;
+        int g = std::stoi(token);
+        if (!ReadPpmToken(file, token)) return nullptr;
+        int b = std::stoi(token);
+
+        uint8_t rr = static_cast<uint8_t>(std::clamp<int>((int)std::round(r * scale), 0, 255));
+        uint8_t gg = static_cast<uint8_t>(std::clamp<int>((int)std::round(g * scale), 0, 255));
+        uint8_t bb = static_cast<uint8_t>(std::clamp<int>((int)std::round(b * scale), 0, 255));
+
+        const bool transparent = (rr == 255 && gg == 0 && bb == 255);
+        pixels[i * 4 + 0] = rr;
+        pixels[i * 4 + 1] = gg;
+        pixels[i * 4 + 2] = bb;
+        pixels[i * 4 + 3] = transparent ? 0 : 255;
+    }
+
+    return Genesis::Engine::Texture::CreateFromMemory((uint32_t)width, (uint32_t)height, pixels);
+}
+
+struct RecentProjectEntry {
+    std::string root;
+    std::string lastScene;
+};
+
+struct EditorSessionSettings {
+    std::string lastProjectRoot;
+    std::string lastScenePath;
+    std::vector<RecentProjectEntry> recentProjects;
+    std::vector<std::string> recentScenes;
+};
+
+static std::string TrimCopy(const std::string& s) {
+    size_t start = s.find_first_not_of(" \t\r\n");
+    if (start == std::string::npos) return std::string();
+    size_t end = s.find_last_not_of(" \t\r\n");
+    return s.substr(start, end - start + 1);
+}
+
+static std::filesystem::path GetEditorSettingsPath() {
+    std::filesystem::path base;
+#ifdef _WIN32
+    if (const char* appData = std::getenv("APPDATA")) {
+        if (*appData) base = appData;
+    }
+#else
+    if (const char* home = std::getenv("HOME")) {
+        if (*home) base = home;
+    }
+#endif
+    if (base.empty()) {
+        base = std::filesystem::current_path();
+    }
+
+    std::filesystem::path dir = base / "GenesisEditor";
+    std::error_code ec;
+    std::filesystem::create_directories(dir, ec);
+    return dir / "editor_settings.ini";
+}
+
+static EditorSessionSettings LoadEditorSettings() {
+    EditorSessionSettings settings;
+    std::ifstream in(GetEditorSettingsPath());
+    if (!in.is_open()) return settings;
+
+    std::string line;
+    while (std::getline(in, line)) {
+        line = TrimCopy(line);
+        if (line.empty() || line[0] == '#') continue;
+        auto eq = line.find('=');
+        if (eq == std::string::npos) continue;
+        std::string key = TrimCopy(line.substr(0, eq));
+        std::string value = TrimCopy(line.substr(eq + 1));
+
+        if (key == "last_project") {
+            settings.lastProjectRoot = value;
+        } else if (key == "last_scene") {
+            settings.lastScenePath = value;
+        } else if (key == "recent_project") {
+            RecentProjectEntry entry;
+            auto pipe = value.find('|');
+            if (pipe == std::string::npos) {
+                entry.root = value;
+            } else {
+                entry.root = TrimCopy(value.substr(0, pipe));
+                entry.lastScene = TrimCopy(value.substr(pipe + 1));
+            }
+            if (!entry.root.empty()) {
+                settings.recentProjects.push_back(entry);
+            }
+        } else if (key == "recent_scene") {
+            if (!value.empty()) settings.recentScenes.push_back(value);
+        }
+    }
+
+    if (settings.lastScenePath.empty() && !settings.lastProjectRoot.empty()) {
+        for (const auto& entry : settings.recentProjects) {
+            if (entry.root == settings.lastProjectRoot && !entry.lastScene.empty()) {
+                settings.lastScenePath = entry.lastScene;
+                break;
+            }
+        }
+    }
+
+    return settings;
+}
+
+static void SaveEditorSettings(const EditorSessionSettings& settings) {
+    std::ofstream out(GetEditorSettingsPath(), std::ios::trunc);
+    if (!out.is_open()) return;
+
+    out << "# Genesis Editor Settings\n";
+    if (!settings.lastProjectRoot.empty()) {
+        out << "last_project=" << settings.lastProjectRoot << "\n";
+    }
+    if (!settings.lastScenePath.empty()) {
+        out << "last_scene=" << settings.lastScenePath << "\n";
+    }
+    for (const auto& entry : settings.recentProjects) {
+        out << "recent_project=" << entry.root;
+        if (!entry.lastScene.empty()) {
+            out << "|" << entry.lastScene;
+        }
+        out << "\n";
+    }
+    for (const auto& scene : settings.recentScenes) {
+        out << "recent_scene=" << scene << "\n";
+    }
+}
+
+static void UpdateRecentProject(EditorSessionSettings& settings, const std::string& root, const std::string& lastScene) {
+    if (root.empty()) return;
+
+    std::string existingScene;
+    for (const auto& entry : settings.recentProjects) {
+        if (entry.root == root) {
+            existingScene = entry.lastScene;
+            break;
+        }
+    }
+
+    const std::string finalScene = !lastScene.empty() ? lastScene : existingScene;
+
+    settings.recentProjects.erase(
+        std::remove_if(settings.recentProjects.begin(), settings.recentProjects.end(),
+                       [&](const RecentProjectEntry& e) { return e.root == root; }),
+        settings.recentProjects.end());
+
+    settings.recentProjects.insert(settings.recentProjects.begin(), RecentProjectEntry{ root, finalScene });
+    const size_t kMaxRecentProjects = 10;
+    if (settings.recentProjects.size() > kMaxRecentProjects) settings.recentProjects.resize(kMaxRecentProjects);
+}
+
+static void UpdateRecentScene(EditorSessionSettings& settings, const std::string& scenePath) {
+    if (scenePath.empty()) return;
+    settings.recentScenes.erase(
+        std::remove(settings.recentScenes.begin(), settings.recentScenes.end(), scenePath),
+        settings.recentScenes.end());
+    settings.recentScenes.insert(settings.recentScenes.begin(), scenePath);
+    const size_t kMaxRecentScenes = 12;
+    if (settings.recentScenes.size() > kMaxRecentScenes) settings.recentScenes.resize(kMaxRecentScenes);
+}
+
+static std::string NormalizePathForSettings(const std::filesystem::path& path, const std::filesystem::path& projectRoot) {
+    std::error_code ec;
+    std::filesystem::path abs = std::filesystem::weakly_canonical(path, ec);
+    if (ec) abs = path;
+    std::filesystem::path rel = std::filesystem::relative(abs, projectRoot, ec);
+    if (!ec) {
+        std::string relStr = rel.string();
+        if (!relStr.empty() && relStr.rfind("..", 0) != 0) return relStr;
+    }
+    return abs.string();
 }
 
 int main(int argc, char** argv) {
@@ -221,9 +435,63 @@ int main(int argc, char** argv) {
         return 0;
     }
 
+    EditorSessionSettings editorSettings = LoadEditorSettings();
+    std::filesystem::path projectRoot = std::filesystem::current_path();
+
+    auto IsValidProjectRoot = [&](const std::filesystem::path& root) {
+        std::error_code ec;
+        return std::filesystem::exists(root / "Assets", ec);
+    };
+
+    if (!editorSettings.lastProjectRoot.empty()) {
+        std::filesystem::path candidate(editorSettings.lastProjectRoot);
+        if (IsValidProjectRoot(candidate)) {
+            projectRoot = candidate;
+        }
+    }
+
+    if (!IsValidProjectRoot(projectRoot)) {
+        for (const auto& entry : editorSettings.recentProjects) {
+            std::filesystem::path candidate(entry.root);
+            if (IsValidProjectRoot(candidate)) {
+                projectRoot = candidate;
+                break;
+            }
+        }
+    }
+
+    if (IsValidProjectRoot(projectRoot)) {
+        std::error_code ec;
+        std::filesystem::current_path(projectRoot, ec);
+        for (const auto& entry : editorSettings.recentProjects) {
+            if (entry.root == projectRoot.string() && !entry.lastScene.empty()) {
+                editorSettings.lastScenePath = entry.lastScene;
+                break;
+            }
+        }
+        editorSettings.lastProjectRoot = projectRoot.string();
+        UpdateRecentProject(editorSettings, editorSettings.lastProjectRoot, editorSettings.lastScenePath);
+        SaveEditorSettings(editorSettings);
+    }
+
     if (!Genesis::Engine::Init()) {
         std::cerr << "Failed to initialize engine" << std::endl;
         return -1;
+    }
+
+    // Configure save subsystem to use the project-local saves directory.
+    {
+        std::filesystem::path saveDir = projectRoot / "saves";
+        std::error_code ec;
+        std::filesystem::create_directories(saveDir, ec);
+#ifdef _WIN32
+        _putenv_s("GENESIS_SAVE_DIR", saveDir.string().c_str());
+#else
+        setenv("GENESIS_SAVE_DIR", saveDir.string().c_str(), 1);
+#endif
+        if (!Genesis::Engine::CreateSaveSubsystem("file")) {
+            Genesis::Engine::CreateSaveSubsystem("null");
+        }
     }
 
     Genesis::Engine::Window window;
@@ -261,16 +529,7 @@ int main(int argc, char** argv) {
     bool zenMode = false;
     bool showGrid = true;
     bool showSceneIcons = true;
-    bool iconOcclusion = true;
-    // Additional overlay toggles
-    bool showColliders = true;
-    bool showAudioSources = true;
-    bool showParticles = true;
-    bool showPhysicsBodies = true;
-    bool showCameraFOV = true;
-    bool reloadSceneIcons = false; // one-shot: set true to regenerate in-memory overlay icons at runtime
-    bool forceSimpleCameraIcon = true; // when true, always draw simple block+triangle for camera icons (no texture)
-    bool showCameraIconDebug = false; // draw debug markers near camera icons (B/T and Tex/Fb label)
+    bool occludeSceneIcons = true;
     char commandSearchBuffer[128] = "";
     int selectedCommandIndex = 0;
 
@@ -313,6 +572,10 @@ int main(int argc, char** argv) {
     glm::quat viewCubeStartRot(1.0f, 0.0f, 0.0f, 0.0f);
     glm::quat viewCubeTargetRot(1.0f, 0.0f, 0.0f, 0.0f);
 
+    std::shared_ptr<Genesis::Engine::Texture> cameraIconTex;
+    std::shared_ptr<Genesis::Engine::Texture> lightDirIconTex;
+    std::shared_ptr<Genesis::Engine::Texture> lightPointIconTex;
+
     // Create scene
     Genesis::Engine::Scene editorScene;
     Genesis::Engine::Scene* activeScene = &editorScene;
@@ -325,132 +588,22 @@ int main(int argc, char** argv) {
     };
     EditorState editorState = EditorState::Edit;
 
-    // Load default scene or create empty
-    if (!Genesis::Engine::SceneLoader::LoadScene(editorScene, "Assets/scenes/default.scene")) {
-        std::cout << "Editor: default scene not found, creating empty scene..." << std::endl;
-        currentScenePath.clear();
-        sceneDirty = true;
-        
-        // Create a default light so we can see things
-        auto lightEntity = editorScene.Registry().create();
-        editorScene.Registry().emplace<Genesis::Engine::NameComponent>(lightEntity, Genesis::Engine::NameComponent{"Directional Light"});
-        Genesis::Engine::LightComponent lightComp;
-        lightComp.type = Genesis::Engine::LightType::Directional;
-        lightComp.color[0] = 1.0f; lightComp.color[1] = 1.0f; lightComp.color[2] = 1.0f;
-        lightComp.intensity = 1.0f;
-        editorScene.Registry().emplace<Genesis::Engine::LightComponent>(lightEntity, lightComp);
-        
-        Genesis::Engine::Transform lightTrans;
-        lightTrans.rx = -0.5f; 
-        lightTrans.ry = 0.5f;
-        editorScene.Registry().emplace<Genesis::Engine::Transform>(lightEntity, lightTrans);
-        
-        // Auto-select the light entity for testing gizmos
-        selectedEntity = lightEntity;
+    auto RecordScenePath = [&](const std::string& path) {
+        const std::string stored = NormalizePathForSettings(path, projectRoot);
+        editorSettings.lastProjectRoot = projectRoot.string();
+        editorSettings.lastScenePath = stored;
+        UpdateRecentProject(editorSettings, editorSettings.lastProjectRoot, stored);
+        UpdateRecentScene(editorSettings, stored);
+        SaveEditorSettings(editorSettings);
+        return stored;
+    };
 
-        // Default Camera
-        auto camEntity = editorScene.Registry().create();
-        editorScene.Registry().emplace<Genesis::Engine::NameComponent>(camEntity, Genesis::Engine::NameComponent{"Main Camera"});
-        Genesis::Engine::Transform camTrans;
-        camTrans.z = 10.0f;
-        editorScene.Registry().emplace<Genesis::Engine::Transform>(camEntity, camTrans);
-        editorScene.Registry().emplace<Genesis::Engine::CameraComponent>(camEntity);
-
-        // Create a Cube Entity for visual reference
-        auto cubeEntity = editorScene.Registry().create();
-        editorScene.Registry().emplace<Genesis::Engine::NameComponent>(cubeEntity, Genesis::Engine::NameComponent{"Cube"});
-        Genesis::Engine::Transform cubeTrans;
-        cubeTrans.y = 0.0f;
-        editorScene.Registry().emplace<Genesis::Engine::Transform>(cubeEntity, cubeTrans);
-        
-        auto modelComp = editorScene.Registry().emplace<Genesis::Engine::ModelComponent>(cubeEntity);
-        modelComp.model = std::make_shared<Genesis::Engine::Model>();
-        modelComp.sourcePath.clear();
-        
-        // Manually create a cube mesh
-        Genesis::Engine::Mesh cubeMesh;
-        std::vector<float> vertices = {
-            // Front face
-            -0.5f, -0.5f,  0.5f,  0.5f, -0.5f,  0.5f,  0.5f,  0.5f,  0.5f, -0.5f,  0.5f,  0.5f,
-            // Back face
-            -0.5f, -0.5f, -0.5f, -0.5f,  0.5f, -0.5f,  0.5f,  0.5f, -0.5f,  0.5f, -0.5f, -0.5f,
-            // Top face
-            -0.5f,  0.5f, -0.5f, -0.5f,  0.5f,  0.5f,  0.5f,  0.5f,  0.5f,  0.5f,  0.5f, -0.5f,
-            // Bottom face
-            -0.5f, -0.5f, -0.5f,  0.5f, -0.5f, -0.5f,  0.5f, -0.5f,  0.5f, -0.5f, -0.5f,  0.5f,
-            // Right face
-             0.5f, -0.5f, -0.5f,  0.5f,  0.5f, -0.5f,  0.5f,  0.5f,  0.5f,  0.5f, -0.5f,  0.5f,
-            // Left face
-            -0.5f, -0.5f, -0.5f, -0.5f, -0.5f,  0.5f, -0.5f,  0.5f,  0.5f, -0.5f,  0.5f, -0.5f
-        };
-        std::vector<float> normals = {
-            // Front
-             0.0f,  0.0f,  1.0f,  0.0f,  0.0f,  1.0f,  0.0f,  0.0f,  1.0f,  0.0f,  0.0f,  1.0f,
-            // Back
-             0.0f,  0.0f, -1.0f,  0.0f,  0.0f, -1.0f,  0.0f,  0.0f, -1.0f,  0.0f,  0.0f, -1.0f,
-            // Top
-             0.0f,  1.0f,  0.0f,  0.0f,  1.0f,  0.0f,  0.0f,  1.0f,  0.0f,  0.0f,  1.0f,  0.0f,
-            // Bottom
-             0.0f, -1.0f,  0.0f,  0.0f, -1.0f,  0.0f,  0.0f, -1.0f,  0.0f,  0.0f, -1.0f,  0.0f,
-            // Right
-             1.0f,  0.0f,  0.0f,  1.0f,  0.0f,  0.0f,  1.0f,  0.0f,  0.0f,  1.0f,  0.0f,  0.0f,
-            // Left
-            -1.0f,  0.0f,  0.0f, -1.0f,  0.0f,  0.0f, -1.0f,  0.0f,  0.0f, -1.0f,  0.0f,  0.0f
-        };
-        std::vector<uint32_t> indices = {
-             0,  1,  2,  2,  3,  0, // Front
-             4,  5,  6,  6,  7,  4, // Back
-             8,  9, 10, 10, 11,  8, // Top
-            12, 13, 14, 14, 15, 12, // Bottom
-            16, 17, 18, 18, 19, 16, // Right
-            20, 21, 22, 22, 23, 20  // Left
-        };
-        // Add dummy UVs
-        std::vector<float> uvs(vertices.size() / 3 * 2, 0.0f);
-
-        cubeMesh.SetData(vertices, normals, uvs, indices);
-        
-        // We need to access the private m_meshes of Model to add this mesh
-        // But Model::m_meshes is private. 
-        // We should probably add a method to Model to add a mesh, or just use a public method if available.
-        // Checking Model.h... m_meshes is private.
-        // Let's modify Model.h to allow adding a mesh manually or make m_meshes public/protected.
-        // For now, I'll just modify Model.h to add `AddMesh(Mesh&& mesh)`.
-        modelComp.model->AddMesh(std::move(cubeMesh));
-    }
-    else {
-        currentScenePath = "Assets/scenes/default.scene";
-        sceneDirty = false;
-    }
-
-    // Setup profiler and ImGui
-    Genesis::Engine::Profiler profiler;
-    Genesis::Engine::ImGuiLayer gui(window.GetSDLWindow(), window.GetGLContext());
-
-    // Global UI sizing tweak (Editor-only): make widgets/buttons slightly roomier.
-    // This helps match the more comfortable click targets users expect from tools like VS Code.
-    {
-        ImGuiStyle& style = ImGui::GetStyle();
-        // (Option B sizing): clearly larger click targets.
-        style.FramePadding = ImVec2(style.FramePadding.x + 4.0f, style.FramePadding.y + 4.0f);
-        style.ItemSpacing = ImVec2(style.ItemSpacing.x + 4.0f, style.ItemSpacing.y + 2.0f);
-        style.ScrollbarSize += 4.0f;
-        style.GrabMinSize += 4.0f;
-    }
-
-    std::cout << "Editor initialized. Entering main loop..." << std::endl;
-
-    uint64_t lastTime = SDL_GetPerformanceCounter();
-
-    bool running = true;
-
-    auto DoNewScene = [&]() {
+    auto BuildEmptyScene = [&]() {
         editorScene.Clear();
         selectedEntity = entt::null;
         currentScenePath.clear();
         sceneDirty = true;
-        
-        // When creating a new scene, we are in Edit mode
+
         activeScene = &editorScene;
         editorState = EditorState::Edit;
         runtimeScene.reset();
@@ -478,6 +631,93 @@ int main(int argc, char** argv) {
         editorScene.Registry().emplace<Genesis::Engine::CameraComponent>(camEntity);
     };
 
+    auto ResolveScenePathForLoad = [&](const std::string& storedPath) {
+        if (storedPath.empty()) return std::string();
+        std::filesystem::path p(storedPath);
+        if (p.is_relative()) {
+            return (projectRoot / p).string();
+        }
+        return p.string();
+    };
+
+    // Load most recent scene if available; otherwise start with a new empty scene.
+    bool loadedStartupScene = false;
+    if (!editorSettings.lastScenePath.empty()) {
+        const std::string loadPath = ResolveScenePathForLoad(editorSettings.lastScenePath);
+        if (!loadPath.empty() && Genesis::Engine::SceneLoader::LoadScene(editorScene, loadPath)) {
+            currentScenePath = editorSettings.lastScenePath;
+            sceneDirty = false;
+            selectedEntity = entt::null;
+            UpdateRecentProject(editorSettings, editorSettings.lastProjectRoot, editorSettings.lastScenePath);
+            UpdateRecentScene(editorSettings, editorSettings.lastScenePath);
+            SaveEditorSettings(editorSettings);
+            loadedStartupScene = true;
+        }
+    }
+
+    if (!loadedStartupScene) {
+        BuildEmptyScene();
+    }
+
+    std::filesystem::path autosavePath = projectRoot / "saves" / "autosave.scene";
+    bool showAutosaveRestoreModal = false;
+    std::string autosaveBaseScenePath = currentScenePath;
+    {
+        std::error_code ec;
+        const bool autosaveExists = std::filesystem::exists(autosavePath, ec);
+        if (autosaveExists) {
+            bool shouldRestore = false;
+            if (currentScenePath.empty()) {
+                shouldRestore = true;
+            } else {
+                std::filesystem::path scenePathResolved = ResolveScenePathForLoad(currentScenePath);
+                if (!std::filesystem::exists(scenePathResolved, ec)) {
+                    shouldRestore = true;
+                } else {
+                    auto autosaveTime = std::filesystem::last_write_time(autosavePath, ec);
+                    if (!ec) {
+                        auto sceneTime = std::filesystem::last_write_time(scenePathResolved, ec);
+                        if (!ec && autosaveTime > sceneTime) shouldRestore = true;
+                    }
+                }
+            }
+            if (shouldRestore) {
+                showAutosaveRestoreModal = true;
+            }
+        }
+    }
+
+    // Setup profiler and ImGui
+    Genesis::Engine::Profiler profiler;
+    Genesis::Engine::ImGuiLayer gui(window.GetSDLWindow(), window.GetGLContext());
+
+    // Global UI sizing tweak (Editor-only): make widgets/buttons slightly roomier.
+    // This helps match the more comfortable click targets users expect from tools like VS Code.
+    {
+        ImGuiStyle& style = ImGui::GetStyle();
+        // (Option B sizing): clearly larger click targets.
+        style.FramePadding = ImVec2(style.FramePadding.x + 4.0f, style.FramePadding.y + 4.0f);
+        style.ItemSpacing = ImVec2(style.ItemSpacing.x + 4.0f, style.ItemSpacing.y + 2.0f);
+        style.ScrollbarSize += 4.0f;
+        style.GrabMinSize += 4.0f;
+    }
+
+    cameraIconTex = LoadIconTexturePPM("Assets/icons/camera_icon.ppm");
+    lightDirIconTex = LoadIconTexturePPM("Assets/icons/light_dir_icon.ppm");
+    lightPointIconTex = LoadIconTexturePPM("Assets/icons/light_point_icon.ppm");
+
+    std::cout << "Editor initialized. Entering main loop..." << std::endl;
+
+    uint64_t lastTime = SDL_GetPerformanceCounter();
+
+    bool running = true;
+    double autosaveTimer = 0.0;
+    const double autosaveInterval = 120.0;
+
+    auto DoNewScene = [&]() {
+        BuildEmptyScene();
+    };
+
     auto MaybePromptUnsaved = [&](PendingSceneAction action, const std::string& path = std::string()) {
         if (!sceneDirty) return false;
         pendingAction = action;
@@ -490,6 +730,45 @@ int main(int argc, char** argv) {
         if (!MaybePromptUnsaved(PendingSceneAction::Quit)) {
             running = false;
         }
+    };
+
+    auto ClearAutosave = [&]() {
+        std::error_code ec;
+        std::filesystem::remove(autosavePath, ec);
+    };
+
+    auto SaveSceneToPath = [&](const std::string& path, bool updateRecents) -> bool {
+        if (path.empty()) return false;
+        if (Genesis::Engine::SceneLoader::SaveScene(editorScene, path)) {
+            if (updateRecents) {
+                currentScenePath = RecordScenePath(path);
+            } else {
+                currentScenePath = path;
+            }
+            sceneDirty = false;
+            ClearAutosave();
+            return true;
+        }
+        return false;
+    };
+
+    auto LoadSceneFromPath = [&](const std::string& storedPath, bool updateRecents) -> bool {
+        if (storedPath.empty()) return false;
+        if (editorState != EditorState::Edit) {
+            if (activeScene) activeScene->OnRuntimeStop();
+            activeScene = &editorScene;
+            runtimeScene.reset();
+            editorState = EditorState::Edit;
+        }
+
+        const std::string loadPath = ResolveScenePathForLoad(storedPath);
+        if (!loadPath.empty() && Genesis::Engine::SceneLoader::LoadScene(editorScene, loadPath)) {
+            currentScenePath = updateRecents ? RecordScenePath(storedPath) : storedPath;
+            sceneDirty = false;
+            selectedEntity = entt::null;
+            return true;
+        }
+        return false;
     };
 
     while (running) {
@@ -519,6 +798,20 @@ int main(int argc, char** argv) {
 
         // Clamp dt to avoid huge jumps (e.g. debugging)
         if (dt > 0.1) dt = 0.1;
+
+        if (editorState == EditorState::Edit) {
+            autosaveTimer += dt;
+            if (autosaveTimer >= autosaveInterval) {
+                autosaveTimer = 0.0;
+                if (sceneDirty) {
+                    std::error_code ec;
+                    std::filesystem::create_directories(autosavePath.parent_path(), ec);
+                    Genesis::Engine::SceneLoader::SaveScene(editorScene, autosavePath.string());
+                }
+            }
+        } else {
+            autosaveTimer = 0.0;
+        }
 
         // Smooth camera animation toward view-cube target.
         // Removed: ImGuizmo handles interpolation internally for clicks, and dragging should be immediate.
@@ -570,7 +863,10 @@ int main(int argc, char** argv) {
                     if (!currentScenePath.empty()) {
                         strncpy_s(scenePathBuffer, currentScenePath.c_str(), sizeof(scenePathBuffer) - 1);
                     } else {
-                        strncpy_s(scenePathBuffer, "Assets/scenes/default.scene", sizeof(scenePathBuffer) - 1);
+                        const std::string fallbackPath = !editorSettings.lastScenePath.empty()
+                            ? editorSettings.lastScenePath
+                            : std::string("Assets/scenes/scene.scene");
+                        strncpy_s(scenePathBuffer, fallbackPath.c_str(), sizeof(scenePathBuffer) - 1);
                     }
                 }
             }
@@ -582,9 +878,7 @@ int main(int argc, char** argv) {
                     // Only save if in Edit Mode
                     // If in Play Mode, we might want to ignore or save the runtime state? Usually ignored.
                     if (editorState == EditorState::Edit) {
-                        if (Genesis::Engine::SceneLoader::SaveScene(editorScene, currentScenePath)) {
-                            sceneDirty = false;
-                        }
+                        SaveSceneToPath(currentScenePath, true);
                     }
                 }
             }
@@ -681,9 +975,31 @@ int main(int argc, char** argv) {
                         if (!currentScenePath.empty()) {
                             strncpy_s(scenePathBuffer, currentScenePath.c_str(), sizeof(scenePathBuffer) - 1);
                         } else {
-                            strncpy_s(scenePathBuffer, "Assets/scenes/default.scene", sizeof(scenePathBuffer) - 1);
+                            const std::string fallbackPath = !editorSettings.lastScenePath.empty()
+                                ? editorSettings.lastScenePath
+                                : std::string("Assets/scenes/scene.scene");
+                            strncpy_s(scenePathBuffer, fallbackPath.c_str(), sizeof(scenePathBuffer) - 1);
                         }
                     }
+                }
+                if (ImGui::BeginMenu("Open Recent")) {
+                    if (editorSettings.recentScenes.empty()) {
+                        ImGui::TextDisabled("(empty)");
+                    } else {
+                        for (size_t i = 0; i < editorSettings.recentScenes.size(); ++i) {
+                            const std::string& path = editorSettings.recentScenes[i];
+                            std::string label = path + "##recent_scene_" + std::to_string(i);
+                            std::error_code ec;
+                            const std::string resolvedPath = ResolveScenePathForLoad(path);
+                            const bool exists = !resolvedPath.empty() && std::filesystem::exists(resolvedPath, ec);
+                            if (ImGui::MenuItem(label.c_str(), nullptr, false, exists)) {
+                                if (!MaybePromptUnsaved(PendingSceneAction::LoadScenePath, path)) {
+                                    LoadSceneFromPath(path, true);
+                                }
+                            }
+                        }
+                    }
+                    ImGui::EndMenu();
                 }
                 if (ImGui::MenuItem("Save", "Ctrl+S")) {
                     if (currentScenePath.empty()) {
@@ -691,9 +1007,7 @@ int main(int argc, char** argv) {
                         strncpy_s(scenePathBuffer, "Assets/scenes/scene.scene", sizeof(scenePathBuffer) - 1);
                     } else {
                         if (editorState == EditorState::Edit) {
-                            if (Genesis::Engine::SceneLoader::SaveScene(editorScene, currentScenePath)) {
-                                sceneDirty = false;
-                            }
+                            SaveSceneToPath(currentScenePath, true);
                         }
                     }
                 }
@@ -712,19 +1026,9 @@ int main(int argc, char** argv) {
             if (ImGui::BeginMenu("View")) {
                 if (ImGui::MenuItem("Toggle Zen Mode", "Ctrl+K Z", &zenMode)) {}
                 if (ImGui::MenuItem("Toggle Grid", "G", &showGrid)) {}
-                // Scene icon toggles
-                ImGui::MenuItem("Show Scene Icons", "Ctrl+K I", &showSceneIcons);
-                ImGui::MenuItem("Icon Occlusion", nullptr, &iconOcclusion);
                 ImGui::Separator();
-                ImGui::MenuItem("Show Colliders", nullptr, &showColliders);
-                ImGui::MenuItem("Show Audio Sources", nullptr, &showAudioSources);
-                ImGui::MenuItem("Show Particle Systems", nullptr, &showParticles);
-                ImGui::MenuItem("Show Camera FOV", nullptr, &showCameraFOV);
-                ImGui::MenuItem("Show Physics Bodies", nullptr, &showPhysicsBodies);
-                ImGui::Separator();
-                ImGui::MenuItem("Force Simple Camera Icon (█◀)", nullptr, &forceSimpleCameraIcon);
-                ImGui::MenuItem("Show Camera Icon Debug", nullptr, &showCameraIconDebug);
-                if (ImGui::MenuItem("Reload Scene Icons")) reloadSceneIcons = true;
+                if (ImGui::MenuItem("Show Non-Visible Icons", "I", &showSceneIcons)) {}
+                if (ImGui::MenuItem("Occlude Non-Visible Icons", nullptr, &occludeSceneIcons)) {}
                 if (ImGui::MenuItem("Reset Layout")) { requestResetLayout = true; }
                 ImGui::EndMenu();
             }
@@ -1066,626 +1370,137 @@ int main(int argc, char** argv) {
             currentRenderer->EndFrame(); // Renders scene to internal texture (no swap)
         }
 
-        if (auto glRenderer = dynamic_cast<Genesis::Engine::OpenGLRenderer*>(currentRenderer)) {
+        auto glRenderer = dynamic_cast<Genesis::Engine::OpenGLRenderer*>(currentRenderer);
+        if (glRenderer) {
             uint64_t texID = glRenderer->GetFinalTextureID();
             // Invert V for OpenGL texture in ImGui
             ImGui::Image((ImTextureID)texID, viewportSize, ImVec2(0, 1), ImVec2(1, 0));
         }
 
         // Draw overlay icons for non-visible objects (camera, lights)
-        // Uses small texture assets for icons when available, and supports occlusion testing
-        // (based on sampling the renderer's depth buffer) controlled by the View menu toggle.
-        {
-            if (!showSceneIcons) {
-                // Skip whole overlay if toggled off
-            } else {
-                auto WorldToScreen = [&](const glm::vec3& worldPos, glm::vec2& out, float* outWindowZ = nullptr) -> bool {
-                    glm::vec4 clip = projection * view * glm::vec4(worldPos, 1.0f);
-                    if (clip.w == 0.0f) return false;
-                    glm::vec3 ndc = glm::vec3(clip) / clip.w;
-                    // Cull if behind near/far planes
-                    if (ndc.z < -1.0f || ndc.z > 1.0f) return false;
-                    out.x = viewportTopLeft.x + (ndc.x * 0.5f + 0.5f) * viewportSize.x;
-                    out.y = viewportTopLeft.y + (0.5f - ndc.y * 0.5f) * viewportSize.y;
-                    if (outWindowZ) *outWindowZ = ndc.z * 0.5f + 0.5f;
-                    // Quick screen bounds cull (small padding)
-                    const float pad = 24.0f;
-                    if (out.x < viewportTopLeft.x - pad || out.x > viewportTopLeft.x + viewportSize.x + pad ||
-                        out.y < viewportTopLeft.y - pad || out.y > viewportTopLeft.y + viewportSize.y + pad) return false;
-                    return true;
-                };
+        if (showSceneIcons && viewportSize.x > 1.0f && viewportSize.y > 1.0f) {
+            auto WorldToScreen = [&](const glm::vec3& worldPos, glm::vec2& outScreen, glm::vec2& outUv, float& outDepth01) -> bool {
+                glm::vec4 clip = projection * view * glm::vec4(worldPos, 1.0f);
+                if (clip.w == 0.0f) return false;
+                glm::vec3 ndc = glm::vec3(clip) / clip.w;
+                if (ndc.z < -1.0f || ndc.z > 1.0f) return false;
 
-                ImDrawList* dl = ImGui::GetWindowDrawList();
-                auto io = ImGui::GetIO();
+                outScreen.x = viewportTopLeft.x + (ndc.x * 0.5f + 0.5f) * viewportSize.x;
+                outScreen.y = viewportTopLeft.y + (0.5f - ndc.y * 0.5f) * viewportSize.y;
+                outUv.x = (outScreen.x - viewportTopLeft.x) / viewportSize.x;
+                outUv.y = (outScreen.y - viewportTopLeft.y) / viewportSize.y;
+                outDepth01 = ndc.z * 0.5f + 0.5f;
 
-                // Simple in-memory icon generation (lazy). Keep these local to editor scope.
-                static std::shared_ptr<Genesis::Engine::Texture> s_camIcon;
-                static std::shared_ptr<Genesis::Engine::Texture> s_lightIcon;
-                static std::shared_ptr<Genesis::Engine::Texture> s_audioIcon;
-                static std::shared_ptr<Genesis::Engine::Texture> s_particleIcon;
-                static std::shared_ptr<Genesis::Engine::Texture> s_rbIcon;
-                if (reloadSceneIcons) {
-                    s_camIcon.reset(); s_lightIcon.reset(); s_audioIcon.reset(); s_particleIcon.reset(); s_rbIcon.reset();
-                    reloadSceneIcons = false;
-                }
-                auto CreateCameraIcon = [&]() -> std::shared_ptr<Genesis::Engine::Texture> {
-                    if (s_camIcon) return s_camIcon;
-                    const int iw = 64, ih = 64;
-                    std::vector<uint8_t> px((size_t)iw * ih * 4, 0);
+                const float pad = 24.0f;
+                if (outScreen.x < viewportTopLeft.x - pad || outScreen.x > viewportTopLeft.x + viewportSize.x + pad ||
+                    outScreen.y < viewportTopLeft.y - pad || outScreen.y > viewportTopLeft.y + viewportSize.y + pad) return false;
+                if (outUv.x < -0.1f || outUv.x > 1.1f || outUv.y < -0.1f || outUv.y > 1.1f) return false;
+                return true;
+            };
 
-                    auto setPixel = [&](int x, int y, uint8_t r, uint8_t g, uint8_t b, uint8_t a) {
-                        if (x < 0 || x >= iw || y < 0 || y >= ih) return;
-                        int i = (y * iw + x) * 4;
-                        px[i+0] = r; px[i+1] = g; px[i+2] = b; px[i+3] = a;
-                    };
+            auto IsOccluded = [&](const glm::vec2& uv, float depth01) -> bool {
+                if (!occludeSceneIcons || !glRenderer) return false;
+                float depthSample = 1.0f;
+                if (!glRenderer->SampleSceneDepth(uv.x, uv.y, depthSample)) return false;
+                const float bias = 0.0025f;
+                return depthSample + bias < depth01;
+            };
 
-                    // Block (█) on the left
-                    const int blockW = 26, blockH = 22;
-                    const int blockLeft = 12;
-                    const int blockTop = (ih - blockH) / 2;
-                    for (int y = blockTop; y < blockTop + blockH; ++y) {
-                        for (int x = blockLeft; x < blockLeft + blockW; ++x) setPixel(x, y, 70, 70, 80, 255);
-                    }
+            if (cameraIconTex) cameraIconTex->UploadToRenderer(currentRenderer);
+            if (lightDirIconTex) lightDirIconTex->UploadToRenderer(currentRenderer);
+            if (lightPointIconTex) lightPointIconTex->UploadToRenderer(currentRenderer);
 
-                    // Left-pointing triangle (◀) immediately to the RIGHT of the block
-                    const int tipX = blockLeft + blockW + 2;
-                    const int tipY = ih / 2;
-                    const int halfTriH = 10;
-                    const int baseX = blockLeft + blockW + 12;
-                    const int topY = tipY - halfTriH;
-                    const int bottomY = tipY + halfTriH;
-                    for (int y = topY; y <= bottomY; ++y) {
-                        float f = float(y - topY) / float(bottomY - topY);
-                        int xMax = tipX + (int)(f * (baseX - tipX));
-                        for (int x = tipX; x <= xMax; ++x) setPixel(x, y, 70, 70, 80, 255);
-                    }
+            ImTextureID cameraTexId = (cameraIconTex && cameraIconTex->GetID())
+                ? (ImTextureID)(uintptr_t)cameraIconTex->GetID()
+                : (ImTextureID)0;
+            ImTextureID lightDirTexId = (lightDirIconTex && lightDirIconTex->GetID())
+                ? (ImTextureID)(uintptr_t)lightDirIconTex->GetID()
+                : (ImTextureID)0;
+            ImTextureID lightPointTexId = (lightPointIconTex && lightPointIconTex->GetID())
+                ? (ImTextureID)(uintptr_t)lightPointIconTex->GetID()
+                : (ImTextureID)0;
 
-                    // Small highlight on the block
-                    for (int y = blockTop + 3; y < blockTop + 8; ++y) for (int x = blockLeft + 3; x < blockLeft + 12; ++x) setPixel(x, y, 110, 110, 120, 140);
+            ImDrawList* dl = ImGui::GetWindowDrawList();
+            ImGuiIO& io = ImGui::GetIO();
+            const bool clicked = viewportHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left);
+            bool consumedClick = false;
+            const float iconSize = 22.0f;
+            const float hitRadiusSq = (iconSize * 0.5f) * (iconSize * 0.5f);
 
-                    // Outline
-                    for (int x = blockLeft; x < blockLeft + blockW; ++x) { setPixel(x, blockTop, 30,30,35,255); setPixel(x, blockTop + blockH - 1, 30,30,35,255); }
-                    for (int y = blockTop; y < blockTop + blockH; ++y) { setPixel(blockLeft, y, 30,30,35,255); setPixel(blockLeft + blockW - 1, y, 30,30,35,255); }
-
-                    s_camIcon = Genesis::Engine::Texture::CreateFromMemory(iw, ih, px);
-                    return s_camIcon;
-                };
-                auto CreateLightIcon = [&]() -> std::shared_ptr<Genesis::Engine::Texture> {
-                    if (s_lightIcon) return s_lightIcon;
-                    const int iw = 64, ih = 64;
-                    std::vector<uint8_t> px((size_t)iw * ih * 4, 0);
-                    int cx = iw/2, cy = ih/2;
-                    for (int y = 0; y < ih; ++y) {
-                        for (int x = 0; x < iw; ++x) {
-                            int i = (y * iw + x) * 4;
-                            int dx = x - cx, dy = y - cy; int r2 = dx*dx + dy*dy;
-                            int coreR = std::max(2, iw / 5);
-                            if (r2 <= coreR * coreR) { px[i+0] = 255; px[i+1] = 210; px[i+2] = 60; px[i+3] = 255; }
-                            // simple rays (8 directions) scaled
-                            int rayStart = iw / 5; // start distance for rays
-                            int rayEnd = iw / 3;   // end distance for rays
-                            if ((abs(dx) == abs(dy) && abs(dx) > rayStart && abs(dx) < rayEnd) || (abs(dx) > rayStart && dy==0) || (abs(dy) > rayStart && dx==0)) {
-                                px[i+0] = 255; px[i+1] = 235; px[i+2] = 120; px[i+3] = 255;
-                            }
-                        }
-                    }
-                    s_lightIcon = Genesis::Engine::Texture::CreateFromMemory(iw, ih, px);
-                    return s_lightIcon;
-                };
-
-                // Audio/Particle/RigidBody icons
-                auto CreateAudioIcon = [&]() -> std::shared_ptr<Genesis::Engine::Texture> {
-                    if (s_audioIcon) return s_audioIcon;
-                    const int iw = 64, ih = 64;
-                    std::vector<uint8_t> px((size_t)iw * ih * 4, 0);
-
-                    auto setPixel = [&](int x, int y, uint8_t r, uint8_t g, uint8_t b, uint8_t a) {
-                        if (x < 0 || x >= iw || y < 0 || y >= ih) return;
-                        int idx = (y * iw + x) * 4;
-                        px[idx+0] = r; px[idx+1] = g; px[idx+2] = b; px[idx+3] = a;
-                    };
-
-                    // Speaker body (left)
-                    int bodyW = 18;
-                    int bodyH = 24;
-                    int bodyX = 8;
-                    int bodyY = (ih - bodyH) / 2;
-                    for (int y = bodyY; y < bodyY + bodyH; ++y) for (int x = bodyX; x < bodyX + bodyW; ++x) setPixel(x, y, 70, 70, 80, 255);
-
-                    // Speaker cone (triangle) inside body pointing right
-                    for (int y = 0; y < bodyH; ++y) {
-                        float t = (float)y / (float)(bodyH - 1);
-                        int left = bodyX + 2;
-                        int right = bodyX + bodyW - 2 + (int)(6.0f * (0.5f - fabsf(t - 0.5f)) );
-                        for (int x = left; x <= right; ++x) setPixel(x, bodyY + y, 180, 180, 190, 255);
-                    }
-
-                    // Sound wave arcs to the right of the speaker
-                    int cx = bodyX + bodyW + 6;
-                    int cy = ih / 2;
-                    for (int ring = 0; ring < 3; ++ring) {
-                        float r = 8.0f + ring * 6.0f;
-                        for (int y = cy - (int)r - 1; y <= cy + (int)r + 1; ++y) {
-                            for (int x = cx; x <= cx + (int)r + 6; ++x) {
-                                float dx = (float)x - (float)cx;
-                                float dy = (float)y - (float)cy;
-                                float dist = sqrtf(dx*dx + dy*dy);
-                                // only right-side arcs, thin band
-                                if (dist >= r - 1.2f && dist <= r + 1.2f && dx >= -2.0f) {
-                                    uint8_t alpha = (uint8_t)std::max(60, 220 - ring * 60 - (int)(fabsf(dist - r) * 80));
-                                    setPixel(x, y, 255, 200, 120, alpha);
-                                }
-                            }
-                        }
-                    }
-
-                    // small accent dot near speaker
-                    setPixel(cx + 2, cy - 8, 255, 255, 255, 220);
-
-                    s_audioIcon = Genesis::Engine::Texture::CreateFromMemory(iw, ih, px);
-                    return s_audioIcon;
-                };
-
-                auto CreateParticleIcon = [&]() -> std::shared_ptr<Genesis::Engine::Texture> {
-                    if (s_particleIcon) return s_particleIcon;
-                    const int iw = 64, ih = 64;
-                    std::vector<uint8_t> px((size_t)iw * ih * 4, 0);
-
-                    auto setPixel = [&](int x, int y, uint8_t r, uint8_t g, uint8_t b, uint8_t a) {
-                        if (x < 0 || x >= iw || y < 0 || y >= ih) return;
-                        int idx = (y * iw + x) * 4;
-                        px[idx+0] = r; px[idx+1] = g; px[idx+2] = b; px[idx+3] = a;
-                    };
-
-                    // Sparkle core (diamond / soft gradient)
-                    int cx = iw / 2, cy = ih / 2;
-                    for (int y = 0; y < ih; ++y) {
-                        for (int x = 0; x < iw; ++x) {
-                            int dx = x - cx, dy = y - cy;
-                            int man = abs(dx) + abs(dy);
-                            if (man <= 8) {
-                                uint8_t a = (uint8_t)std::max(0, 255 - man * 24);
-                                // warm golden core
-                                setPixel(x, y, 255, 230, 140, a);
-                            }
-                            // diagonal glints
-                            if (abs(dx - dy) <= 1 && abs(dx) <= 14) {
-                                int d = abs(dx);
-                                uint8_t a = (uint8_t)std::max(0, 160 - d * 10);
-                                if (a > 16) setPixel(x, y, 255, 210, 120, a);
-                            }
-                            if (abs(dx + dy) <= 1 && abs(dx) <= 14) {
-                                int d = abs(dx);
-                                uint8_t a = (uint8_t)std::max(0, 160 - d * 10);
-                                if (a > 16) setPixel(x, y, 255, 210, 120, a);
-                            }
-                            // small accent dots
-                            if ((dx == 11 && dy == -10) || (dx == -10 && dy == -6) || (dx == 9 && dy == 6)) {
-                                setPixel(x, y, 255, 255, 255, 220);
-                            }
-                        }
-                    }
-
-                    s_particleIcon = Genesis::Engine::Texture::CreateFromMemory(iw, ih, px);
-                    return s_particleIcon;
-                };
-
-                auto CreateRigidBodyIcon = [&]() -> std::shared_ptr<Genesis::Engine::Texture> {
-                    if (s_rbIcon) return s_rbIcon;
-                    const int iw = 64, ih = 64;
-                    std::vector<uint8_t> px((size_t)iw * ih * 4, 0);
-                    int bx0 = iw/4, bx1 = iw - iw/4;
-                    int by0 = ih/3, by1 = ih - ih/3;
-                    for (int y = 0; y < ih; ++y) {
-                        for (int x = 0; x < iw; ++x) {
-                            int i = (y * iw + x) * 4;
-                            if (x >= bx0 && x <= bx1 && y >= by0 && y <= by1) { px[i+0]=160; px[i+1]=160; px[i+2]=200; px[i+3]=255; }
-                        }
-                    }
-                    s_rbIcon = Genesis::Engine::Texture::CreateFromMemory(iw, ih, px);
-                    return s_rbIcon;
-                };
-
-                // Ensure textures exist and are uploaded when we have a renderer
-                // Camera icon replaced by a canonical block+triangle vector/fallback; clear any prior camera texture to avoid remnants.
-                s_camIcon.reset();
-                CreateLightIcon(); CreateAudioIcon(); CreateParticleIcon(); CreateRigidBodyIcon();
-                if (s_lightIcon && currentRenderer) s_lightIcon->UploadToRenderer(currentRenderer);
-                if (s_audioIcon && currentRenderer) s_audioIcon->UploadToRenderer(currentRenderer);
-                if (s_particleIcon && currentRenderer) s_particleIcon->UploadToRenderer(currentRenderer);
-                if (s_rbIcon && currentRenderer) s_rbIcon->UploadToRenderer(currentRenderer);
-
-                auto IsOccluded = [&](int sx, int sy, float windowZ) {
-                    if (!iconOcclusion) return false;
-                    if (auto glr = dynamic_cast<Genesis::Engine::OpenGLRenderer*>(currentRenderer)) {
-                        float d = 1.0f;
-                        if (glr->ReadDepthAtWindowCoord(sx, sy, d)) {
-                            // if depth is closer than the object, we're occluded
-                            if (d < windowZ - 1e-5f) return true;
-                        }
-                    }
-                    return false;
-                };
-
-                const float iconSize = 64.0f; // larger icons for visibility (try 64×64)
-                const float half = iconSize * 0.5f;
-
-                // Camera icons
+            // Camera icons
+            if (cameraTexId) {
                 auto camView = activeScene->Registry().view<Genesis::Engine::CameraComponent, Genesis::Engine::Transform>();
                 for (auto entity : camView) {
                     const auto& tc = camView.get<Genesis::Engine::Transform>(entity);
                     glm::vec3 wp(tc.x, tc.y, tc.z);
-                    glm::vec2 sp; float winZ = 0.0f;
-                    if (!WorldToScreen(wp, sp, &winZ)) continue;
-                    ImVec2 p((float)sp.x, (float)sp.y);
+                    glm::vec2 sp, uv;
+                    float depth01 = 1.0f;
+                    if (!WorldToScreen(wp, sp, uv, depth01)) continue;
+                    if (IsOccluded(uv, depth01)) continue;
 
-                    if (IsOccluded((int)p.x, (int)p.y, winZ)) continue;
+                    ImVec2 p(sp.x, sp.y);
+                    ImVec2 half(iconSize * 0.5f, iconSize * 0.5f);
+                    ImVec2 pMin(p.x - half.x, p.y - half.y);
+                    ImVec2 pMax(p.x + half.x, p.y + half.y);
+                    ImU32 tint = ImGui::GetColorU32(ImVec4(0.6f, 0.8f, 1.0f, 1.0f));
+                    dl->AddImage(cameraTexId, pMin, pMax, ImVec2(0, 0), ImVec2(1, 1), tint);
 
-                    bool drewTex = false;
-                    // We prefer the canonical fallback '█◀' design; only use texture if explicitly allowed and present
-                    if (!forceSimpleCameraIcon && s_camIcon && s_camIcon->GetID() != 0) {
-                        ImVec2 tl = ImVec2(p.x - half, p.y - half);
-                        ImVec2 br = ImVec2(p.x + half, p.y + half);
-                        dl->AddImage((ImTextureID)(uintptr_t)s_camIcon->GetID(), tl, br, ImVec2(0, 1), ImVec2(1, 0));
-                        drewTex = true;
-                    }
-                    if (!drewTex) {
-                        // Canonical symbol: block (█) on the left, left-pointing triangle (◀) immediately to its right
-                        ImU32 col = IM_COL32(70,70,80,255);
-                        float blockW = iconSize * 0.42f;
-                        float blockH = iconSize * 0.36f;
-                        float triW = blockW * 0.6f;
-
-                        // Place block slightly to the left of p and triangle to the right of the block
-                        ImVec2 bodyTL(p.x - blockW - triW * 0.5f, p.y - blockH * 0.5f);
-                        ImVec2 bodyBR(bodyTL.x + blockW, bodyTL.y + blockH);
-                        dl->AddRectFilled(bodyTL, bodyBR, col, 4.0f);
-                        dl->AddRect(bodyTL, bodyBR, IM_COL32(30,30,35,255), 2.0f);
-
-                        // Triangle pointing left, tip near the block
-                        ImVec2 triTip(bodyBR.x + 2.0f, p.y);
-                        ImVec2 triBase1(bodyBR.x + 2.0f + triW, p.y - blockH * 0.45f);
-                        ImVec2 triBase2(bodyBR.x + 2.0f + triW, p.y + blockH * 0.45f);
-                        dl->AddTriangleFilled(triTip, triBase1, triBase2, col);
-
-                        // Debug markers
-                        if (showCameraIconDebug) {
-                            ImVec2 bCenter((bodyTL.x + bodyBR.x) * 0.5f, (bodyTL.y + bodyBR.y) * 0.5f);
-                            ImVec2 tCenter((triTip.x + triBase1.x + triBase2.x) / 3.0f, (triTip.y + triBase1.y + triBase2.y) / 3.0f);
-                            dl->AddCircleFilled(bCenter, 3.0f, IM_COL32(0,255,0,255), 12);
-                            dl->AddCircleFilled(tCenter, 3.0f, IM_COL32(255,0,0,255), 12);
-                            dl->AddText(ImVec2(bCenter.x + 6.0f, bCenter.y - 6.0f), IM_COL32(0,255,0,255), "B");
-                            dl->AddText(ImVec2(tCenter.x + 6.0f, tCenter.y - 6.0f), IM_COL32(255,0,0,255), "T");
-                            dl->AddText(ImVec2(p.x + 6.0f, p.y + blockH * 0.6f), IM_COL32(255,200,0,255), "Fb");
-                            dl->AddLine(bCenter, tCenter, IM_COL32(255,255,0,160), 1.0f);
-                            // Numeric sanity check
-                            char buf[64];
-                            sprintf_s(buf, "B.x=%.1f T.x=%.1f", bCenter.x, tCenter.x);
-                            dl->AddText(ImVec2(p.x - 8.0f, p.y + blockH), IM_COL32(255,255,255,200), buf);
-                        }
-                    }
-                    else {
-                        if (showCameraIconDebug) {
-                            dl->AddText(ImVec2(p.x + 6.0f, p.y + 6.0f), IM_COL32(0,200,255,255), "Tex");
-                        }
+                    if (selectedEntity == entity) {
+                        dl->AddRect(pMin, pMax, IM_COL32(255, 255, 255, 200), 2.0f, 0, 1.5f);
                     }
 
-                    // Forward indicator (same as before)
-                    glm::mat4 rotX = glm::rotate(glm::mat4(1.0f), tc.rx, glm::vec3(1,0,0));
-                    glm::mat4 rotY = glm::rotate(glm::mat4(1.0f), tc.ry, glm::vec3(0,1,0));
-                    glm::mat4 rotZ = glm::rotate(glm::mat4(1.0f), tc.rz, glm::vec3(0,0,1));
-                    glm::mat4 rot = rotZ * rotY * rotX;
-                    glm::vec3 fwd = glm::vec3(rot * glm::vec4(0, 0, -1, 0));
-                    if (glm::length(fwd) > 1e-6f) {
-                        glm::vec3 arrowWorld = wp + glm::normalize(fwd) * 1.2f;
-                        glm::vec2 arrowScr;
-                        if (WorldToScreen(arrowWorld, arrowScr)) {
-                            ImVec2 end((float)arrowScr.x, (float)arrowScr.y);
-                            dl->AddLine(p, end, ImGui::GetColorU32(ImVec4(0.4f,0.6f,1.0f,1.0f)), 2.0f);
-                        }
-                    }
-
-                    // Camera FOV visualization
-                    if (showCameraFOV) {
-                        // Also get the camera component fields
-                        const auto& cc = camView.get<Genesis::Engine::CameraComponent>(entity);
-
-                        glm::vec3 dir = glm::normalize(fwd);
-                        glm::vec3 right = glm::vec3(rot * glm::vec4(1,0,0,0));
-                        glm::vec3 up = glm::vec3(rot * glm::vec4(0,1,0,0));
-
-                        float aspect = viewportSize.x / viewportSize.y;
-                        float tanHalf = tanf(glm::radians(cc.fov * 0.5f));
-                        float n = cc.nearPlane;
-                        float f = cc.farPlane;
-
-                        glm::vec3 nc = wp + dir * n;
-                        glm::vec3 fc = wp + dir * f;
-
-                        float hN = tanHalf * n; float wN = hN * aspect;
-                        float hF = tanHalf * f; float wF = hF * aspect;
-
-                        glm::vec3 nTL = nc + up * hN - right * wN;
-                        glm::vec3 nTR = nc + up * hN + right * wN;
-                        glm::vec3 nBR = nc - up * hN + right * wN;
-                        glm::vec3 nBL = nc - up * hN - right * wN;
-
-                        glm::vec3 fTL = fc + up * hF - right * wF;
-                        glm::vec3 fTR = fc + up * hF + right * wF;
-                        glm::vec3 fBR = fc - up * hF + right * wF;
-                        glm::vec3 fBL = fc - up * hF - right * wF;
-
-                        glm::vec2 sNTL, sNTR, sNBR, sNBL, sFTL, sFTR, sFBR, sFBL;
-                        float zNTL, zNTR, zNBR, zNBL, zFTL, zFTR, zFBR, zFBL;
-                        bool vNTL = WorldToScreen(nTL, sNTL, &zNTL);
-                        bool vNTR = WorldToScreen(nTR, sNTR, &zNTR);
-                        bool vNBR = WorldToScreen(nBR, sNBR, &zNBR);
-                        bool vNBL = WorldToScreen(nBL, sNBL, &zNBL);
-                        bool vFTL = WorldToScreen(fTL, sFTL, &zFTL);
-                        bool vFTR = WorldToScreen(fTR, sFTR, &zFTR);
-                        bool vFBR = WorldToScreen(fBR, sFBR, &zFBR);
-                        bool vFBL = WorldToScreen(fBL, sFBL, &zFBL);
-
-                        if (vFTL || vFTR || vFBR || vFBL || vNTL || vNTR || vNBR || vNBL) {
-                            // occlusion test at far center
-                            glm::vec2 scrFc; float zFc;
-                            bool vFc = WorldToScreen(fc, scrFc, &zFc);
-                            bool fcOccluded = false;
-                            if (vFc) fcOccluded = IsOccluded((int)scrFc.x, (int)scrFc.y, zFc);
-
-                            ImU32 fillCol = ImGui::GetColorU32(ImVec4(0.4f,0.6f,1.0f, fcOccluded ? 0.18f : 0.45f));
-                            ImU32 outlineCol = ImGui::GetColorU32(ImVec4(0.4f,0.6f,1.0f, fcOccluded ? 0.12f : 1.0f));
-
-                            // Draw far plane if fully visible
-                            if (vFTL && vFTR && vFBR && vFBL) {
-                                ImVec2 farPts[4] = { ImVec2((float)sFTL.x,(float)sFTL.y), ImVec2((float)sFTR.x,(float)sFTR.y), ImVec2((float)sFBR.x,(float)sFBR.y), ImVec2((float)sFBL.x,(float)sFBL.y) };
-                                dl->AddConvexPolyFilled(farPts, 4, fillCol);
-                                dl->AddPolyline(farPts, 4, outlineCol, true, 1.5f);
-                            } else {
-                                // draw visible segments between far corners
-                                if (vFTL && vFTR) dl->AddLine(ImVec2((float)sFTL.x,(float)sFTL.y), ImVec2((float)sFTR.x,(float)sFTR.y), outlineCol, 1.0f);
-                                if (vFTR && vFBR) dl->AddLine(ImVec2((float)sFTR.x,(float)sFTR.y), ImVec2((float)sFBR.x,(float)sFBR.y), outlineCol, 1.0f);
-                                if (vFBR && vFBL) dl->AddLine(ImVec2((float)sFBR.x,(float)sFBR.y), ImVec2((float)sFBL.x,(float)sFBL.y), outlineCol, 1.0f);
-                                if (vFBL && vFTL) dl->AddLine(ImVec2((float)sFBL.x,(float)sFBL.y), ImVec2((float)sFTL.x,(float)sFTL.y), outlineCol, 1.0f);
-                            }
-
-                            // draw edges from camera apex to far corners
-                            if (vFTL) dl->AddLine(p, ImVec2((float)sFTL.x,(float)sFTL.y), outlineCol, 1.0f);
-                            if (vFTR) dl->AddLine(p, ImVec2((float)sFTR.x,(float)sFTR.y), outlineCol, 1.0f);
-                            if (vFBR) dl->AddLine(p, ImVec2((float)sFBR.x,(float)sFBR.y), outlineCol, 1.0f);
-                            if (vFBL) dl->AddLine(p, ImVec2((float)sFBL.x,(float)sFBL.y), outlineCol, 1.0f);
-
-                            // near plane outline (thin)
-                            if (vNTL && vNTR && vNBR && vNBL) {
-                                ImVec2 nearPts[4] = { ImVec2((float)sNTL.x,(float)sNTL.y), ImVec2((float)sNTR.x,(float)sNTR.y), ImVec2((float)sNBR.x,(float)sNBR.y), ImVec2((float)sNBL.x,(float)sNBL.y) };
-                                dl->AddPolyline(nearPts, 4, IM_COL32(200,200,255,200), true, 1.0f);
-                            }
-                        }
-                    }
-
-                    // Selection hit test
-                    if (viewportHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
-                        ImVec2 m = io.MousePos;
-                        if (m.x >= p.x - half && m.x <= p.x + half && m.y >= p.y - half && m.y <= p.y + half) {
+                    if (clicked && !consumedClick) {
+                        float dx = io.MousePos.x - p.x;
+                        float dy = io.MousePos.y - p.y;
+                        if (dx * dx + dy * dy <= hitRadiusSq) {
                             selectedEntity = entity;
+                            consumedClick = true;
                         }
                     }
                 }
+            }
 
-                // Light icons
-                auto lightView = activeScene->Registry().view<Genesis::Engine::LightComponent, Genesis::Engine::Transform>();
-                for (auto entity : lightView) {
-                    const auto& tc = lightView.get<Genesis::Engine::Transform>(entity);
-                    const auto& lc = lightView.get<Genesis::Engine::LightComponent>(entity);
-                    glm::vec3 wp(tc.x, tc.y, tc.z);
-                    glm::vec2 sp; float winZ = 0.0f;
-                    if (!WorldToScreen(wp, sp, &winZ)) continue;
-                    ImVec2 p((float)sp.x, (float)sp.y);
+            // Light icons
+            auto lightView = activeScene->Registry().view<Genesis::Engine::LightComponent, Genesis::Engine::Transform>();
+            for (auto entity : lightView) {
+                const auto& tc = lightView.get<Genesis::Engine::Transform>(entity);
+                const auto& lc = lightView.get<Genesis::Engine::LightComponent>(entity);
+                glm::vec3 wp(tc.x, tc.y, tc.z);
+                glm::vec2 sp, uv;
+                float depth01 = 1.0f;
+                if (!WorldToScreen(wp, sp, uv, depth01)) continue;
+                if (IsOccluded(uv, depth01)) continue;
 
-                    if (IsOccluded((int)p.x, (int)p.y, winZ)) continue;
+                ImTextureID lightTexId = (lc.type == Genesis::Engine::LightType::Directional) ? lightDirTexId : lightPointTexId;
+                if (!lightTexId) continue;
 
-                    bool drewTex = false;
-                    if (s_lightIcon && s_lightIcon->GetID() != 0) {
-                        ImVec2 tl = ImVec2(p.x - half, p.y - half);
-                        ImVec2 br = ImVec2(p.x + half, p.y + half);
-                        dl->AddImage((ImTextureID)(uintptr_t)s_lightIcon->GetID(), tl, br, ImVec2(0, 1), ImVec2(1, 0));
-                        drewTex = true;
-                    }
-                    if (!drewTex) {
-                        ImU32 col = ImGui::GetColorU32(ImVec4(lc.color[0], lc.color[1], lc.color[2], 1.0f));
-                        dl->AddCircleFilled(p, half * 0.6f, col, 16);
-                        dl->AddCircle(p, half * 0.6f + 3.0f, col, 16, 2.0f);
-                    }
+                ImVec2 p(sp.x, sp.y);
+                ImVec2 half(iconSize * 0.5f, iconSize * 0.5f);
+                ImVec2 pMin(p.x - half.x, p.y - half.y);
+                ImVec2 pMax(p.x + half.x, p.y + half.y);
+                ImU32 tint = ImGui::GetColorU32(ImVec4(lc.color[0], lc.color[1], lc.color[2], 1.0f));
+                dl->AddImage(lightTexId, pMin, pMax, ImVec2(0, 0), ImVec2(1, 1), tint);
 
-                    if (lc.type == Genesis::Engine::LightType::Directional) {
-                        // Direction arrow
-                        glm::mat4 rotX = glm::rotate(glm::mat4(1.0f), tc.rx, glm::vec3(1,0,0));
-                        glm::mat4 rotY = glm::rotate(glm::mat4(1.0f), tc.ry, glm::vec3(0,1,0));
-                        glm::mat4 rotZ = glm::rotate(glm::mat4(1.0f), tc.rz, glm::vec3(0,0,1));
-                        glm::mat4 rot = rotZ * rotY * rotX;
-                        glm::vec3 fwd = glm::vec3(rot * glm::vec4(0, 0, -1, 0));
-                        if (glm::length(fwd) > 1e-6f) {
-                            glm::vec3 arrowWorld = wp + glm::normalize(fwd) * 1.5f;
-                            glm::vec2 arrowScr;
-                            if (WorldToScreen(arrowWorld, arrowScr)) {
-                                ImVec2 end((float)arrowScr.x, (float)arrowScr.y);
-                                dl->AddLine(p, end, ImGui::GetColorU32(ImVec4(lc.color[0], lc.color[1], lc.color[2], 1.0f)), 2.0f);
-                            }
-                        }
-                    } else {
-                        // Show range ring for point lights
-                        if (lc.range > 0.0f) {
-                            glm::vec3 rworld = wp + glm::vec3(lc.range, 0, 0);
-                            glm::vec2 rscr;
-                            if (WorldToScreen(rworld, rscr)) {
-                                float pixelR = sqrtf((rscr.x - p.x)*(rscr.x - p.x) + (rscr.y - p.y)*(rscr.y - p.y));
-                                dl->AddCircle(p, pixelR, IM_COL32(255,255,255,100), 64, 1.5f);
-                            }
-                        }
-                    }
+                if (selectedEntity == entity) {
+                    dl->AddRect(pMin, pMax, IM_COL32(255, 255, 255, 200), 2.0f, 0, 1.5f);
+                }
 
-                    if (viewportHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
-                        ImVec2 m = io.MousePos;
-                        if (m.x >= p.x - half && m.x <= p.x + half && m.y >= p.y - half && m.y <= p.y + half) {
-                            selectedEntity = entity;
-                        }
+                if (lc.type == Genesis::Engine::LightType::Point && lc.range > 0.0f) {
+                    glm::vec3 rworld = wp + glm::vec3(lc.range, 0, 0);
+                    glm::vec2 rscr, ruv;
+                    float rdepth = 1.0f;
+                    if (WorldToScreen(rworld, rscr, ruv, rdepth)) {
+                        float pixelR = sqrtf((rscr.x - p.x) * (rscr.x - p.x) + (rscr.y - p.y) * (rscr.y - p.y));
+                        dl->AddCircle(p, pixelR, IM_COL32(255, 255, 255, 100), 64, 1.5f);
                     }
                 }
 
-                // Audio sources (icons + ranges)
-                if (showAudioSources) {
-                    auto audioView = activeScene->Registry().view<Genesis::Engine::AudioComponent, Genesis::Engine::Transform>();
-                    for (auto entity : audioView) {
-                        const auto& tc = audioView.get<Genesis::Engine::Transform>(entity);
-                        const auto& ac = audioView.get<Genesis::Engine::AudioComponent>(entity);
-                        glm::vec3 wp(tc.x, tc.y, tc.z);
-                        glm::vec2 sp; float winZ = 0.0f;
-                        if (!WorldToScreen(wp, sp, &winZ)) continue;
-                        ImVec2 p((float)sp.x, (float)sp.y);
-
-                        if (IsOccluded((int)p.x, (int)p.y, winZ)) continue;
-
-                        bool drewTex = false;
-                        if (s_audioIcon && s_audioIcon->GetID() != 0) {
-                            ImVec2 tl = ImVec2(p.x - half, p.y - half);
-                            ImVec2 br = ImVec2(p.x + half, p.y + half);
-                            dl->AddImage((ImTextureID)(uintptr_t)s_audioIcon->GetID(), tl, br, ImVec2(0, 1), ImVec2(1, 0));
-                            drewTex = true;
-                        }
-                        if (!drewTex) {
-                            // Speaker body
-                            ImU32 bodyCol = IM_COL32(70,70,80,255);
-                            ImU32 coneCol = IM_COL32(200,200,210,255);
-                            ImVec2 bodyTL(p.x - half * 0.8f, p.y - half * 0.35f);
-                            ImVec2 bodyBR(p.x - half * 0.3f, p.y + half * 0.35f);
-                            dl->AddRectFilled(bodyTL, bodyBR, bodyCol, 3.0f);
-
-                            // cone triangle (points right)
-                            ImVec2 triA(bodyTL.x + 2.0f, p.y);
-                            ImVec2 triB(bodyBR.x + 2.0f, p.y - half * 0.22f);
-                            ImVec2 triC(bodyBR.x + 2.0f, p.y + half * 0.22f);
-                            dl->AddTriangleFilled(triA, triB, triC, coneCol);
-
-                            // waves (three arcs to the right)
-                            ImU32 waveCol = IM_COL32(255,200,120,200);
-                            const int segments = 24;
-                            for (int ring = 0; ring < 3; ++ring) {
-                                float r = half * 0.45f + ring * (half * 0.22f);
-                                std::vector<ImVec2> pts;
-                                pts.reserve(segments+1);
-                                float ang0 = glm::radians(-35.0f);
-                                float ang1 = glm::radians(35.0f);
-                                for (int i = 0; i <= segments; ++i) {
-                                    float t = (float)i / (float)segments;
-                                    float a = ang0 + (ang1 - ang0) * t;
-                                    ImVec2 pt(p.x + cosf(a) * r + half * 0.1f, p.y + sinf(a) * r);
-                                    pts.push_back(pt);
-                                }
-                                dl->AddPolyline(pts.data(), (int)pts.size(), waveCol, false, 2.0f);
-                            }
-
-                            // small accent
-                            dl->AddCircleFilled(ImVec2(bodyBR.x + 4.0f, p.y - half * 0.28f), half * 0.06f, IM_COL32(255,255,255,220));
-                        }
-
-                        // Ranges for spatial audio
-                        if (ac.spatial) {
-                            if (ac.minDistance > 0.0f) {
-                                glm::vec3 rworld = wp + glm::vec3(ac.minDistance, 0, 0);
-                                glm::vec2 rscr;
-                                if (WorldToScreen(rworld, rscr)) {
-                                    float pixelR = sqrtf((rscr.x - p.x)*(rscr.x - p.x) + (rscr.y - p.y)*(rscr.y - p.y));
-                                    dl->AddCircle(p, pixelR, IM_COL32(255,255,255,80), 64, 1.0f);
-                                }
-                            }
-                            if (ac.maxDistance > ac.minDistance) {
-                                glm::vec3 rworld = wp + glm::vec3(ac.maxDistance, 0, 0);
-                                glm::vec2 rscr;
-                                if (WorldToScreen(rworld, rscr)) {
-                                    float pixelR = sqrtf((rscr.x - p.x)*(rscr.x - p.x) + (rscr.y - p.y)*(rscr.y - p.y));
-                                    dl->AddCircle(p, pixelR, IM_COL32(255,255,255,60), 64, 1.5f);
-                                }
-                            }
-                        }
-
-                        // selection hit test
-                        if (viewportHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
-                            ImVec2 m = io.MousePos;
-                            if (m.x >= p.x - half && m.x <= p.x + half && m.y >= p.y - half && m.y <= p.y + half) {
-                                selectedEntity = entity;
-                            }
-                        }
-                    }
-                }
-
-                // Particle systems (icons + emitter radius)
-                if (showParticles) {
-                    auto partView = activeScene->Registry().view<Genesis::Engine::ParticleSystemComponent, Genesis::Engine::Transform>();
-                    for (auto entity : partView) {
-                        const auto& tc = partView.get<Genesis::Engine::Transform>(entity);
-                        const auto& pc = partView.get<Genesis::Engine::ParticleSystemComponent>(entity);
-                        glm::vec3 wp(tc.x, tc.y, tc.z);
-                        glm::vec2 sp; float winZ = 0.0f;
-                        if (!WorldToScreen(wp, sp, &winZ)) continue;
-                        ImVec2 p((float)sp.x, (float)sp.y);
-
-                        if (IsOccluded((int)p.x, (int)p.y, winZ)) continue;
-
-                        bool drewTex = false;
-                        if (s_particleIcon && s_particleIcon->GetID() != 0) {
-                            ImVec2 tl = ImVec2(p.x - half, p.y - half);
-                            ImVec2 br = ImVec2(p.x + half, p.y + half);
-                            // Prefer the generated texture when available and not forcing fallback
-                            if (!forceSimpleCameraIcon) {
-                                dl->AddImage((ImTextureID)(uintptr_t)s_particleIcon->GetID(), tl, br, ImVec2(0, 1), ImVec2(1, 0));
-                                drewTex = true;
-                            }
-                        }
-                        if (!drewTex) {
-                            // Sparkle fallback (✨): diamond core + glint arms + small accent dots
-                            ImU32 coreCol = IM_COL32(255,220,110,220);
-                            ImU32 outlineCol = IM_COL32(255,180,60,200);
-                            ImU32 whiteCol = IM_COL32(255,255,255,220);
-
-                            float r = half * 0.36f;
-                            ImVec2 top(p.x, p.y - r);
-                            ImVec2 right(p.x + r, p.y);
-                            ImVec2 bottom(p.x, p.y + r);
-                            ImVec2 left(p.x - r, p.y);
-                            ImVec2 diamond[4] = { top, right, bottom, left };
-
-                            dl->AddConvexPolyFilled(diamond, 4, coreCol);
-                            dl->AddPolyline(diamond, 4, outlineCol, true, 1.6f);
-
-                            // subtle glint arms
-                            float arm = r * 1.1f;
-                            dl->AddLine(ImVec2(p.x - arm * 0.2f, p.y - arm), ImVec2(p.x + arm * 0.2f, p.y - arm * 0.3f), whiteCol, 1.0f);
-                            dl->AddLine(ImVec2(p.x - arm * 0.2f, p.y + arm), ImVec2(p.x + arm * 0.2f, p.y + arm * 0.3f), whiteCol, 1.0f);
-                            dl->AddLine(ImVec2(p.x - arm, p.y - arm * 0.2f), ImVec2(p.x - arm * 0.3f, p.y + arm * 0.2f), whiteCol, 1.0f);
-                            dl->AddLine(ImVec2(p.x + arm, p.y - arm * 0.2f), ImVec2(p.x + arm * 0.3f, p.y + arm * 0.2f), whiteCol, 1.0f);
-
-                            // small accent dots
-                            dl->AddCircleFilled(ImVec2(p.x + r * 0.6f, p.y - r * 0.6f), half * 0.06f, whiteCol);
-                            dl->AddCircleFilled(ImVec2(p.x - r * 0.6f, p.y - r * 0.4f), half * 0.05f, IM_COL32(255,200,255,200));
-                        }
-
-                        // emitter radius
-                        if (pc.emitterRadius > 0.0f) {
-                            glm::vec3 rworld = wp + glm::vec3(pc.emitterRadius, 0, 0);
-                            glm::vec2 rscr;
-                            if (WorldToScreen(rworld, rscr)) {
-                                float pixelR = sqrtf((rscr.x - p.x)*(rscr.x - p.x) + (rscr.y - p.y)*(rscr.y - p.y));
-                                dl->AddCircle(p, pixelR, IM_COL32(255,255,255,100), 64, 1.5f);
-                            }
-                        }
-
-                        // selection hit test
-                        if (viewportHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
-                            ImVec2 m = io.MousePos;
-                            if (m.x >= p.x - half && m.x <= p.x + half && m.y >= p.y - half && m.y <= p.y + half) {
-                                selectedEntity = entity;
-                            }
-                        }
+                if (clicked && !consumedClick) {
+                    float dx = io.MousePos.x - p.x;
+                    float dy = io.MousePos.y - p.y;
+                    if (dx * dx + dy * dy <= hitRadiusSq) {
+                        selectedEntity = entity;
+                        consumedClick = true;
                     }
                 }
             }
@@ -1702,19 +1517,7 @@ int main(int argc, char** argv) {
 
                     if (ext == ".scene") {
                         if (!MaybePromptUnsaved(PendingSceneAction::LoadScenePath, p.string())) {
-                            // Stop play mode if running
-                            if (editorState != EditorState::Edit) {
-                                if (activeScene) activeScene->OnRuntimeStop();
-                                activeScene = &editorScene;
-                                runtimeScene.reset();
-                                editorState = EditorState::Edit;
-                            }
-                            
-                            if (Genesis::Engine::SceneLoader::LoadScene(editorScene, p.string())) {
-                                currentScenePath = p.string();
-                                sceneDirty = false;
-                                selectedEntity = entt::null;
-                            }
+                            LoadSceneFromPath(p.string(), true);
                         }
                     } else if (ext == ".gltf" || ext == ".glb" || ext == ".obj" || ext == ".fbx") {
                         auto e = activeScene->Registry().create();
@@ -1970,6 +1773,7 @@ int main(int argc, char** argv) {
             }
 
             activeScene->Registry().each([&](auto entity) {
+                ImGui::PushID((int)entity);
                 std::string label;
                 if (activeScene->Registry().any_of<Genesis::Engine::NameComponent>(entity)) {
                     const auto& nc = activeScene->Registry().get<Genesis::Engine::NameComponent>(entity);
@@ -2028,6 +1832,7 @@ int main(int argc, char** argv) {
                 if (isSelected) {
                     ImGui::SetItemDefaultFocus();
                 }
+                ImGui::PopID();
             });
 
             if (ImGui::BeginPopupModal("Rename Entity", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
@@ -2157,108 +1962,6 @@ int main(int argc, char** argv) {
                             }
                             ImGui::EndDragDropTarget();
                         }
-
-                        if (mc.model && ImGui::TreeNode("Materials")) {
-                            const auto& materials = mc.model->Materials();
-                            for (int i = 0; i < (int)materials.size(); ++i) {
-                                if (ImGui::TreeNode((void*)(intptr_t)i, "Material %d", i)) {
-                                    bool isOverridden = mc.materialOverrides.find(i) != mc.materialOverrides.end();
-                                    Genesis::Engine::Material currentMat = isOverridden ? mc.materialOverrides[i] : materials[i];
-                                    
-                                    bool changed = false;
-                                    if (ImGui::ColorEdit4("Base Color", currentMat.baseColor.data())) changed = true;
-                                    
-                                    float metallic = currentMat.metallic;
-                                    if (ImGui::SliderFloat("Metallic", &metallic, 0.0f, 1.0f)) {
-                                        currentMat.metallic = metallic;
-                                        changed = true;
-                                    }
-                                    
-                                    float roughness = currentMat.roughness;
-                                    if (ImGui::SliderFloat("Roughness", &roughness, 0.0f, 1.0f)) {
-                                        currentMat.roughness = roughness;
-                                        changed = true;
-                                    }
-                                    
-                                    // Base Texture
-                                    char buf[256];
-                                    if (currentMat.baseColorTexture.length() >= 256) buf[0] = 0; else strcpy_s(buf, currentMat.baseColorTexture.c_str());
-                                    if (ImGui::InputText("Base Texture", buf, 256)) {
-                                        currentMat.baseColorTexture = buf;
-                                        if (!currentMat.baseColorTexture.empty())
-                                             currentMat.baseColorTextureObj = Genesis::Engine::Texture::CreateFromFile(buf);
-                                        else
-                                             currentMat.baseColorTextureObj.reset();
-                                        changed = true;
-                                    }
-                                    if (ImGui::BeginDragDropTarget()) {
-                                        if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("CONTENT_BROWSER_ITEM")) {
-                                            const char* droppedPath = (const char*)payload->Data;
-                                            currentMat.baseColorTexture = droppedPath;
-                                            currentMat.baseColorTextureObj = Genesis::Engine::Texture::CreateFromFile(droppedPath);
-                                            changed = true;
-                                        }
-                                        ImGui::EndDragDropTarget();
-                                    }
-                                    
-                                    // Normal Texture
-                                    char bufNorm[256];
-                                    if (currentMat.normalTexture.length() >= 256) bufNorm[0] = 0; else strcpy_s(bufNorm, currentMat.normalTexture.c_str());
-                                    if (ImGui::InputText("Normal Texture", bufNorm, 256)) {
-                                        currentMat.normalTexture = bufNorm;
-                                        if (!currentMat.normalTexture.empty())
-                                             currentMat.normalTextureObj = Genesis::Engine::Texture::CreateFromFile(bufNorm);
-                                        else
-                                             currentMat.normalTextureObj.reset();
-                                        changed = true;
-                                    }
-                                    if (ImGui::BeginDragDropTarget()) {
-                                        if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("CONTENT_BROWSER_ITEM")) {
-                                            const char* droppedPath = (const char*)payload->Data;
-                                            currentMat.normalTexture = droppedPath;
-                                            currentMat.normalTextureObj = Genesis::Engine::Texture::CreateFromFile(droppedPath);
-                                            changed = true;
-                                        }
-                                        ImGui::EndDragDropTarget();
-                                    }
-
-                                    if (changed) {
-                                        mc.materialOverrides[i] = currentMat;
-                                        if (editorState == EditorState::Edit) sceneDirty = true;
-                                    }
-                                    
-                                    if (isOverridden) {
-                                        if (ImGui::Button("Reset to Original")) {
-                                            mc.materialOverrides.erase(i);
-                                            if (editorState == EditorState::Edit) sceneDirty = true;
-                                        }
-                                    }
-                                    
-                                    ImGui::TreePop();
-                                }
-                            }
-                            ImGui::TreePop();
-                        }
-                    }
-                }
-
-                if (activeScene->Registry().all_of<Genesis::Engine::ScriptComponent>(selectedEntity)) {
-                    if (ImGui::CollapsingHeader("Script", ImGuiTreeNodeFlags_DefaultOpen)) {
-                        ImGui::Text("Native Script Attached");
-                        if (ImGui::Button("Remove")) {
-                            activeScene->Registry().remove<Genesis::Engine::ScriptComponent>(selectedEntity);
-                            if (editorState == EditorState::Edit) sceneDirty = true;
-                        }
-                    }
-                }
-
-                if (activeScene->Registry().all_of<Genesis::Engine::ScriptComponent>(selectedEntity)) {
-                    if (ImGui::CollapsingHeader("Script", ImGuiTreeNodeFlags_DefaultOpen)) {
-                        ImGui::Text("Native Script Attached");
-                        if (ImGui::Button("Remove")) {
-                            activeScene->Registry().remove<Genesis::Engine::ScriptComponent>(selectedEntity);
-                            if (editorState == EditorState::Edit) sceneDirty = true;
-                        }
                     }
                 }
 
@@ -2278,36 +1981,6 @@ int main(int argc, char** argv) {
                             mc.model = std::make_shared<Genesis::Engine::Model>();
                             mc.sourcePath.clear();
                             activeScene->Registry().emplace<Genesis::Engine::ModelComponent>(selectedEntity, mc);
-                            if (editorState == EditorState::Edit) sceneDirty = true;
-                        }
-                    }
-                    if (ImGui::MenuItem("Camera")) {
-                        if (!activeScene->Registry().all_of<Genesis::Engine::CameraComponent>(selectedEntity)) {
-                            activeScene->Registry().emplace<Genesis::Engine::CameraComponent>(selectedEntity);
-                            if (editorState == EditorState::Edit) sceneDirty = true;
-                        }
-                    }
-                    if (ImGui::MenuItem("Rigid Body")) {
-                        if (!activeScene->Registry().all_of<Genesis::Engine::RigidBodyComponent>(selectedEntity)) {
-                            activeScene->Registry().emplace<Genesis::Engine::RigidBodyComponent>(selectedEntity);
-                            if (editorState == EditorState::Edit) sceneDirty = true;
-                        }
-                    }
-                    if (ImGui::MenuItem("Audio")) {
-                        if (!activeScene->Registry().all_of<Genesis::Engine::AudioComponent>(selectedEntity)) {
-                            activeScene->Registry().emplace<Genesis::Engine::AudioComponent>(selectedEntity);
-                            if (editorState == EditorState::Edit) sceneDirty = true;
-                        }
-                    }
-                    if (ImGui::MenuItem("Particle System")) {
-                        if (!activeScene->Registry().all_of<Genesis::Engine::ParticleSystemComponent>(selectedEntity)) {
-                            activeScene->Registry().emplace<Genesis::Engine::ParticleSystemComponent>(selectedEntity);
-                            if (editorState == EditorState::Edit) sceneDirty = true;
-                        }
-                    }
-                    if (ImGui::MenuItem("Script")) {
-                        if (!activeScene->Registry().all_of<Genesis::Engine::ScriptComponent>(selectedEntity)) {
-                            activeScene->Registry().emplace<Genesis::Engine::ScriptComponent>(selectedEntity);
                             if (editorState == EditorState::Edit) sceneDirty = true;
                         }
                     }
@@ -2384,20 +2057,7 @@ int main(int argc, char** argv) {
                             if (ext == ".scene") {
                                 const std::string pathStr = entry.path().string();
                                 if (!MaybePromptUnsaved(PendingSceneAction::LoadScenePath, pathStr)) {
-                                    // Stop play mode logic handled in LoadScenePath action if prompted, 
-                                    // but here we are loading directly if not dirty.
-                                    if (editorState != EditorState::Edit) {
-                                         if (activeScene) activeScene->OnRuntimeStop();
-                                         activeScene = &editorScene;
-                                         runtimeScene.reset();
-                                         editorState = EditorState::Edit;
-                                    }
-
-                                    if (Genesis::Engine::SceneLoader::LoadScene(editorScene, pathStr)) {
-                                        currentScenePath = pathStr;
-                                        sceneDirty = false;
-                                        selectedEntity = entt::null;
-                                    }
+                                    LoadSceneFromPath(pathStr, true);
                                 }
                             }
                         }
@@ -2478,7 +2138,10 @@ int main(int argc, char** argv) {
                             if (!currentScenePath.empty()) {
                                 strncpy_s(scenePathBuffer, currentScenePath.c_str(), sizeof(scenePathBuffer) - 1);
                             } else {
-                                strncpy_s(scenePathBuffer, "Assets/scenes/default.scene", sizeof(scenePathBuffer) - 1);
+                                const std::string fallbackPath = !editorSettings.lastScenePath.empty()
+                                    ? editorSettings.lastScenePath
+                                    : std::string("Assets/scenes/scene.scene");
+                                strncpy_s(scenePathBuffer, fallbackPath.c_str(), sizeof(scenePathBuffer) - 1);
                             }
                         }
                     }
@@ -2488,9 +2151,7 @@ int main(int argc, char** argv) {
                             strncpy_s(scenePathBuffer, "Assets/scenes/scene.scene", sizeof(scenePathBuffer) - 1);
                         } else {
                             if (editorState == EditorState::Edit) {
-                                if (Genesis::Engine::SceneLoader::SaveScene(editorScene, currentScenePath)) {
-                                    sceneDirty = false;
-                                }
+                                SaveSceneToPath(currentScenePath, true);
                             }
                         }
                     }
@@ -2569,17 +2230,7 @@ int main(int argc, char** argv) {
 
             if (ImGui::Button("Open") || ImGui::IsKeyPressed(ImGuiKey_Enter)) {
                 if (!MaybePromptUnsaved(PendingSceneAction::LoadScenePath, std::string(scenePathBuffer))) {
-                    if (editorState != EditorState::Edit) {
-                         if (activeScene) activeScene->OnRuntimeStop();
-                         activeScene = &editorScene;
-                         runtimeScene.reset();
-                         editorState = EditorState::Edit;
-                    }
-                    if (Genesis::Engine::SceneLoader::LoadScene(editorScene, scenePathBuffer)) {
-                        currentScenePath = scenePathBuffer;
-                        sceneDirty = false;
-                        selectedEntity = entt::null;
-                    }
+                    LoadSceneFromPath(scenePathBuffer, true);
                 }
                 showOpenSceneModal = false;
                 ImGui::CloseCurrentPopup();
@@ -2602,9 +2253,7 @@ int main(int argc, char** argv) {
             ImGui::InputText("##saveScenePath", scenePathBuffer, sizeof(scenePathBuffer));
             ImGui::PopItemWidth();
             if (ImGui::Button("Save") || ImGui::IsKeyPressed(ImGuiKey_Enter)) {
-                if (Genesis::Engine::SceneLoader::SaveScene(editorScene, scenePathBuffer)) {
-                    currentScenePath = scenePathBuffer;
-                    sceneDirty = false;
+                if (SaveSceneToPath(scenePathBuffer, true)) {
 
                     // If a destructive action was pending, run it now.
                     if (pendingAction != PendingSceneAction::None) {
@@ -2619,17 +2268,7 @@ int main(int argc, char** argv) {
                         } else if (action == PendingSceneAction::ShowOpenScene) {
                             showOpenSceneModal = true;
                         } else if (action == PendingSceneAction::LoadScenePath) {
-                            if (editorState != EditorState::Edit) {
-                                if (activeScene) activeScene->OnRuntimeStop();
-                                activeScene = &editorScene;
-                                runtimeScene.reset();
-                                editorState = EditorState::Edit;
-                            }
-                            if (Genesis::Engine::SceneLoader::LoadScene(editorScene, p)) {
-                                currentScenePath = p;
-                                sceneDirty = false;
-                                selectedEntity = entt::null;
-                            }
+                            LoadSceneFromPath(p, true);
                         }
                     }
                 }
@@ -2646,6 +2285,39 @@ int main(int argc, char** argv) {
                 }
                 ImGui::CloseCurrentPopup();
             }
+            ImGui::EndPopup();
+        }
+
+        // Autosave restore prompt
+        if (showAutosaveRestoreModal) {
+            ImGui::OpenPopup("Autosave Available");
+        }
+        if (ImGui::BeginPopupModal("Autosave Available", &showAutosaveRestoreModal, ImGuiWindowFlags_AlwaysAutoResize)) {
+            ImGui::TextUnformatted("An autosave was found for this project.");
+            ImGui::TextUnformatted("Restore it?");
+            ImGui::Separator();
+
+            if (ImGui::Button("Restore")) {
+                if (Genesis::Engine::SceneLoader::LoadScene(editorScene, autosavePath.string())) {
+                    selectedEntity = entt::null;
+                    sceneDirty = true;
+                    currentScenePath = autosaveBaseScenePath;
+                }
+                showAutosaveRestoreModal = false;
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Discard")) {
+                ClearAutosave();
+                showAutosaveRestoreModal = false;
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Later")) {
+                showAutosaveRestoreModal = false;
+                ImGui::CloseCurrentPopup();
+            }
+
             ImGui::EndPopup();
         }
 
@@ -2672,8 +2344,7 @@ int main(int argc, char** argv) {
                     strncpy_s(scenePathBuffer, "Assets/scenes/scene.scene", sizeof(scenePathBuffer) - 1);
                     shouldClose = true;
                 } else {
-                    if (Genesis::Engine::SceneLoader::SaveScene(editorScene, currentScenePath)) {
-                        sceneDirty = false;
+                    if (SaveSceneToPath(currentScenePath, true)) {
 
                         auto action = pendingAction;
                         auto p = pendingScenePath;
@@ -2687,18 +2358,7 @@ int main(int argc, char** argv) {
                         } else if (action == PendingSceneAction::ShowOpenScene) {
                             showOpenSceneModal = true;
                         } else if (action == PendingSceneAction::LoadScenePath) {
-                            // Stop Play Mode if running
-                            if (editorState != EditorState::Edit) {
-                                if (activeScene) activeScene->OnRuntimeStop();
-                                activeScene = &editorScene;
-                                runtimeScene.reset();
-                                editorState = EditorState::Edit;
-                            }
-                            if (Genesis::Engine::SceneLoader::LoadScene(editorScene, p)) {
-                                currentScenePath = p;
-                                sceneDirty = false;
-                                selectedEntity = entt::null;
-                            }
+                            LoadSceneFromPath(p, true);
                         }
                         shouldClose = true;
                     } else {
@@ -2728,18 +2388,7 @@ int main(int argc, char** argv) {
                 } else if (action == PendingSceneAction::ShowOpenScene) {
                     showOpenSceneModal = true;
                 } else if (action == PendingSceneAction::LoadScenePath) {
-                    // Stop Play Mode if running
-                    if (editorState != EditorState::Edit) {
-                        if (activeScene) activeScene->OnRuntimeStop();
-                        activeScene = &editorScene;
-                        runtimeScene.reset();
-                        editorState = EditorState::Edit;
-                    }
-                    if (Genesis::Engine::SceneLoader::LoadScene(editorScene, p)) {
-                        currentScenePath = p;
-                        sceneDirty = false;
-                        selectedEntity = entt::null;
-                    }
+                    LoadSceneFromPath(p, true);
                 }
 
                 showUnsavedChangesModal = false;
