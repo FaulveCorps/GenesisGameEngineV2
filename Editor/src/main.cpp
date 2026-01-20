@@ -1913,6 +1913,12 @@ int main(int argc, char** argv) {
                 ImGui::PopID();
             });
 
+            if (ImGui::IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem)
+                && ImGui::IsMouseClicked(ImGuiMouseButton_Left)
+                && !ImGui::IsAnyItemHovered()) {
+                selectedEntity = entt::null;
+            }
+
             if (ImGui::BeginPopupModal("Rename Entity", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
                 ImGui::TextUnformatted("Name:");
                 ImGui::PushItemWidth(300.0f);
