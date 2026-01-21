@@ -558,6 +558,7 @@ int main(int argc, char** argv) {
     // Editor Camera State
     glm::vec3 cameraPos = glm::vec3(0.0f, 2.0f, 5.0f);
     glm::vec3 cameraRot = glm::vec3(-20.0f, 0.0f, 0.0f); // Pitch, Yaw, Roll
+    float editorCameraFov = 45.0f;
     ImGuizmo::OPERATION currentGizmoOperation = ImGuizmo::TRANSLATE;
     // Fixed world-aligned gizmo by default (modern editor behavior).
     // Note: we still force SCALE to LOCAL at draw time to avoid TRS shear artifacts.
@@ -1226,7 +1227,9 @@ int main(int argc, char** argv) {
         const bool wantText = ImGui::GetIO().WantTextInput;
         const bool lDown = ImGui::IsMouseDown(ImGuiMouseButton_Left);
         const bool rDown = ImGui::IsMouseDown(ImGuiMouseButton_Right);
+        const bool mDown = ImGui::IsMouseDown(ImGuiMouseButton_Middle);
         const bool lClicked = ImGui::IsMouseClicked(ImGuiMouseButton_Left);
+        const bool viewportLeftClicked = viewportHovered && lClicked;
 
         // Acquire input ownership.
         if (inputOwner == ViewportInputOwner::None) {
@@ -1234,7 +1237,7 @@ int main(int argc, char** argv) {
                 inputOwner = ViewportInputOwner::ViewCube;
             } else if ((lClicked || lDown) && ImGuizmo::IsOver()) {
                 inputOwner = ViewportInputOwner::Gizmo;
-            } else if (viewportFocused && viewportHovered && !mouseOverViewCube && rDown && !wantText) {
+            } else if (viewportFocused && viewportHovered && !mouseOverViewCube && (rDown || mDown) && !wantText) {
                 inputOwner = ViewportInputOwner::CameraNav;
             }
         }
@@ -1244,7 +1247,7 @@ int main(int argc, char** argv) {
             inputOwner = ViewportInputOwner::None;
         } else if (inputOwner == ViewportInputOwner::Gizmo && !lDown && !ImGuizmo::IsUsing()) {
             inputOwner = ViewportInputOwner::None;
-        } else if (inputOwner == ViewportInputOwner::CameraNav && !rDown) {
+        } else if (inputOwner == ViewportInputOwner::CameraNav && !rDown && !mDown) {
             inputOwner = ViewportInputOwner::None;
         }
 
@@ -1263,6 +1266,16 @@ int main(int argc, char** argv) {
         if (!ImGui::GetIO().WantTextInput && ImGui::IsKeyPressed(ImGuiKey_G)) {
             // Keep this scoped to viewport focus to avoid toggling grid while typing elsewhere.
             if (viewportFocused) showGrid = !showGrid;
+        }
+
+        if (editorState == EditorState::Edit && viewportHovered && !wantText && !ImGuizmo::IsUsing()) {
+            float wheel = ImGui::GetIO().MouseWheel;
+            if (wheel != 0.0f) {
+                const float fovStep = 2.0f;
+                const float minFov = 15.0f;
+                const float maxFov = 90.0f;
+                editorCameraFov = glm::clamp(editorCameraFov - wheel * fovStep, minFov, maxFov);
+            }
         }
 
         // Camera Navigation (viewport-scoped)
@@ -1285,18 +1298,26 @@ int main(int argc, char** argv) {
                 refUp = glm::vec3(0.0f, 0.0f, 1.0f);
             }
             glm::vec3 right = glm::normalize(glm::cross(forward, refUp));
+            glm::vec3 up = glm::normalize(glm::cross(right, forward));
 
-            if (ImGui::IsKeyDown(ImGuiKey_W)) cameraPos += forward * speed;
-            if (ImGui::IsKeyDown(ImGuiKey_S)) cameraPos -= forward * speed;
-            if (ImGui::IsKeyDown(ImGuiKey_A)) cameraPos -= right * speed;
-            if (ImGui::IsKeyDown(ImGuiKey_D)) cameraPos += right * speed;
-            if (ImGui::IsKeyDown(ImGuiKey_Q)) cameraPos -= glm::vec3(0, 1, 0) * speed;
-            if (ImGui::IsKeyDown(ImGuiKey_E)) cameraPos += glm::vec3(0, 1, 0) * speed;
+            if (rDown) {
+                if (ImGui::IsKeyDown(ImGuiKey_W)) cameraPos += forward * speed;
+                if (ImGui::IsKeyDown(ImGuiKey_S)) cameraPos -= forward * speed;
+                if (ImGui::IsKeyDown(ImGuiKey_A)) cameraPos -= right * speed;
+                if (ImGui::IsKeyDown(ImGuiKey_D)) cameraPos += right * speed;
+                if (ImGui::IsKeyDown(ImGuiKey_Q)) cameraPos -= glm::vec3(0, 1, 0) * speed;
+                if (ImGui::IsKeyDown(ImGuiKey_E)) cameraPos += glm::vec3(0, 1, 0) * speed;
 
-            // Mouse Look (once captured, apply regardless of hover for stable navigation)
-            ImVec2 delta = ImGui::GetIO().MouseDelta;
-            cameraRot.y -= delta.x * 0.1f; // Invert X for intuitive look
-            cameraRot.x -= delta.y * 0.1f; // Invert Y
+                // Mouse Look (once captured, apply regardless of hover for stable navigation)
+                ImVec2 delta = ImGui::GetIO().MouseDelta;
+                cameraRot.y -= delta.x * 0.1f; // Invert X for intuitive look
+                cameraRot.x -= delta.y * 0.1f; // Invert Y
+            } else if (mDown) {
+                ImVec2 delta = ImGui::GetIO().MouseDelta;
+                const float panSpeed = 0.01f;
+                cameraPos -= right * (delta.x * panSpeed);
+                cameraPos += up * (delta.y * panSpeed);
+            }
         }
 
         // Update Camera Matrices
@@ -1305,11 +1326,11 @@ int main(int argc, char** argv) {
         view = glm::rotate(view, glm::radians(cameraRot.y), glm::vec3(0, 1, 0));
         view = glm::translate(view, -cameraPos);
 
-        glm::mat4 projection = glm::perspective(glm::radians(45.0f), 16.0f / 9.0f, 0.1f, 100.0f);
+        glm::mat4 projection = glm::perspective(glm::radians(editorCameraFov), 16.0f / 9.0f, 0.1f, 100.0f);
         
         // Update Projection Aspect Ratio based on Viewport Size
         if (viewportSize.x > 0 && viewportSize.y > 0) {
-            projection = glm::perspective(glm::radians(45.0f), viewportSize.x / viewportSize.y, 0.1f, 100.0f);
+            projection = glm::perspective(glm::radians(editorCameraFov), viewportSize.x / viewportSize.y, 0.1f, 100.0f);
         }
 
         // Play Mode Camera Override
@@ -1385,6 +1406,8 @@ int main(int argc, char** argv) {
             ImGuizmo::DrawGrid(glm::value_ptr(view), glm::value_ptr(projection), glm::value_ptr(identityMatrix), 100.f);
         }
 
+        bool viewportClickConsumed = false;
+
         // Draw overlay icons for non-visible objects (camera, lights)
         if (showSceneIcons && viewportSize.x > 1.0f && viewportSize.y > 1.0f) {
             auto WorldToScreen = [&](const glm::vec3& worldPos, glm::vec2& outScreen, glm::vec2& outUv, float& outDepth01) -> bool {
@@ -1430,8 +1453,7 @@ int main(int argc, char** argv) {
 
             ImDrawList* dl = ImGui::GetWindowDrawList();
             ImGuiIO& io = ImGui::GetIO();
-            const bool clicked = viewportHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left);
-            bool consumedClick = false;
+            const bool clicked = viewportLeftClicked;
             const float iconSize = 32.0f;
             const float hitRadiusSq = (iconSize * 0.5f) * (iconSize * 0.5f);
             const bool useVectorIcons = true;
@@ -1578,12 +1600,12 @@ int main(int argc, char** argv) {
                         dl->AddRect(pMin, pMax, IM_COL32(255, 255, 255, 200), 2.0f, 0, 1.5f);
                     }
 
-                    if (clicked && !consumedClick) {
+                    if (clicked && !viewportClickConsumed) {
                         float dx = io.MousePos.x - p.x;
                         float dy = io.MousePos.y - p.y;
                         if (dx * dx + dy * dy <= hitRadiusSq) {
                             selectedEntity = entity;
-                            consumedClick = true;
+                            viewportClickConsumed = true;
                         }
                     }
                 }
@@ -1632,12 +1654,12 @@ int main(int argc, char** argv) {
                     }
                 }
 
-                if (clicked && !consumedClick) {
+                if (clicked && !viewportClickConsumed) {
                     float dx = io.MousePos.x - p.x;
                     float dy = io.MousePos.y - p.y;
                     if (dx * dx + dy * dy <= hitRadiusSq) {
                         selectedEntity = entity;
-                        consumedClick = true;
+                        viewportClickConsumed = true;
                     }
                 }
             }
@@ -1664,12 +1686,12 @@ int main(int argc, char** argv) {
                         dl->AddRect(pMin, pMax, IM_COL32(255, 255, 255, 200), 2.0f, 0, 1.5f);
                     }
 
-                    if (clicked && !consumedClick) {
+                    if (clicked && !viewportClickConsumed) {
                         float dx = io.MousePos.x - p.x;
                         float dy = io.MousePos.y - p.y;
                         if (dx * dx + dy * dy <= hitRadiusSq) {
                             selectedEntity = entity;
-                            consumedClick = true;
+                            viewportClickConsumed = true;
                         }
                     }
                 }
@@ -1697,12 +1719,12 @@ int main(int argc, char** argv) {
                         dl->AddRect(pMin, pMax, IM_COL32(255, 255, 255, 200), 2.0f, 0, 1.5f);
                     }
 
-                    if (clicked && !consumedClick) {
+                    if (clicked && !viewportClickConsumed) {
                         float dx = io.MousePos.x - p.x;
                         float dy = io.MousePos.y - p.y;
                         if (dx * dx + dy * dy <= hitRadiusSq) {
                             selectedEntity = entity;
-                            consumedClick = true;
+                            viewportClickConsumed = true;
                         }
                     }
                 }
@@ -1730,12 +1752,12 @@ int main(int argc, char** argv) {
                         dl->AddRect(pMin, pMax, IM_COL32(255, 255, 255, 200), 2.0f, 0, 1.5f);
                     }
 
-                    if (clicked && !consumedClick) {
+                    if (clicked && !viewportClickConsumed) {
                         float dx = io.MousePos.x - p.x;
                         float dy = io.MousePos.y - p.y;
                         if (dx * dx + dy * dy <= hitRadiusSq) {
                             selectedEntity = entity;
-                            consumedClick = true;
+                            viewportClickConsumed = true;
                         }
                     }
                 }
@@ -1764,12 +1786,12 @@ int main(int argc, char** argv) {
                         dl->AddRect(pMin, pMax, IM_COL32(255, 255, 255, 200), 2.0f, 0, 1.5f);
                     }
 
-                    if (clicked && !consumedClick) {
+                    if (clicked && !viewportClickConsumed) {
                         float dx = io.MousePos.x - p.x;
                         float dy = io.MousePos.y - p.y;
                         if (dx * dx + dy * dy <= hitRadiusSq) {
                             selectedEntity = entity;
-                            consumedClick = true;
+                            viewportClickConsumed = true;
                         }
                     }
                 }
@@ -1798,15 +1820,22 @@ int main(int argc, char** argv) {
                         dl->AddRect(pMin, pMax, IM_COL32(255, 255, 255, 200), 2.0f, 0, 1.5f);
                     }
 
-                    if (clicked && !consumedClick) {
+                    if (clicked && !viewportClickConsumed) {
                         float dx = io.MousePos.x - p.x;
                         float dy = io.MousePos.y - p.y;
                         if (dx * dx + dy * dy <= hitRadiusSq) {
                             selectedEntity = entity;
-                            consumedClick = true;
+                            viewportClickConsumed = true;
                         }
                     }
                 }
+            }
+        }
+
+        if (viewportLeftClicked && !viewportClickConsumed) {
+            const bool gizmoHit = ImGuizmo::IsOver() || ImGuizmo::IsUsing();
+            if (!gizmoHit && !mouseOverViewCube) {
+                selectedEntity = entt::null;
             }
         }
 
