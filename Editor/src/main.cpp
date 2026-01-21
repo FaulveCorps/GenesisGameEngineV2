@@ -17,6 +17,8 @@
 #include "engine/ScriptRegistry.h"
 #include "engine/PrefabLoader.h"
 #include "engine/AssetDatabase.h"
+#include "engine/Animation.h"
+#include "engine/UI.h"
 #include "imgui_impl_sdl3.h"
 #include "imgui_impl_opengl3.h"
 #include "ImGuizmo.h"
@@ -3102,6 +3104,8 @@ int main(int argc, char** argv) {
                 static char audioPathBuf[512] = "";
                 static entt::entity transformEditEntity = entt::null;
                 static Genesis::Engine::Transform transformEditStart{};
+                static entt::entity lastUIEntity = entt::null;
+                static char uiTextBuf[256] = "";
 
                 if (activeScene->Registry().all_of<Genesis::Engine::Transform>(selectedEntity)) {
                     if (ImGui::CollapsingHeader("Transform", ImGuiTreeNodeFlags_DefaultOpen)) {
@@ -3341,6 +3345,88 @@ int main(int argc, char** argv) {
                     }
                 }
 
+                if (activeScene->Registry().all_of<Genesis::Engine::AnimationComponent>(selectedEntity)) {
+                    if (ImGui::CollapsingHeader("Animation", ImGuiTreeNodeFlags_DefaultOpen)) {
+                        auto& anim = activeScene->Registry().get<Genesis::Engine::AnimationComponent>(selectedEntity);
+                        const char* clipName = anim.clip ? anim.clip->name.c_str() : "(none)";
+                        ImGui::Text("Clip: %s", clipName);
+                        if (ImGui::DragFloat("Current Time", &anim.currentTime, 0.01f, 0.0f, 10000.0f)) {
+                            if (editorState == EditorState::Edit) sceneDirty = true;
+                        }
+                        if (ImGui::DragFloat("Speed", &anim.speed, 0.01f, -10.0f, 10.0f)) {
+                            if (editorState == EditorState::Edit) sceneDirty = true;
+                        }
+                        if (ImGui::Checkbox("Loop", &anim.loop)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        if (ImGui::Checkbox("Playing", &anim.isPlaying)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        if (ImGui::Button("Restart")) {
+                            anim.currentTime = 0.0f;
+                            anim.isPlaying = true;
+                            if (editorState == EditorState::Edit) sceneDirty = true;
+                        }
+                        ImGui::SameLine();
+                        if (ImGui::Button("Stop")) {
+                            anim.isPlaying = false;
+                            if (editorState == EditorState::Edit) sceneDirty = true;
+                        }
+                        ImGui::SameLine();
+                        if (ImGui::Button("Clear Clip")) {
+                            anim.clip.reset();
+                            anim.currentTime = 0.0f;
+                            anim.isPlaying = false;
+                            if (editorState == EditorState::Edit) sceneDirty = true;
+                        }
+                    }
+                }
+
+                if (activeScene->Registry().all_of<Genesis::Engine::UIComponent>(selectedEntity)) {
+                    if (ImGui::CollapsingHeader("UI", ImGuiTreeNodeFlags_DefaultOpen)) {
+                        auto& ui = activeScene->Registry().get<Genesis::Engine::UIComponent>(selectedEntity);
+                        const char* types[] = { "Image", "Button", "Text" };
+                        int currentType = static_cast<int>(ui.type);
+                        if (ImGui::Combo("Type", &currentType, types, IM_ARRAYSIZE(types))) {
+                            ui.type = static_cast<Genesis::Engine::UIType>(currentType);
+                            if (editorState == EditorState::Edit) sceneDirty = true;
+                        }
+                        if (ImGui::DragFloat2("Position", &ui.x, 0.5f)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        if (ImGui::DragFloat2("Size", &ui.width, 0.5f, 0.0f, 10000.0f)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        if (ImGui::ColorEdit4("Color", ui.color)) if (editorState == EditorState::Edit) sceneDirty = true;
+
+                        if (selectedEntity != lastUIEntity) {
+                            strncpy_s(uiTextBuf, ui.text.c_str(), sizeof(uiTextBuf) - 1);
+                            lastUIEntity = selectedEntity;
+                        }
+                        if (ImGui::InputText("Text", uiTextBuf, sizeof(uiTextBuf))) {
+                            ui.text = uiTextBuf;
+                            if (editorState == EditorState::Edit) sceneDirty = true;
+                        }
+
+                        if (ui.texture) {
+                            ImGui::Text("Texture: assigned");
+                        } else {
+                            ImGui::Text("Texture: (none)");
+                        }
+                        ImGui::TextUnformatted("Drag an image from Content Browser to assign.");
+                        if (ImGui::BeginDragDropTarget()) {
+                            if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("CONTENT_BROWSER_ITEM")) {
+                                const char* droppedPath = (const char*)payload->Data;
+                                if (droppedPath && droppedPath[0] != 0) {
+                                    std::filesystem::path p(droppedPath);
+                                    std::string ext = ToLowerCopy(p.extension().string());
+                                    if (IsImageExtension(ext)) {
+                                        ui.texture = Genesis::Engine::Texture::CreateFromFile(p.string());
+                                        if (editorState == EditorState::Edit) sceneDirty = true;
+                                    }
+                                }
+                            }
+                            ImGui::EndDragDropTarget();
+                        }
+                        if (ui.texture && ImGui::Button("Clear Texture")) {
+                            ui.texture.reset();
+                            if (editorState == EditorState::Edit) sceneDirty = true;
+                        }
+                    }
+                }
+
                 if (ImGui::Button("Add Component")) {
                     ImGui::OpenPopup("AddComponentPopup");
                 }
@@ -3409,6 +3495,18 @@ int main(int argc, char** argv) {
                     if (ImGui::MenuItem("Sphere Collider")) {
                         if (!activeScene->Registry().all_of<Genesis::Engine::SphereColliderComponent>(selectedEntity)) {
                             activeScene->Registry().emplace<Genesis::Engine::SphereColliderComponent>(selectedEntity);
+                            if (editorState == EditorState::Edit) sceneDirty = true;
+                        }
+                    }
+                    if (ImGui::MenuItem("Animation")) {
+                        if (!activeScene->Registry().all_of<Genesis::Engine::AnimationComponent>(selectedEntity)) {
+                            activeScene->Registry().emplace<Genesis::Engine::AnimationComponent>(selectedEntity);
+                            if (editorState == EditorState::Edit) sceneDirty = true;
+                        }
+                    }
+                    if (ImGui::MenuItem("UI")) {
+                        if (!activeScene->Registry().all_of<Genesis::Engine::UIComponent>(selectedEntity)) {
+                            activeScene->Registry().emplace<Genesis::Engine::UIComponent>(selectedEntity);
                             if (editorState == EditorState::Edit) sceneDirty = true;
                         }
                     }
