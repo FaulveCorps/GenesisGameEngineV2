@@ -24,6 +24,8 @@
 #include <string>
 #include <vector>
 #include <cstdlib>
+#include <unordered_map>
+#include <cstdint>
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -125,6 +127,170 @@ static std::shared_ptr<Genesis::Engine::Texture> LoadIconTexturePPM(const std::s
     }
 
     return Genesis::Engine::Texture::CreateFromMemory((uint32_t)width, (uint32_t)height, pixels);
+}
+
+struct IconColor {
+    uint8_t r = 0, g = 0, b = 0, a = 255;
+};
+
+static IconColor ShadeColor(const IconColor& c, float mul, int add = 0) {
+    auto clamp = [](int v) { return static_cast<uint8_t>(std::max(0, std::min(255, v))); };
+    return {
+        clamp((int)std::round(c.r * mul) + add),
+        clamp((int)std::round(c.g * mul) + add),
+        clamp((int)std::round(c.b * mul) + add),
+        c.a
+    };
+}
+
+static IconColor LerpColor(const IconColor& a, const IconColor& b, float t) {
+    t = std::max(0.0f, std::min(1.0f, t));
+    auto lerp = [t](uint8_t v0, uint8_t v1) {
+        return static_cast<uint8_t>(std::round(v0 + (v1 - v0) * t));
+    };
+    return { lerp(a.r, b.r), lerp(a.g, b.g), lerp(a.b, b.b), lerp(a.a, b.a) };
+}
+
+static void SetPixel(std::vector<uint8_t>& pixels, int size, int x, int y, const IconColor& c) {
+    if (x < 0 || y < 0 || x >= size || y >= size) return;
+    size_t idx = (static_cast<size_t>(y) * size + x) * 4;
+    pixels[idx + 0] = c.r;
+    pixels[idx + 1] = c.g;
+    pixels[idx + 2] = c.b;
+    pixels[idx + 3] = c.a;
+}
+
+static void FillRect(std::vector<uint8_t>& pixels, int size, int x0, int y0, int x1, int y1, const IconColor& c) {
+    for (int y = y0; y < y1; ++y) {
+        for (int x = x0; x < x1; ++x) {
+            SetPixel(pixels, size, x, y, c);
+        }
+    }
+}
+
+static bool InRoundedRect(int x, int y, int x0, int y0, int x1, int y1, int radius) {
+    if (x < x0 || y < y0 || x >= x1 || y >= y1) return false;
+    if (radius <= 0) return true;
+
+    const int left = x0 + radius;
+    const int right = x1 - radius - 1;
+    const int top = y0 + radius;
+    const int bottom = y1 - radius - 1;
+
+    if (x >= left && x <= right) return true;
+    if (y >= top && y <= bottom) return true;
+
+    const int cx = (x < left) ? left : right;
+    const int cy = (y < top) ? top : bottom;
+    const int dx = x - cx;
+    const int dy = y - cy;
+    return (dx * dx + dy * dy) <= (radius * radius);
+}
+
+static void FillRoundedRectGradient(std::vector<uint8_t>& pixels, int size,
+    int x0, int y0, int x1, int y1, int radius,
+    const IconColor& top, const IconColor& bottom) {
+    const int height = std::max(1, y1 - y0);
+    for (int y = y0; y < y1; ++y) {
+        const float t = (height > 1) ? (float)(y - y0) / (float)(height - 1) : 0.0f;
+        const IconColor row = LerpColor(top, bottom, t);
+        for (int x = x0; x < x1; ++x) {
+            if (InRoundedRect(x, y, x0, y0, x1, y1, radius)) {
+                SetPixel(pixels, size, x, y, row);
+            }
+        }
+    }
+}
+
+static std::shared_ptr<Genesis::Engine::Texture> MakeFolderIcon(const IconColor& base) {
+    const int size = 64;
+    std::vector<uint8_t> pixels(static_cast<size_t>(size) * size * 4, 0);
+
+    IconColor bodyTop = ShadeColor(base, 1.08f, 10);
+    IconColor bodyBottom = ShadeColor(base, 0.86f, -6);
+    IconColor tabTop = ShadeColor(base, 1.2f, 18);
+    IconColor tabBottom = ShadeColor(base, 0.98f, 4);
+    IconColor outline = ShadeColor(base, 0.65f, -10);
+    IconColor shadow = { 0, 0, 0, 70 };
+
+    // Shadow
+    FillRoundedRectGradient(pixels, size, 8, 24, 58, 56, 6, shadow, shadow);
+    // Tab
+    FillRoundedRectGradient(pixels, size, 12, 12, 40, 26, 5, tabTop, tabBottom);
+    // Body
+    FillRoundedRectGradient(pixels, size, 6, 22, 58, 56, 6, bodyTop, bodyBottom);
+
+    // Outline
+    for (int y = 22; y < 56; ++y) {
+        for (int x = 6; x < 58; ++x) {
+            if (InRoundedRect(x, y, 6, 22, 58, 56, 6) && !InRoundedRect(x, y, 7, 23, 57, 55, 5)) {
+                SetPixel(pixels, size, x, y, outline);
+            }
+        }
+    }
+    for (int y = 12; y < 26; ++y) {
+        for (int x = 12; x < 40; ++x) {
+            if (InRoundedRect(x, y, 12, 12, 40, 26, 5) && !InRoundedRect(x, y, 13, 13, 39, 25, 4)) {
+                SetPixel(pixels, size, x, y, outline);
+            }
+        }
+    }
+
+    // Highlight line
+    IconColor highlight = ShadeColor(base, 1.35f, 25);
+    for (int x = 10; x < 52; ++x) {
+        SetPixel(pixels, size, x, 27, highlight);
+    }
+
+    return Genesis::Engine::Texture::CreateFromMemory(size, size, pixels);
+}
+
+static std::shared_ptr<Genesis::Engine::Texture> MakeFileIcon(const IconColor& base) {
+    const int size = 64;
+    std::vector<uint8_t> pixels(static_cast<size_t>(size) * size * 4, 0);
+
+    IconColor top = ShadeColor(base, 1.08f, 12);
+    IconColor bottom = ShadeColor(base, 0.88f, -6);
+    IconColor fold = ShadeColor(base, 1.25f, 26);
+    IconColor outline = ShadeColor(base, 0.65f, -12);
+    IconColor shadow = { 0, 0, 0, 70 };
+
+    FillRoundedRectGradient(pixels, size, 14, 10, 52, 56, 6, shadow, shadow);
+    FillRoundedRectGradient(pixels, size, 12, 8, 52, 56, 6, top, bottom);
+
+    const int foldSize = 12;
+    for (int y = 8; y < 8 + foldSize; ++y) {
+        for (int x = 52 - (y - 8) - 1; x < 52; ++x) {
+            SetPixel(pixels, size, x, y, fold);
+        }
+    }
+
+    for (int y = 8; y < 56; ++y) {
+        for (int x = 12; x < 52; ++x) {
+            if (InRoundedRect(x, y, 12, 8, 52, 56, 6) && !InRoundedRect(x, y, 13, 9, 51, 55, 5)) {
+                SetPixel(pixels, size, x, y, outline);
+            }
+        }
+    }
+
+    IconColor line = ShadeColor(base, 0.7f, -6);
+    for (int i = 0; i < 3; ++i) {
+        int y = 30 + i * 6;
+        for (int x = 18; x < 44; ++x) {
+            SetPixel(pixels, size, x, y, line);
+        }
+    }
+
+    return Genesis::Engine::Texture::CreateFromMemory(size, size, pixels);
+}
+
+static std::string ToLowerCopy(std::string s) {
+    std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c) { return (char)std::tolower(c); });
+    return s;
+}
+
+static bool IsImageExtension(const std::string& extLower) {
+    return extLower == ".png" || extLower == ".jpg" || extLower == ".jpeg" || extLower == ".bmp" || extLower == ".tga";
 }
 
 struct RecentProjectEntry {
@@ -2486,6 +2652,8 @@ int main(int argc, char** argv) {
             ImGui::Begin("Content Browser");
             static std::filesystem::path contentDir = "Assets";
             static char contentSearch[128] = "";
+            static std::unordered_map<std::string, std::shared_ptr<Genesis::Engine::Texture>> thumbnailCache;
+            static std::unordered_map<std::string, std::shared_ptr<Genesis::Engine::Texture>> iconCache;
 
             if (std::filesystem::exists(contentDir)) {
                 // Toolbar
@@ -2532,9 +2700,56 @@ int main(int argc, char** argv) {
                     }
                     
                     ImGui::PushID(filename.c_str());
-                    // Placeholder for thumbnail
+                    auto GetIconTexture = [&](const std::string& key, const IconColor& color, bool isFolder) {
+                        auto it = iconCache.find(key);
+                        if (it != iconCache.end()) return it->second;
+                        auto tex = isFolder ? MakeFolderIcon(color) : MakeFileIcon(color);
+                        iconCache[key] = tex;
+                        return tex;
+                    };
+
+                    auto GetFileTypeIcon = [&](const std::string& extLower, bool isDir) {
+                        if (isDir) {
+                            return GetIconTexture("folder", IconColor{ 231, 189, 90, 255 }, true);
+                        }
+                        if (extLower == ".scene") return GetIconTexture("scene", IconColor{ 94, 156, 255, 255 }, false);
+                        if (extLower == ".gltf" || extLower == ".glb" || extLower == ".obj" || extLower == ".fbx") return GetIconTexture("model", IconColor{ 180, 120, 255, 255 }, false);
+                        if (extLower == ".vert" || extLower == ".frag" || extLower == ".glsl" || extLower == ".hlsl" || extLower == ".spv") return GetIconTexture("shader", IconColor{ 255, 166, 77, 255 }, false);
+                        if (extLower == ".ttf" || extLower == ".otf") return GetIconTexture("font", IconColor{ 121, 215, 155, 255 }, false);
+                        if (extLower == ".wav" || extLower == ".mp3" || extLower == ".ogg") return GetIconTexture("audio", IconColor{ 120, 210, 220, 255 }, false);
+                        if (extLower == ".lua" || extLower == ".cs" || extLower == ".js") return GetIconTexture("script", IconColor{ 245, 215, 110, 255 }, false);
+                        return GetIconTexture("file", IconColor{ 140, 150, 165, 255 }, false);
+                    };
+
+                    std::shared_ptr<Genesis::Engine::Texture> thumbTex;
+                    const bool isDir = entry.is_directory();
+                    std::string extLower = isDir ? std::string() : ToLowerCopy(entry.path().extension().string());
+
+                    if (!isDir && IsImageExtension(extLower)) {
+                        auto it = thumbnailCache.find(path);
+                        if (it != thumbnailCache.end()) {
+                            thumbTex = it->second;
+                        } else {
+                            auto loaded = Genesis::Engine::Texture::CreateFromFile(path);
+                            if (loaded) {
+                                thumbnailCache[path] = loaded;
+                                thumbTex = loaded;
+                            }
+                        }
+                    }
+
+                    if (!thumbTex) {
+                        thumbTex = GetFileTypeIcon(extLower, isDir);
+                    }
+
+                    if (thumbTex) {
+                        thumbTex->UploadToRenderer(currentRenderer);
+                    }
+
+                    ImTextureID texId = (thumbTex && thumbTex->GetID()) ? (ImTextureID)(uintptr_t)thumbTex->GetID() : (ImTextureID)0;
+                    // Thumbnail / icon
                     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
-                    ImGui::ImageButton(filename.c_str(), (ImTextureID)0, ImVec2(thumbnailSize, thumbnailSize));
+                    ImGui::ImageButton(filename.c_str(), texId, ImVec2(thumbnailSize, thumbnailSize));
                     ImGui::PopStyleColor();
 
                     if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
