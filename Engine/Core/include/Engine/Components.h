@@ -14,6 +14,9 @@ class ScriptableEntity;
 struct ScriptComponent {
     ScriptableEntity* Instance = nullptr;
 
+    // Script class name for editor/serialization
+    std::string className;
+
     ScriptableEntity* (*InstantiateScript)() = nullptr;
     void (*DestroyScript)(ScriptComponent*) = nullptr;
 
@@ -39,6 +42,20 @@ struct NameComponent {
 // Hierarchy relationship (Editor + Runtime)
 struct ParentComponent {
     entt::entity parent = entt::null;
+};
+
+// Prefab instance root marker
+struct PrefabInstanceComponent {
+    std::string prefabPath;
+    bool preserveRootTransform = true;
+};
+
+// Prefab source link for entities created from prefabs
+struct PrefabLinkComponent {
+    std::string prefabPath;
+    int prefabId = -1;
+    bool overrideTransform = false;
+    bool overrideName = false;
 };
 
 struct ModelComponent {

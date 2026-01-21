@@ -114,6 +114,8 @@ add_library(EngineCore STATIC
     src/WasmHostBindings.cpp
     src/WasmRuntime.cpp
     src/SceneLoader.cpp
+    src/ScriptRegistry.cpp
+    src/PrefabLoader.cpp
     src/AnimationSystem.cpp
     src/UISystem.cpp
     ${imgui_SOURCE_DIR}/imgui.cpp

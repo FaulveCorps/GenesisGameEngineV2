@@ -154,6 +154,45 @@ bool SceneLoader::LoadScene(Scene& scene, const std::string& filePath) {
             s.isTrigger = (trigger != 0);
             scene.Registry().emplace<SphereColliderComponent>(currentEntity, s);
         }
+        else if (token == "SCRIPT" && currentEntity != entt::null) {
+            std::string className;
+            std::getline(ss, className);
+            while (!className.empty() && (className[0] == ' ' || className[0] == '\t')) className.erase(className.begin());
+            if (!className.empty() && className != "NONE") {
+                ScriptComponent sc;
+                sc.className = className;
+                sc.Instance = nullptr;
+                sc.InstantiateScript = nullptr;
+                sc.DestroyScript = nullptr;
+                scene.Registry().emplace_or_replace<ScriptComponent>(currentEntity, sc);
+            }
+        }
+        else if (token == "PREFAB_INSTANCE" && currentEntity != entt::null) {
+            std::string path;
+            int preserve = 1;
+            ss >> path >> preserve;
+            if (!path.empty() && path != "NONE") {
+                PrefabInstanceComponent pi;
+                pi.prefabPath = path;
+                pi.preserveRootTransform = (preserve != 0);
+                scene.Registry().emplace_or_replace<PrefabInstanceComponent>(currentEntity, pi);
+            }
+        }
+        else if (token == "PREFAB_LINK" && currentEntity != entt::null) {
+            std::string path;
+            int id = -1;
+            int overrideTransform = 0;
+            int overrideName = 0;
+            ss >> path >> id >> overrideTransform >> overrideName;
+            if (!path.empty() && path != "NONE" && id >= 0) {
+                PrefabLinkComponent pl;
+                pl.prefabPath = path;
+                pl.prefabId = id;
+                pl.overrideTransform = (overrideTransform != 0);
+                pl.overrideName = (overrideName != 0);
+                scene.Registry().emplace_or_replace<PrefabLinkComponent>(currentEntity, pl);
+            }
+        }
         else if (token == "PARENT" && currentEntity != entt::null) {
             int parentId = -1;
             ss >> parentId;
@@ -271,6 +310,28 @@ bool SceneLoader::SaveScene(const Scene& scene, const std::string& filePath) {
                      << c.nearPlane << " " 
                      << c.farPlane << " " 
                      << (c.primary ? 1 : 0) << "\n";
+            }
+
+            if (reg.any_of<ScriptComponent>(entity)) {
+                const auto& sc = reg.get<ScriptComponent>(entity);
+                if (!sc.className.empty()) {
+                    file << "SCRIPT " << sc.className << "\n";
+                }
+            }
+
+            if (reg.any_of<PrefabInstanceComponent>(entity)) {
+                const auto& pi = reg.get<PrefabInstanceComponent>(entity);
+                if (!pi.prefabPath.empty()) {
+                    file << "PREFAB_INSTANCE " << pi.prefabPath << " " << (pi.preserveRootTransform ? 1 : 0) << "\n";
+                }
+            }
+
+            if (reg.any_of<PrefabLinkComponent>(entity)) {
+                const auto& pl = reg.get<PrefabLinkComponent>(entity);
+                if (!pl.prefabPath.empty() && pl.prefabId >= 0) {
+                    file << "PREFAB_LINK " << pl.prefabPath << " " << pl.prefabId << " "
+                         << (pl.overrideTransform ? 1 : 0) << " " << (pl.overrideName ? 1 : 0) << "\n";
+                }
             }
 
             if (reg.any_of<AudioComponent>(entity)) {

@@ -8,6 +8,7 @@
 #include "engine/UI.h"
 #include "engine/DebugRenderer.h"
 #include "engine/Engine.h"
+#include "engine/ScriptRegistry.h"
 #include <iostream>
 #include <cmath>
 #include <unordered_map>
@@ -77,6 +78,12 @@ void Scene::OnUpdateRuntime(double dt) {
         for (auto entity : view) {
             auto& sc = view.get<ScriptComponent>(entity);
             if (!sc.Instance) {
+                if (!sc.InstantiateScript && !sc.className.empty()) {
+                    if (const auto* info = ScriptRegistry::Find(sc.className)) {
+                        sc.InstantiateScript = info->create;
+                        sc.DestroyScript = info->destroy;
+                    }
+                }
                 if (sc.InstantiateScript) {
                     sc.Instance = sc.InstantiateScript();
                     sc.Instance->m_Entity = entity;
@@ -207,6 +214,12 @@ void Scene::CopyFrom(const Scene& other) {
         }
         if (auto* tc = other.m_registry.try_get<Transform>(entity)) {
             m_registry.emplace<Transform>(dst, *tc);
+        }
+        if (auto* pi = other.m_registry.try_get<PrefabInstanceComponent>(entity)) {
+            m_registry.emplace<PrefabInstanceComponent>(dst, *pi);
+        }
+        if (auto* pl = other.m_registry.try_get<PrefabLinkComponent>(entity)) {
+            m_registry.emplace<PrefabLinkComponent>(dst, *pl);
         }
         if (auto* lc = other.m_registry.try_get<LightComponent>(entity)) {
             m_registry.emplace<LightComponent>(dst, *lc);

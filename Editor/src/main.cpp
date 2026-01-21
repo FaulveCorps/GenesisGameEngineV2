@@ -14,6 +14,8 @@
 #include "engine/TextureRegistry.h"
 #include "engine/Texture.h"
 #include "engine/OpenGLRenderer.h"
+#include "engine/ScriptRegistry.h"
+#include "engine/PrefabLoader.h"
 #include "imgui_impl_sdl3.h"
 #include "imgui_impl_opengl3.h"
 #include "ImGuizmo.h"
@@ -381,6 +383,10 @@ struct EntitySnapshot {
     Genesis::Engine::NameComponent name;
     bool hasParent = false;
     Genesis::Engine::ParentComponent parent;
+    bool hasPrefabInstance = false;
+    Genesis::Engine::PrefabInstanceComponent prefabInstance;
+    bool hasPrefabLink = false;
+    Genesis::Engine::PrefabLinkComponent prefabLink;
     bool hasTransform = false;
     Genesis::Engine::Transform transform;
     bool hasModel = false;
@@ -412,6 +418,14 @@ static EntitySnapshot CaptureEntitySnapshot(const entt::registry& reg, entt::ent
     if (reg.any_of<Genesis::Engine::ParentComponent>(entity)) {
         snap.hasParent = true;
         snap.parent = reg.get<Genesis::Engine::ParentComponent>(entity);
+    }
+    if (reg.any_of<Genesis::Engine::PrefabInstanceComponent>(entity)) {
+        snap.hasPrefabInstance = true;
+        snap.prefabInstance = reg.get<Genesis::Engine::PrefabInstanceComponent>(entity);
+    }
+    if (reg.any_of<Genesis::Engine::PrefabLinkComponent>(entity)) {
+        snap.hasPrefabLink = true;
+        snap.prefabLink = reg.get<Genesis::Engine::PrefabLinkComponent>(entity);
     }
     if (reg.any_of<Genesis::Engine::Transform>(entity)) {
         snap.hasTransform = true;
@@ -462,6 +476,12 @@ static entt::entity CreateEntityFromSnapshot(entt::registry& reg, const EntitySn
     if (snap.hasName) reg.emplace<Genesis::Engine::NameComponent>(e, snap.name);
     if (snap.hasParent && snap.parent.parent != entt::null && reg.valid(snap.parent.parent)) {
         reg.emplace<Genesis::Engine::ParentComponent>(e, snap.parent);
+    }
+    if (snap.hasPrefabInstance && !snap.prefabInstance.prefabPath.empty()) {
+        reg.emplace<Genesis::Engine::PrefabInstanceComponent>(e, snap.prefabInstance);
+    }
+    if (snap.hasPrefabLink && !snap.prefabLink.prefabPath.empty() && snap.prefabLink.prefabId >= 0) {
+        reg.emplace<Genesis::Engine::PrefabLinkComponent>(e, snap.prefabLink);
     }
     if (snap.hasTransform) reg.emplace<Genesis::Engine::Transform>(e, snap.transform);
     if (snap.hasModel) reg.emplace<Genesis::Engine::ModelComponent>(e, snap.model);
@@ -900,8 +920,11 @@ int main(int argc, char** argv) {
     bool showOpenSceneModal = false;
     bool showSaveAsSceneModal = false;
     bool showAboutModal = false;
+    bool showSavePrefabModal = false;
+    entt::entity prefabTargetEntity = entt::null;
     bool focusInspectorName = false;
     char scenePathBuffer[512] = "";
+    char prefabPathBuffer[512] = "";
 
     // Unsaved changes workflow
     enum class PendingSceneAction {
@@ -1023,6 +1046,19 @@ int main(int argc, char** argv) {
         camTrans.z = 10.0f; // Move back
         editorScene.Registry().emplace<Genesis::Engine::Transform>(camEntity, camTrans);
         editorScene.Registry().emplace<Genesis::Engine::CameraComponent>(camEntity);
+    };
+
+    auto SuggestPrefabPath = [&](entt::entity entity) {
+        std::string name = "prefab";
+        if (editorScene.Registry().valid(entity) && editorScene.Registry().any_of<Genesis::Engine::NameComponent>(entity)) {
+            const auto& nc = editorScene.Registry().get<Genesis::Engine::NameComponent>(entity);
+            if (!nc.name.empty()) name = nc.name;
+        }
+        for (auto& ch : name) {
+            if (ch == ' ' || ch == '/' || ch == '\\') ch = '_';
+        }
+        std::string path = "Assets/prefabs/" + name + ".prefab";
+        strncpy_s(prefabPathBuffer, path.c_str(), sizeof(prefabPathBuffer) - 1);
     };
 
     struct EntityUndoData {
@@ -1219,6 +1255,53 @@ int main(int argc, char** argv) {
                 sceneDirty = true;
             }
         });
+    };
+
+    auto CollectSubtreeEntities = [&](entt::entity root, std::vector<entt::entity>& out) {
+        out.clear();
+        auto& reg = editorScene.Registry();
+        std::unordered_map<entt::entity, std::vector<entt::entity>> children;
+        reg.each([&](auto entity) {
+            if (reg.any_of<Genesis::Engine::ParentComponent>(entity)) {
+                auto parent = reg.get<Genesis::Engine::ParentComponent>(entity).parent;
+                if (parent != entt::null && reg.valid(parent)) {
+                    children[parent].push_back(entity);
+                }
+            }
+        });
+
+        std::function<void(entt::entity)> dfs = [&](entt::entity e) {
+            out.push_back(e);
+            auto it = children.find(e);
+            if (it == children.end()) return;
+            for (auto child : it->second) {
+                dfs(child);
+            }
+        };
+
+        if (reg.valid(root)) dfs(root);
+    };
+
+    auto BreakPrefabInstance = [&](entt::entity root) {
+        auto& reg = editorScene.Registry();
+        if (!reg.valid(root)) return;
+        std::string prefabPath;
+        if (reg.any_of<Genesis::Engine::PrefabInstanceComponent>(root)) {
+            prefabPath = reg.get<Genesis::Engine::PrefabInstanceComponent>(root).prefabPath;
+            reg.remove<Genesis::Engine::PrefabInstanceComponent>(root);
+        }
+
+        std::vector<entt::entity> subtree;
+        CollectSubtreeEntities(root, subtree);
+        for (auto entity : subtree) {
+            if (reg.any_of<Genesis::Engine::PrefabLinkComponent>(entity)) {
+                const auto& link = reg.get<Genesis::Engine::PrefabLinkComponent>(entity);
+                if (prefabPath.empty() || link.prefabPath == prefabPath) {
+                    reg.remove<Genesis::Engine::PrefabLinkComponent>(entity);
+                }
+            }
+        }
+        sceneDirty = true;
     };
 
     auto ResolveScenePathForLoad = [&](const std::string& storedPath) {
@@ -1949,22 +2032,11 @@ int main(int argc, char** argv) {
             for (auto entity : viewCam) {
                 const auto& cam = viewCam.get<Genesis::Engine::CameraComponent>(entity);
                 if (cam.primary) {
-                    const auto& t = viewCam.get<Genesis::Engine::Transform>(entity);
-                    
-                    // Engine Transform -> View Matrix
-                    // Eye position
-                    glm::vec3 eye(t.x, t.y, t.z);
-                    
-                    // Rotation matrix (match Scene::Render logic: Rot = Rz * Ry * Rx)
-                    glm::mat4 rotX = glm::rotate(glm::mat4(1.0f), t.rx, glm::vec3(1, 0, 0));
-                    glm::mat4 rotY = glm::rotate(glm::mat4(1.0f), t.ry, glm::vec3(0, 1, 0));
-                    glm::mat4 rotZ = glm::rotate(glm::mat4(1.0f), t.rz, glm::vec3(0, 0, 1));
-                    glm::mat4 rot = rotZ * rotY * rotX;
+                    glm::mat4 world = GetWorldMatrixGLM(activeScene->Registry(), entity);
+                    glm::vec3 eye = glm::vec3(world[3]);
 
-                    // Forward vector is usually -Z in OpenGL view space.
-                    // If Identity rotation faces -Z:
-                    glm::vec3 forward = glm::vec3(rot * glm::vec4(0, 0, -1, 0));
-                    glm::vec3 up = glm::vec3(rot * glm::vec4(0, 1, 0, 0));
+                    glm::vec3 forward = glm::normalize(glm::vec3(-world[2]));
+                    glm::vec3 up = glm::normalize(glm::vec3(world[1]));
 
                     view = glm::lookAt(eye, eye + forward, up);
 
@@ -2464,6 +2536,14 @@ int main(int argc, char** argv) {
                         if (!MaybePromptUnsaved(PendingSceneAction::LoadScenePath, p.string())) {
                             LoadSceneFromPath(p.string(), true);
                         }
+                    } else if (ext == ".prefab") {
+                        if (editorState == EditorState::Edit) {
+                            entt::entity root = Genesis::Engine::PrefabLoader::InstantiatePrefab(editorScene, p.string(), entt::null);
+                            if (root != entt::null) {
+                                selectedEntity = root;
+                                sceneDirty = true;
+                            }
+                        }
                     } else if (ext == ".gltf" || ext == ".glb" || ext == ".obj" || ext == ".fbx") {
                         if (editorState == EditorState::Edit) {
                             auto& reg = editorScene.Registry();
@@ -2650,6 +2730,9 @@ int main(int argc, char** argv) {
                     }
                 }
                 DecomposeEngineTRS(localMat, tc);
+                if (activeScene->Registry().any_of<Genesis::Engine::PrefabLinkComponent>(selectedEntity)) {
+                    activeScene->Registry().get<Genesis::Engine::PrefabLinkComponent>(selectedEntity).overrideTransform = true;
+                }
                 sceneDirty = true;
             } else {
                 // Not using: keep gizmo matrix in sync with component so it stays aligned to the rendered model.
@@ -2787,6 +2870,13 @@ int main(int argc, char** argv) {
                     if (ImGui::MenuItem("Duplicate")) {
                         DuplicateEntityWithUndo(entity);
                     }
+                    if (ImGui::MenuItem("Create Prefab...")) {
+                        if (editorState == EditorState::Edit) {
+                            prefabTargetEntity = entity;
+                            SuggestPrefabPath(entity);
+                            showSavePrefabModal = true;
+                        }
+                    }
                     const bool hasParent = hierarchyReg.any_of<Genesis::Engine::ParentComponent>(entity);
                     if (ImGui::MenuItem("Unparent", nullptr, false, hasParent)) {
                         SetParentWithUndo(entity, entt::null);
@@ -2886,6 +2976,9 @@ int main(int argc, char** argv) {
                 std::string nameBefore = nameEditBuf;
                 if (ImGui::InputText("Name", nameEditBuf, sizeof(nameEditBuf))) {
                     activeScene->Registry().emplace_or_replace<Genesis::Engine::NameComponent>(selectedEntity, Genesis::Engine::NameComponent{std::string(nameEditBuf)});
+                    if (activeScene->Registry().any_of<Genesis::Engine::PrefabLinkComponent>(selectedEntity)) {
+                        activeScene->Registry().get<Genesis::Engine::PrefabLinkComponent>(selectedEntity).overrideName = true;
+                    }
                     if (editorState == EditorState::Edit) sceneDirty = true;
                 }
                 if (ImGui::IsItemActivated()) {
@@ -2914,6 +3007,45 @@ int main(int argc, char** argv) {
                         ImGui::SameLine();
                         if (ImGui::Button("Clear Parent")) {
                             SetParentWithUndo(selectedEntity, entt::null);
+                        }
+                    }
+                }
+                {
+                    if (activeScene->Registry().any_of<Genesis::Engine::PrefabInstanceComponent>(selectedEntity)) {
+                        if (ImGui::CollapsingHeader("Prefab", ImGuiTreeNodeFlags_DefaultOpen)) {
+                            auto& pi = activeScene->Registry().get<Genesis::Engine::PrefabInstanceComponent>(selectedEntity);
+                            ImGui::TextWrapped("Asset: %s", pi.prefabPath.empty() ? "(none)" : pi.prefabPath.c_str());
+                            ImGui::Checkbox("Preserve Root Transform", &pi.preserveRootTransform);
+                            if (editorState != EditorState::Edit) ImGui::BeginDisabled();
+                            if (ImGui::Button("Reapply Prefab")) {
+                                if (editorState == EditorState::Edit) {
+                                    Genesis::Engine::PrefabLoader::ApplyPrefab(editorScene, selectedEntity);
+                                }
+                            }
+                            ImGui::SameLine();
+                            if (ImGui::Button("Break Prefab")) {
+                                if (editorState == EditorState::Edit) {
+                                    BreakPrefabInstance(selectedEntity);
+                                }
+                            }
+                            if (editorState != EditorState::Edit) ImGui::EndDisabled();
+                        }
+                    }
+
+                    if (activeScene->Registry().any_of<Genesis::Engine::PrefabLinkComponent>(selectedEntity)) {
+                        if (ImGui::CollapsingHeader("Prefab Overrides", ImGuiTreeNodeFlags_DefaultOpen)) {
+                            auto& link = activeScene->Registry().get<Genesis::Engine::PrefabLinkComponent>(selectedEntity);
+                            ImGui::Text("Prefab ID: %d", link.prefabId);
+                            bool overrideTransform = link.overrideTransform;
+                            bool overrideName = link.overrideName;
+                            if (ImGui::Checkbox("Override Transform", &overrideTransform)) {
+                                link.overrideTransform = overrideTransform;
+                                if (editorState == EditorState::Edit) sceneDirty = true;
+                            }
+                            if (ImGui::Checkbox("Override Name", &overrideName)) {
+                                link.overrideName = overrideName;
+                                if (editorState == EditorState::Edit) sceneDirty = true;
+                            }
                         }
                     }
                 }
@@ -2946,6 +3078,9 @@ int main(int argc, char** argv) {
                         auto& tc = activeScene->Registry().get<Genesis::Engine::Transform>(selectedEntity);
                         Genesis::Engine::Transform beforePos = tc;
                         if (ImGui::DragFloat3("Position", &tc.x, 0.1f)) {
+                            if (activeScene->Registry().any_of<Genesis::Engine::PrefabLinkComponent>(selectedEntity)) {
+                                activeScene->Registry().get<Genesis::Engine::PrefabLinkComponent>(selectedEntity).overrideTransform = true;
+                            }
                             if (editorState == EditorState::Edit) sceneDirty = true;
                         }
                         if (ImGui::IsItemActivated()) {
@@ -2963,6 +3098,9 @@ int main(int argc, char** argv) {
                             tc.rx = glm::radians(rotDeg[0]);
                             tc.ry = glm::radians(rotDeg[1]);
                             tc.rz = glm::radians(rotDeg[2]);
+                            if (activeScene->Registry().any_of<Genesis::Engine::PrefabLinkComponent>(selectedEntity)) {
+                                activeScene->Registry().get<Genesis::Engine::PrefabLinkComponent>(selectedEntity).overrideTransform = true;
+                            }
                             if (editorState == EditorState::Edit) sceneDirty = true;
                         }
                         if (ImGui::IsItemActivated()) {
@@ -2975,6 +3113,9 @@ int main(int argc, char** argv) {
 
                         Genesis::Engine::Transform beforeScale = tc;
                         if (ImGui::DragFloat3("Scale", &tc.sx, 0.01f, 0.0f, 1000.0f)) {
+                            if (activeScene->Registry().any_of<Genesis::Engine::PrefabLinkComponent>(selectedEntity)) {
+                                activeScene->Registry().get<Genesis::Engine::PrefabLinkComponent>(selectedEntity).overrideTransform = true;
+                            }
                             if (editorState == EditorState::Edit) sceneDirty = true;
                         }
                         if (ImGui::IsItemActivated()) {
@@ -3053,6 +3194,57 @@ int main(int argc, char** argv) {
                             }
                             ImGui::EndDragDropTarget();
                         }
+                    }
+                }
+
+                if (activeScene->Registry().all_of<Genesis::Engine::ScriptComponent>(selectedEntity)) {
+                    if (ImGui::CollapsingHeader("Script", ImGuiTreeNodeFlags_DefaultOpen)) {
+                        auto& sc = activeScene->Registry().get<Genesis::Engine::ScriptComponent>(selectedEntity);
+                        const bool readOnly = (editorState != EditorState::Edit);
+                        auto scripts = Genesis::Engine::ScriptRegistry::GetRegisteredNames();
+
+                        if (readOnly) ImGui::BeginDisabled();
+
+                        std::string current = sc.className.empty() ? std::string("(none)") : sc.className;
+                        if (ImGui::BeginCombo("Class", current.c_str())) {
+                            bool noneSelected = sc.className.empty();
+                            if (ImGui::Selectable("(none)", noneSelected)) {
+                                sc.className.clear();
+                                sc.InstantiateScript = nullptr;
+                                sc.DestroyScript = nullptr;
+                                sc.Instance = nullptr;
+                                if (editorState == EditorState::Edit) sceneDirty = true;
+                            }
+
+                            for (const auto& name : scripts) {
+                                bool selected = (sc.className == name);
+                                if (ImGui::Selectable(name.c_str(), selected)) {
+                                    sc.className = name;
+                                    if (const auto* info = Genesis::Engine::ScriptRegistry::Find(name)) {
+                                        sc.InstantiateScript = info->create;
+                                        sc.DestroyScript = info->destroy;
+                                    } else {
+                                        sc.InstantiateScript = nullptr;
+                                        sc.DestroyScript = nullptr;
+                                    }
+                                    sc.Instance = nullptr;
+                                    if (editorState == EditorState::Edit) sceneDirty = true;
+                                }
+                                if (selected) ImGui::SetItemDefaultFocus();
+                            }
+                            ImGui::EndCombo();
+                        }
+
+                        if (scripts.empty()) {
+                            ImGui::TextDisabled("No scripts registered.");
+                        }
+
+                        if (ImGui::Button("Remove Script")) {
+                            activeScene->Registry().remove<Genesis::Engine::ScriptComponent>(selectedEntity);
+                            if (editorState == EditorState::Edit) sceneDirty = true;
+                        }
+
+                        if (readOnly) ImGui::EndDisabled();
                     }
                 }
 
@@ -3155,6 +3347,17 @@ int main(int argc, char** argv) {
                             if (editorState == EditorState::Edit) sceneDirty = true;
                         }
                     }
+                    if (ImGui::MenuItem("Script")) {
+                        if (!activeScene->Registry().all_of<Genesis::Engine::ScriptComponent>(selectedEntity)) {
+                            Genesis::Engine::ScriptComponent sc;
+                            sc.className.clear();
+                            sc.Instance = nullptr;
+                            sc.InstantiateScript = nullptr;
+                            sc.DestroyScript = nullptr;
+                            activeScene->Registry().emplace<Genesis::Engine::ScriptComponent>(selectedEntity, sc);
+                            if (editorState == EditorState::Edit) sceneDirty = true;
+                        }
+                    }
                     if (ImGui::MenuItem("Particle System")) {
                         if (!activeScene->Registry().all_of<Genesis::Engine::ParticleSystemComponent>(selectedEntity)) {
                             activeScene->Registry().emplace<Genesis::Engine::ParticleSystemComponent>(selectedEntity);
@@ -3253,6 +3456,7 @@ int main(int argc, char** argv) {
                             return GetIconTexture("folder", IconColor{ 231, 189, 90, 255 }, true);
                         }
                         if (extLower == ".scene") return GetIconTexture("scene", IconColor{ 94, 156, 255, 255 }, false);
+                        if (extLower == ".prefab") return GetIconTexture("prefab", IconColor{ 170, 120, 255, 255 }, false);
                         if (extLower == ".gltf" || extLower == ".glb" || extLower == ".obj" || extLower == ".fbx") return GetIconTexture("model", IconColor{ 180, 120, 255, 255 }, false);
                         if (extLower == ".vert" || extLower == ".frag" || extLower == ".glsl" || extLower == ".hlsl" || extLower == ".spv") return GetIconTexture("shader", IconColor{ 255, 166, 77, 255 }, false);
                         if (extLower == ".ttf" || extLower == ".otf") return GetIconTexture("font", IconColor{ 121, 215, 155, 255 }, false);
@@ -3302,6 +3506,14 @@ int main(int argc, char** argv) {
                                 const std::string pathStr = entry.path().string();
                                 if (!MaybePromptUnsaved(PendingSceneAction::LoadScenePath, pathStr)) {
                                     LoadSceneFromPath(pathStr, true);
+                                }
+                            } else if (ext == ".prefab") {
+                                if (editorState == EditorState::Edit) {
+                                    entt::entity root = Genesis::Engine::PrefabLoader::InstantiatePrefab(editorScene, entry.path().string(), entt::null);
+                                    if (root != entt::null) {
+                                        selectedEntity = root;
+                                        sceneDirty = true;
+                                    }
                                 }
                             }
                         }
@@ -3526,6 +3738,34 @@ int main(int argc, char** argv) {
                     pendingAction = PendingSceneAction::None;
                     pendingScenePath.clear();
                 }
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndPopup();
+        }
+
+        // Save Prefab modal
+        if (showSavePrefabModal) {
+            ImGui::OpenPopup("Save Prefab As");
+        }
+        if (ImGui::BeginPopupModal("Save Prefab As", &showSavePrefabModal, ImGuiWindowFlags_AlwaysAutoResize)) {
+            ImGui::TextUnformatted("Prefab path:");
+            ImGui::PushItemWidth(520.0f);
+            ImGui::InputText("##savePrefabPath", prefabPathBuffer, sizeof(prefabPathBuffer));
+            ImGui::PopItemWidth();
+            ImGui::TextDisabled("Tip: prefabs are saved as .prefab files.");
+
+            if (ImGui::Button("Save") || ImGui::IsKeyPressed(ImGuiKey_Enter)) {
+                if (editorState == EditorState::Edit && prefabTargetEntity != entt::null && editorScene.Registry().valid(prefabTargetEntity)) {
+                    Genesis::Engine::PrefabLoader::SavePrefab(editorScene, prefabTargetEntity, prefabPathBuffer);
+                }
+                showSavePrefabModal = false;
+                prefabTargetEntity = entt::null;
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Cancel") || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+                showSavePrefabModal = false;
+                prefabTargetEntity = entt::null;
                 ImGui::CloseCurrentPopup();
             }
             ImGui::EndPopup();
