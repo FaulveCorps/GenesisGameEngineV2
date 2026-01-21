@@ -2,6 +2,7 @@
 
 #include <memory>
 #include <entt/entt.hpp>
+#include "Engine/MathUtils.h"
 
 namespace Genesis::Engine {
 
@@ -24,6 +25,9 @@ public:
     void Update(double dt);
 
     void Render(class IGraphicsAPI* renderer);
+
+    // Hierarchy helper: compute world matrix for an entity.
+    Matrix4 GetWorldMatrix(entt::entity entity) const;
 
     // Helper to copy scene state (for Play Mode)
     void CopyFrom(const Scene& other);

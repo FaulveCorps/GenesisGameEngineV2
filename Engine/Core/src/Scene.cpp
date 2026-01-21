@@ -10,8 +10,21 @@
 #include "engine/Engine.h"
 #include <iostream>
 #include <cmath>
+#include <unordered_map>
+#include <vector>
+#include <unordered_set>
 
 namespace Genesis::Engine {
+
+static Matrix4 ComposeTransformMatrix(const Transform& t) {
+    Matrix4 transMat = Matrix4::CreateTranslation(t.x, t.y, t.z);
+    Matrix4 rotX = Matrix4::CreateRotationX(t.rx);
+    Matrix4 rotY = Matrix4::CreateRotationY(t.ry);
+    Matrix4 rotZ = Matrix4::CreateRotationZ(t.rz);
+    Matrix4 scaleMat = Matrix4::CreateScale(t.sx, t.sy, t.sz);
+    Matrix4 rot = rotZ * rotY * rotX;
+    return transMat * rot * scaleMat;
+}
 
 void Scene::OnRuntimeStart() {
     m_runtimeActive = true;
@@ -138,6 +151,36 @@ void Scene::OnUpdateRuntime(double dt) {
 void Scene::OnUpdateEditor(double dt) {
 }
 
+Matrix4 Scene::GetWorldMatrix(entt::entity entity) const {
+    if (!m_registry.valid(entity) || !m_registry.any_of<Transform>(entity)) {
+        return Matrix4::CreateIdentity();
+    }
+
+    Matrix4 world = ComposeTransformMatrix(m_registry.get<Transform>(entity));
+
+    entt::entity current = entity;
+    std::unordered_set<entt::entity> visited;
+    visited.insert(entity);
+    int depth = 0;
+
+    while (m_registry.any_of<ParentComponent>(current)) {
+        auto parent = m_registry.get<ParentComponent>(current).parent;
+        if (parent == entt::null || !m_registry.valid(parent)) break;
+        if (visited.count(parent) > 0) break;
+        visited.insert(parent);
+
+        if (m_registry.any_of<Transform>(parent)) {
+            Matrix4 parentLocal = ComposeTransformMatrix(m_registry.get<Transform>(parent));
+            world = parentLocal * world;
+        }
+
+        current = parent;
+        if (++depth > 64) break;
+    }
+
+    return world;
+}
+
 void Scene::Update(double dt) {
     OnUpdateRuntime(dt);
 }
@@ -147,8 +190,17 @@ void Scene::CopyFrom(const Scene& other) {
     m_runtimeActive = false;
     m_useSceneCamera = other.m_useSceneCamera;
 
-    other.m_registry.each([&](auto entity) {
-        const auto dst = m_registry.create();
+    std::vector<entt::entity> entities;
+    other.m_registry.each([&](auto entity) { entities.push_back(entity); });
+
+    std::unordered_map<entt::entity, entt::entity> remap;
+    remap.reserve(entities.size());
+    for (auto entity : entities) {
+        remap[entity] = m_registry.create();
+    }
+
+    for (auto entity : entities) {
+        const auto dst = remap[entity];
 
         if (auto* nc = other.m_registry.try_get<NameComponent>(entity)) {
             m_registry.emplace<NameComponent>(dst, *nc);
@@ -191,11 +243,56 @@ void Scene::CopyFrom(const Scene& other) {
         if (auto* anim = other.m_registry.try_get<AnimationComponent>(entity)) {
             m_registry.emplace<AnimationComponent>(dst, *anim);
         }
-    });
+    }
+
+    // Apply parent relationships after all entities exist.
+    for (auto entity : entities) {
+        if (auto* pc = other.m_registry.try_get<ParentComponent>(entity)) {
+            entt::entity parent = pc->parent;
+            entt::entity mappedParent = entt::null;
+            if (parent != entt::null) {
+                auto it = remap.find(parent);
+                if (it != remap.end()) mappedParent = it->second;
+            }
+            if (mappedParent != entt::null) {
+                m_registry.emplace<ParentComponent>(remap[entity], ParentComponent{mappedParent});
+            }
+        }
+    }
 }
 
 void Scene::Render(IGraphicsAPI* renderer) {
     if (!renderer) return;
+
+    std::unordered_map<entt::entity, Matrix4> worldCache;
+    std::unordered_set<entt::entity> visiting;
+
+    auto ComputeWorld = [&](auto&& self, entt::entity e) -> Matrix4 {
+        if (!m_registry.valid(e)) return Matrix4::CreateIdentity();
+        if (auto it = worldCache.find(e); it != worldCache.end()) return it->second;
+
+        Matrix4 local = Matrix4::CreateIdentity();
+        if (m_registry.any_of<Transform>(e)) {
+            local = ComposeTransformMatrix(m_registry.get<Transform>(e));
+        }
+
+        if (visiting.count(e) > 0) {
+            return local;
+        }
+        visiting.insert(e);
+
+        Matrix4 world = local;
+        if (m_registry.any_of<ParentComponent>(e)) {
+            auto parent = m_registry.get<ParentComponent>(e).parent;
+            if (parent != entt::null && m_registry.valid(parent)) {
+                world = self(self, parent) * local;
+            }
+        }
+
+        visiting.erase(e);
+        worldCache[e] = world;
+        return world;
+    };
 
     if (m_runtimeActive && m_useSceneCamera) {
         auto camView = m_registry.view<CameraComponent, Transform>();
@@ -213,13 +310,32 @@ void Scene::Render(IGraphicsAPI* renderer) {
 
         if (chosen != entt::null) {
             const auto& cam = camView.get<CameraComponent>(chosen);
-            const auto& t = camView.get<Transform>(chosen);
+            Matrix4 world = ComputeWorld(ComputeWorld, chosen);
 
-            Matrix4 rotX = Matrix4::CreateRotationX(-t.rx);
-            Matrix4 rotY = Matrix4::CreateRotationY(-t.ry);
-            Matrix4 rotZ = Matrix4::CreateRotationZ(-t.rz);
-            Matrix4 trans = Matrix4::CreateTranslation(-t.x, -t.y, -t.z);
-            Matrix4 view = rotX * rotY * rotZ * trans;
+            float px = world.m[12];
+            float py = world.m[13];
+            float pz = world.m[14];
+
+            auto Normalize = [](float& x, float& y, float& z) {
+                float len = std::sqrt(x * x + y * y + z * z);
+                if (len > 1e-6f) { x /= len; y /= len; z /= len; }
+            };
+
+            float rightX = world.m[0], rightY = world.m[1], rightZ = world.m[2];
+            float upX = world.m[4], upY = world.m[5], upZ = world.m[6];
+            float fwdX = world.m[8], fwdY = world.m[9], fwdZ = world.m[10];
+            Normalize(rightX, rightY, rightZ);
+            Normalize(upX, upY, upZ);
+            Normalize(fwdX, fwdY, fwdZ);
+
+            Matrix4 view = Matrix4::CreateIdentity();
+            view.m[0] = rightX; view.m[1] = upX; view.m[2] = -fwdX; view.m[3] = 0.0f;
+            view.m[4] = rightY; view.m[5] = upY; view.m[6] = -fwdY; view.m[7] = 0.0f;
+            view.m[8] = rightZ; view.m[9] = upZ; view.m[10] = -fwdZ; view.m[11] = 0.0f;
+            view.m[12] = -(rightX * px + rightY * py + rightZ * pz);
+            view.m[13] = -(upX * px + upY * py + upZ * pz);
+            view.m[14] = (fwdX * px + fwdY * py + fwdZ * pz);
+            view.m[15] = 1.0f;
 
             const float aspect = 16.0f / 9.0f;
             float nearPlane = (cam.nearPlane < 0.01f) ? 0.01f : cam.nearPlane;
@@ -243,23 +359,20 @@ void Scene::Render(IGraphicsAPI* renderer) {
     bool lightFound = false;
     for (auto entity : lightView) {
         auto& light = lightView.get<LightComponent>(entity);
-        auto& t = lightView.get<Transform>(entity);
+        Matrix4 world = ComputeWorld(ComputeWorld, entity);
         
         if (light.type == LightType::Directional) {
             if (!lightFound) {
-                Matrix4 rotX = Matrix4::CreateRotationX(t.rx);
-                Matrix4 rotY = Matrix4::CreateRotationY(t.ry);
-                Matrix4 rotZ = Matrix4::CreateRotationZ(t.rz);
-                Matrix4 rot = rotZ * rotY * rotX; 
-
-                float dir[3] = { rot.m[8], rot.m[9], rot.m[10] }; 
+                float dir[3] = { world.m[8], world.m[9], world.m[10] };
+                float len = std::sqrt(dir[0] * dir[0] + dir[1] * dir[1] + dir[2] * dir[2]);
+                if (len > 1e-6f) { dir[0] /= len; dir[1] /= len; dir[2] /= len; }
                 
                 renderer->SetGlobalLight(dir, light.color, light.intensity);
                 lightFound = true;
             }
         } else if (light.type == LightType::Point) {
             IGraphicsAPI::PointLightData pl;
-            pl.position[0] = t.x; pl.position[1] = t.y; pl.position[2] = t.z;
+            pl.position[0] = world.m[12]; pl.position[1] = world.m[13]; pl.position[2] = world.m[14];
             pl.color[0] = light.color[0]; pl.color[1] = light.color[1]; pl.color[2] = light.color[2];
             pl.intensity = light.intensity;
             pl.radius = light.range;
@@ -279,22 +392,7 @@ void Scene::Render(IGraphicsAPI* renderer) {
     for (auto entity : view) {
         auto &mc = view.get<ModelComponent>(entity);
         if (mc.model) {
-            Matrix4 transform = Matrix4::CreateIdentity();
-            
-            if (m_registry.any_of<Transform>(entity)) {
-                auto& t = m_registry.get<Transform>(entity);
-                
-                Matrix4 transMat = Matrix4::CreateTranslation(t.x, t.y, t.z);
-                Matrix4 rotX = Matrix4::CreateRotationX(t.rx);
-                Matrix4 rotY = Matrix4::CreateRotationY(t.ry);
-                Matrix4 rotZ = Matrix4::CreateRotationZ(t.rz);
-                Matrix4 scaleMat = Matrix4::CreateScale(t.sx, t.sy, t.sz);
-                
-                // T * R * S
-                Matrix4 rot = rotZ * rotY * rotX;
-                transform = transMat * rot * scaleMat;
-            }
-
+            Matrix4 transform = ComputeWorld(ComputeWorld, entity);
             mc.model->Draw(transform.m, &mc.materialOverrides);
         }
     }

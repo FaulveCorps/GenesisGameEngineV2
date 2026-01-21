@@ -7,6 +7,7 @@
 #include <iostream>
 #include <filesystem>
 #include <iomanip>
+#include <unordered_map>
 
 namespace Genesis::Engine {
 
@@ -21,6 +22,8 @@ bool SceneLoader::LoadScene(Scene& scene, const std::string& filePath) {
 
     std::string line;
     entt::entity currentEntity = entt::null;
+    std::vector<entt::entity> idToEntity;
+    std::vector<std::pair<entt::entity, int>> pendingParents;
 
     while (std::getline(file, line)) {
         if (line.empty() || line[0] == '#') continue;
@@ -30,7 +33,14 @@ bool SceneLoader::LoadScene(Scene& scene, const std::string& filePath) {
         ss >> token;
 
         if (token == "ENTITY") {
+            int id = -1;
+            if (!(ss >> id)) {
+                id = static_cast<int>(idToEntity.size());
+            }
+            if (id < 0) id = static_cast<int>(idToEntity.size());
+            if (id >= (int)idToEntity.size()) idToEntity.resize(static_cast<size_t>(id + 1), entt::null);
             currentEntity = scene.Registry().create();
+            idToEntity[static_cast<size_t>(id)] = currentEntity;
         }
         else if (token == "NAME" && currentEntity != entt::null) {
             // NAME may contain spaces. Read the rest of the line.
@@ -144,6 +154,22 @@ bool SceneLoader::LoadScene(Scene& scene, const std::string& filePath) {
             s.isTrigger = (trigger != 0);
             scene.Registry().emplace<SphereColliderComponent>(currentEntity, s);
         }
+        else if (token == "PARENT" && currentEntity != entt::null) {
+            int parentId = -1;
+            ss >> parentId;
+            if (parentId >= 0) {
+                pendingParents.emplace_back(currentEntity, parentId);
+            }
+        }
+    }
+
+    for (const auto& [child, parentId] : pendingParents) {
+        if (parentId >= 0 && parentId < (int)idToEntity.size()) {
+            entt::entity parentEnt = idToEntity[static_cast<size_t>(parentId)];
+            if (parentEnt != entt::null && scene.Registry().valid(parentEnt)) {
+                scene.Registry().emplace_or_replace<ParentComponent>(child, ParentComponent{parentEnt});
+            }
+        }
     }
     
     std::cout << "SceneLoader: Loaded scene from " << filePath << std::endl;
@@ -168,15 +194,34 @@ bool SceneLoader::SaveScene(const Scene& scene, const std::string& filePath) {
         file << std::fixed << std::setprecision(6);
 
         const auto& reg = scene.Registry();
+        std::unordered_map<entt::entity, int> entityIds;
+        int nextId = 0;
+        reg.each([&](auto entity) {
+            entityIds[entity] = nextId++;
+        });
 
         // Note: entt registry iteration order is stable per run, but not guaranteed across runs.
         // For now, we just serialize in registry order.
         reg.each([&](auto entity) {
-            file << "ENTITY\n";
+            auto itId = entityIds.find(entity);
+            const int id = (itId != entityIds.end()) ? itId->second : nextId++;
+            file << "ENTITY " << id << "\n";
             if (reg.any_of<NameComponent>(entity)) {
                 const auto& nc = reg.get<NameComponent>(entity);
                 if (!nc.name.empty()) {
                     file << "NAME " << nc.name << "\n";
+                }
+            }
+
+            if (reg.any_of<ParentComponent>(entity)) {
+                const auto& pc = reg.get<ParentComponent>(entity);
+                int parentId = -1;
+                if (pc.parent != entt::null && reg.valid(pc.parent)) {
+                    auto itParent = entityIds.find(pc.parent);
+                    if (itParent != entityIds.end()) parentId = itParent->second;
+                }
+                if (parentId >= 0) {
+                    file << "PARENT " << parentId << "\n";
                 }
             }
 

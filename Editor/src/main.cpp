@@ -27,6 +27,7 @@
 #include <unordered_map>
 #include <cstdint>
 #include <functional>
+#include <unordered_set>
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -294,6 +295,81 @@ static bool IsImageExtension(const std::string& extLower) {
     return extLower == ".png" || extLower == ".jpg" || extLower == ".jpeg" || extLower == ".bmp" || extLower == ".tga";
 }
 
+static glm::mat4 ComposeTransformGLM(const Genesis::Engine::Transform& t) {
+    glm::mat4 transMat = glm::translate(glm::mat4(1.0f), glm::vec3(t.x, t.y, t.z));
+    glm::mat4 rotX = glm::rotate(glm::mat4(1.0f), t.rx, glm::vec3(1, 0, 0));
+    glm::mat4 rotY = glm::rotate(glm::mat4(1.0f), t.ry, glm::vec3(0, 1, 0));
+    glm::mat4 rotZ = glm::rotate(glm::mat4(1.0f), t.rz, glm::vec3(0, 0, 1));
+    glm::mat4 rot = rotZ * rotY * rotX;
+    glm::mat4 scaleMat = glm::scale(glm::mat4(1.0f), glm::vec3(t.sx, t.sy, t.sz));
+    return transMat * rot * scaleMat;
+}
+
+static bool DecomposeTransformGLM(const glm::mat4& m, Genesis::Engine::Transform& out) {
+    glm::vec3 scale;
+    glm::quat rotation;
+    glm::vec3 translation;
+    glm::vec3 skew;
+    glm::vec4 perspective;
+    if (!glm::decompose(m, scale, rotation, translation, skew, perspective)) {
+        return false;
+    }
+
+    out.x = translation.x;
+    out.y = translation.y;
+    out.z = translation.z;
+
+    out.sx = scale.x;
+    out.sy = scale.y;
+    out.sz = scale.z;
+
+    rotation = glm::normalize(rotation);
+    const glm::mat4 R = glm::mat4_cast(rotation);
+    float z = 0.0f, y = 0.0f, x = 0.0f;
+    glm::extractEulerAngleZYX(R, z, y, x);
+    out.rx = x;
+    out.ry = y;
+    out.rz = z;
+    return true;
+}
+
+static bool IsAncestor(const entt::registry& reg, entt::entity ancestor, entt::entity child) {
+    entt::entity current = child;
+    int depth = 0;
+    while (reg.valid(current) && reg.any_of<Genesis::Engine::ParentComponent>(current)) {
+        auto parent = reg.get<Genesis::Engine::ParentComponent>(current).parent;
+        if (parent == ancestor) return true;
+        if (parent == entt::null || !reg.valid(parent)) return false;
+        current = parent;
+        if (++depth > 64) return true;
+    }
+    return false;
+}
+
+static glm::mat4 GetWorldMatrixGLM(const entt::registry& reg, entt::entity entity) {
+    if (!reg.valid(entity) || !reg.any_of<Genesis::Engine::Transform>(entity)) {
+        return glm::mat4(1.0f);
+    }
+
+    glm::mat4 world = ComposeTransformGLM(reg.get<Genesis::Engine::Transform>(entity));
+    entt::entity current = entity;
+    std::unordered_set<entt::entity> visited;
+    visited.insert(entity);
+    int depth = 0;
+    while (reg.any_of<Genesis::Engine::ParentComponent>(current)) {
+        auto parent = reg.get<Genesis::Engine::ParentComponent>(current).parent;
+        if (parent == entt::null || !reg.valid(parent)) break;
+        if (visited.count(parent) > 0) break;
+        visited.insert(parent);
+        if (reg.any_of<Genesis::Engine::Transform>(parent)) {
+            world = ComposeTransformGLM(reg.get<Genesis::Engine::Transform>(parent)) * world;
+        }
+        current = parent;
+        if (++depth > 64) break;
+    }
+    return world;
+}
+
 struct EditorCommand {
     std::string label;
     std::function<void()> undo;
@@ -303,6 +379,8 @@ struct EditorCommand {
 struct EntitySnapshot {
     bool hasName = false;
     Genesis::Engine::NameComponent name;
+    bool hasParent = false;
+    Genesis::Engine::ParentComponent parent;
     bool hasTransform = false;
     Genesis::Engine::Transform transform;
     bool hasModel = false;
@@ -330,6 +408,10 @@ static EntitySnapshot CaptureEntitySnapshot(const entt::registry& reg, entt::ent
     if (reg.any_of<Genesis::Engine::NameComponent>(entity)) {
         snap.hasName = true;
         snap.name = reg.get<Genesis::Engine::NameComponent>(entity);
+    }
+    if (reg.any_of<Genesis::Engine::ParentComponent>(entity)) {
+        snap.hasParent = true;
+        snap.parent = reg.get<Genesis::Engine::ParentComponent>(entity);
     }
     if (reg.any_of<Genesis::Engine::Transform>(entity)) {
         snap.hasTransform = true;
@@ -378,6 +460,9 @@ static EntitySnapshot CaptureEntitySnapshot(const entt::registry& reg, entt::ent
 static entt::entity CreateEntityFromSnapshot(entt::registry& reg, const EntitySnapshot& snap) {
     auto e = reg.create();
     if (snap.hasName) reg.emplace<Genesis::Engine::NameComponent>(e, snap.name);
+    if (snap.hasParent && snap.parent.parent != entt::null && reg.valid(snap.parent.parent)) {
+        reg.emplace<Genesis::Engine::ParentComponent>(e, snap.parent);
+    }
     if (snap.hasTransform) reg.emplace<Genesis::Engine::Transform>(e, snap.transform);
     if (snap.hasModel) reg.emplace<Genesis::Engine::ModelComponent>(e, snap.model);
     if (snap.hasLight) reg.emplace<Genesis::Engine::LightComponent>(e, snap.light);
@@ -1054,6 +1139,84 @@ int main(int argc, char** argv) {
                     editorScene.Registry().get<Genesis::Engine::Transform>(entity) = after;
                     sceneDirty = true;
                 }
+            }
+        });
+    };
+
+    auto SetParentWithUndo = [&](entt::entity child, entt::entity newParent) {
+        if (editorState != EditorState::Edit) return;
+        auto& reg = editorScene.Registry();
+        if (!reg.valid(child)) return;
+        if (newParent != entt::null && !reg.valid(newParent)) return;
+        if (child == newParent) return;
+        if (newParent != entt::null && IsAncestor(reg, child, newParent)) return;
+
+        entt::entity oldParent = entt::null;
+        if (reg.any_of<Genesis::Engine::ParentComponent>(child)) {
+            oldParent = reg.get<Genesis::Engine::ParentComponent>(child).parent;
+        }
+
+        Genesis::Engine::Transform beforeTransform{};
+        bool hasTransform = reg.any_of<Genesis::Engine::Transform>(child);
+        if (hasTransform) beforeTransform = reg.get<Genesis::Engine::Transform>(child);
+
+        glm::mat4 childWorld = GetWorldMatrixGLM(reg, child);
+        glm::mat4 parentWorld = glm::mat4(1.0f);
+        if (newParent != entt::null && reg.valid(newParent)) {
+            parentWorld = GetWorldMatrixGLM(reg, newParent);
+        }
+        glm::mat4 localMat = childWorld;
+        if (newParent != entt::null) {
+            localMat = glm::inverse(parentWorld) * childWorld;
+        }
+
+        Genesis::Engine::Transform afterTransform = beforeTransform;
+        if (hasTransform) {
+            DecomposeTransformGLM(localMat, afterTransform);
+        }
+
+        if (newParent == entt::null) {
+            if (reg.any_of<Genesis::Engine::ParentComponent>(child)) {
+                reg.remove<Genesis::Engine::ParentComponent>(child);
+            }
+        } else {
+            reg.emplace_or_replace<Genesis::Engine::ParentComponent>(child, Genesis::Engine::ParentComponent{ newParent });
+        }
+        if (hasTransform) {
+            reg.get<Genesis::Engine::Transform>(child) = afterTransform;
+        }
+        sceneDirty = true;
+
+        PushCommand(EditorCommand{
+            "Reparent Entity",
+            [&, child, oldParent, beforeTransform, hasTransform]() {
+                if (!reg.valid(child)) return;
+                if (oldParent == entt::null) {
+                    if (reg.any_of<Genesis::Engine::ParentComponent>(child)) {
+                        reg.remove<Genesis::Engine::ParentComponent>(child);
+                    }
+                } else {
+                    reg.emplace_or_replace<Genesis::Engine::ParentComponent>(child, Genesis::Engine::ParentComponent{ oldParent });
+                }
+                if (hasTransform) {
+                    reg.get<Genesis::Engine::Transform>(child) = beforeTransform;
+                }
+                sceneDirty = true;
+            },
+            [&, child, newParent, afterTransform, hasTransform]() {
+                if (!reg.valid(child)) return;
+                if (newParent == entt::null) {
+                    if (reg.any_of<Genesis::Engine::ParentComponent>(child)) {
+                        reg.remove<Genesis::Engine::ParentComponent>(child);
+                    }
+                } else {
+                    if (!reg.valid(newParent)) return;
+                    reg.emplace_or_replace<Genesis::Engine::ParentComponent>(child, Genesis::Engine::ParentComponent{ newParent });
+                }
+                if (hasTransform) {
+                    reg.get<Genesis::Engine::Transform>(child) = afterTransform;
+                }
+                sceneDirty = true;
             }
         });
     };
@@ -2027,8 +2190,8 @@ int main(int argc, char** argv) {
             {
                 auto camView = activeScene->Registry().view<Genesis::Engine::CameraComponent, Genesis::Engine::Transform>();
                 for (auto entity : camView) {
-                    const auto& tc = camView.get<Genesis::Engine::Transform>(entity);
-                    glm::vec3 wp(tc.x, tc.y, tc.z);
+                    glm::mat4 world = GetWorldMatrixGLM(activeScene->Registry(), entity);
+                    glm::vec3 wp = glm::vec3(world[3]);
                     glm::vec2 sp, uv;
                     float depth01 = 1.0f;
                     if (!WorldToScreen(wp, sp, uv, depth01)) continue;
@@ -2063,9 +2226,9 @@ int main(int argc, char** argv) {
             // Light icons
             auto lightView = activeScene->Registry().view<Genesis::Engine::LightComponent, Genesis::Engine::Transform>();
             for (auto entity : lightView) {
-                const auto& tc = lightView.get<Genesis::Engine::Transform>(entity);
                 const auto& lc = lightView.get<Genesis::Engine::LightComponent>(entity);
-                glm::vec3 wp(tc.x, tc.y, tc.z);
+                glm::mat4 world = GetWorldMatrixGLM(activeScene->Registry(), entity);
+                glm::vec3 wp = glm::vec3(world[3]);
                 glm::vec2 sp, uv;
                 float depth01 = 1.0f;
                 if (!WorldToScreen(wp, sp, uv, depth01)) continue;
@@ -2117,8 +2280,8 @@ int main(int argc, char** argv) {
             {
                 auto audioView = activeScene->Registry().view<Genesis::Engine::AudioComponent, Genesis::Engine::Transform>();
                 for (auto entity : audioView) {
-                    const auto& tc = audioView.get<Genesis::Engine::Transform>(entity);
-                    glm::vec3 wp(tc.x, tc.y, tc.z);
+                    glm::mat4 world = GetWorldMatrixGLM(activeScene->Registry(), entity);
+                    glm::vec3 wp = glm::vec3(world[3]);
                     glm::vec2 sp, uv;
                     float depth01 = 1.0f;
                     if (!WorldToScreen(wp, sp, uv, depth01)) continue;
@@ -2150,8 +2313,8 @@ int main(int argc, char** argv) {
             {
                 auto particleView = activeScene->Registry().view<Genesis::Engine::ParticleSystemComponent, Genesis::Engine::Transform>();
                 for (auto entity : particleView) {
-                    const auto& tc = particleView.get<Genesis::Engine::Transform>(entity);
-                    glm::vec3 wp(tc.x, tc.y, tc.z);
+                    glm::mat4 world = GetWorldMatrixGLM(activeScene->Registry(), entity);
+                    glm::vec3 wp = glm::vec3(world[3]);
                     glm::vec2 sp, uv;
                     float depth01 = 1.0f;
                     if (!WorldToScreen(wp, sp, uv, depth01)) continue;
@@ -2183,8 +2346,8 @@ int main(int argc, char** argv) {
             {
                 auto rbView = activeScene->Registry().view<Genesis::Engine::RigidBodyComponent, Genesis::Engine::Transform>();
                 for (auto entity : rbView) {
-                    const auto& tc = rbView.get<Genesis::Engine::Transform>(entity);
-                    glm::vec3 wp(tc.x, tc.y, tc.z);
+                    glm::mat4 world = GetWorldMatrixGLM(activeScene->Registry(), entity);
+                    glm::vec3 wp = glm::vec3(world[3]);
                     glm::vec2 sp, uv;
                     float depth01 = 1.0f;
                     if (!WorldToScreen(wp, sp, uv, depth01)) continue;
@@ -2216,9 +2379,9 @@ int main(int argc, char** argv) {
             {
                 auto boxView = activeScene->Registry().view<Genesis::Engine::BoxColliderComponent, Genesis::Engine::Transform>();
                 for (auto entity : boxView) {
-                    const auto& tc = boxView.get<Genesis::Engine::Transform>(entity);
                     const auto& bc = boxView.get<Genesis::Engine::BoxColliderComponent>(entity);
-                    glm::vec3 wp(tc.x + bc.offset[0], tc.y + bc.offset[1], tc.z + bc.offset[2]);
+                    glm::mat4 world = GetWorldMatrixGLM(activeScene->Registry(), entity);
+                    glm::vec3 wp = glm::vec3(world * glm::vec4(bc.offset[0], bc.offset[1], bc.offset[2], 1.0f));
                     glm::vec2 sp, uv;
                     float depth01 = 1.0f;
                     if (!WorldToScreen(wp, sp, uv, depth01)) continue;
@@ -2250,9 +2413,9 @@ int main(int argc, char** argv) {
             {
                 auto sphereView = activeScene->Registry().view<Genesis::Engine::SphereColliderComponent, Genesis::Engine::Transform>();
                 for (auto entity : sphereView) {
-                    const auto& tc = sphereView.get<Genesis::Engine::Transform>(entity);
                     const auto& sc = sphereView.get<Genesis::Engine::SphereColliderComponent>(entity);
-                    glm::vec3 wp(tc.x + sc.offset[0], tc.y + sc.offset[1], tc.z + sc.offset[2]);
+                    glm::mat4 world = GetWorldMatrixGLM(activeScene->Registry(), entity);
+                    glm::vec3 wp = glm::vec3(world * glm::vec4(sc.offset[0], sc.offset[1], sc.offset[2], 1.0f));
                     glm::vec2 sp, uv;
                     float depth01 = 1.0f;
                     if (!WorldToScreen(wp, sp, uv, depth01)) continue;
@@ -2432,42 +2595,11 @@ int main(int argc, char** argv) {
 
             auto& tc = activeScene->Registry().get<Genesis::Engine::Transform>(selectedEntity);
             auto ComposeEngineTRS = [&](const Genesis::Engine::Transform& t) {
-                // Must match Engine/Core/src/Scene.cpp: rot = rotZ * rotY * rotX; transform = T * rot * S
-                glm::mat4 transMat = glm::translate(glm::mat4(1.0f), glm::vec3(t.x, t.y, t.z));
-                glm::mat4 rotX = glm::rotate(glm::mat4(1.0f), t.rx, glm::vec3(1, 0, 0));
-                glm::mat4 rotY = glm::rotate(glm::mat4(1.0f), t.ry, glm::vec3(0, 1, 0));
-                glm::mat4 rotZ = glm::rotate(glm::mat4(1.0f), t.rz, glm::vec3(0, 0, 1));
-                glm::mat4 rot = rotZ * rotY * rotX;
-                glm::mat4 scaleMat = glm::scale(glm::mat4(1.0f), glm::vec3(t.sx, t.sy, t.sz));
-                return transMat * rot * scaleMat;
+                return ComposeTransformGLM(t);
             };
 
             auto DecomposeEngineTRS = [&](const glm::mat4& m, Genesis::Engine::Transform& out) {
-                glm::vec3 scale;
-                glm::quat rotation;
-                glm::vec3 translation;
-                glm::vec3 skew;
-                glm::vec4 perspective;
-                if (!glm::decompose(m, scale, rotation, translation, skew, perspective)) {
-                    return;
-                }
-
-                out.x = translation.x;
-                out.y = translation.y;
-                out.z = translation.z;
-
-                out.sx = scale.x;
-                out.sy = scale.y;
-                out.sz = scale.z;
-
-                // Extract Euler for the engine's ZYX convention: R = Rz * Ry * Rx
-                rotation = glm::normalize(rotation);
-                const glm::mat4 R = glm::mat4_cast(rotation);
-                float z = 0.0f, y = 0.0f, x = 0.0f;
-                glm::extractEulerAngleZYX(R, z, y, x);
-                out.rx = x;
-                out.ry = y;
-                out.rz = z;
+                DecomposeTransformGLM(m, out);
             };
 
             // Keep a stable matrix during manipulation to avoid feedback jitter from differing Euler conventions.
@@ -2479,7 +2611,7 @@ int main(int argc, char** argv) {
 
             if (gizmoEntity != selectedEntity || (!gizmoUsingNow && !gizmoWasUsing)) {
                 gizmoEntity = selectedEntity;
-                gizmoMatrix = ComposeEngineTRS(tc);
+                gizmoMatrix = GetWorldMatrixGLM(activeScene->Registry(), selectedEntity);
             }
 
             const bool gizmoInteractive = allowGizmoInteractionThisFrame && !wantText;
@@ -2508,12 +2640,21 @@ int main(int argc, char** argv) {
                     gizmoStartTransform = tc;
                 }
                 gizmoMatrix = manipulated;
-                DecomposeEngineTRS(gizmoMatrix, tc);
+                glm::mat4 localMat = gizmoMatrix;
+                if (activeScene->Registry().any_of<Genesis::Engine::ParentComponent>(selectedEntity)) {
+                    auto parent = activeScene->Registry().get<Genesis::Engine::ParentComponent>(selectedEntity).parent;
+                    if (parent != entt::null && activeScene->Registry().valid(parent)) {
+                        glm::mat4 parentWorld = GetWorldMatrixGLM(activeScene->Registry(), parent);
+                        glm::mat4 parentInv = glm::inverse(parentWorld);
+                        localMat = parentInv * gizmoMatrix;
+                    }
+                }
+                DecomposeEngineTRS(localMat, tc);
                 sceneDirty = true;
             } else {
                 // Not using: keep gizmo matrix in sync with component so it stays aligned to the rendered model.
                 // (If you don't do this, the gizmo can drift after other systems edit tc.)
-                gizmoMatrix = ComposeEngineTRS(tc);
+                gizmoMatrix = GetWorldMatrixGLM(activeScene->Registry(), selectedEntity);
             }
 
             if (!usingThisFrame && gizmoWasUsing) {
@@ -2563,52 +2704,127 @@ int main(int argc, char** argv) {
                 }
             }
 
-            activeScene->Registry().each([&](auto entity) {
-                ImGui::PushID((int)entity);
-                std::string label;
-                if (activeScene->Registry().any_of<Genesis::Engine::NameComponent>(entity)) {
-                    const auto& nc = activeScene->Registry().get<Genesis::Engine::NameComponent>(entity);
-                    label = nc.name.empty() ? ("Entity " + std::to_string((uint32_t)entity)) : nc.name;
-                } else {
-                    label = "Entity " + std::to_string((uint32_t)entity);
+            auto& hierarchyReg = activeScene->Registry();
+            std::unordered_map<entt::entity, std::vector<entt::entity>> childrenMap;
+            std::vector<entt::entity> roots;
+
+            auto GetLabel = [&](entt::entity entity) {
+                if (hierarchyReg.any_of<Genesis::Engine::NameComponent>(entity)) {
+                    const auto& nc = hierarchyReg.get<Genesis::Engine::NameComponent>(entity);
+                    if (!nc.name.empty()) return nc.name;
                 }
-                bool isSelected = (selectedEntity == entity);
-                if (ImGui::Selectable(label.c_str(), isSelected)) {
+                return "Entity " + std::to_string((uint32_t)entity);
+            };
+
+            hierarchyReg.each([&](auto entity) {
+                entt::entity parent = entt::null;
+                if (hierarchyReg.any_of<Genesis::Engine::ParentComponent>(entity)) {
+                    parent = hierarchyReg.get<Genesis::Engine::ParentComponent>(entity).parent;
+                }
+                if (parent != entt::null && hierarchyReg.valid(parent) && parent != entity) {
+                    childrenMap[parent].push_back(entity);
+                } else {
+                    roots.push_back(entity);
+                }
+            });
+
+            auto SortByLabel = [&](std::vector<entt::entity>& list) {
+                std::sort(list.begin(), list.end(), [&](entt::entity a, entt::entity b) {
+                    return GetLabel(a) < GetLabel(b);
+                });
+            };
+            SortByLabel(roots);
+            for (auto& entry : childrenMap) {
+                SortByLabel(entry.second);
+            }
+
+            auto DrawNode = [&](auto&& self, entt::entity entity) -> void {
+                ImGui::PushID((int)entity);
+                const std::string label = GetLabel(entity);
+                const bool hasChildren = childrenMap.find(entity) != childrenMap.end() && !childrenMap[entity].empty();
+                ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanFullWidth;
+                if (!hasChildren) flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
+                if (selectedEntity == entity) flags |= ImGuiTreeNodeFlags_Selected;
+
+                bool opened = ImGui::TreeNodeEx((void*)(intptr_t)entity, flags, "%s", label.c_str());
+                if (ImGui::IsItemClicked()) {
                     selectedEntity = entity;
                 }
 
                 if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
                     renameEntity = entity;
-                    std::string curName = label;
-                    strncpy_s(renameBuf, curName.c_str(), sizeof(renameBuf) - 1);
-                    renameOriginalName = curName;
+                    strncpy_s(renameBuf, label.c_str(), sizeof(renameBuf) - 1);
+                    renameOriginalName = label;
                     ImGui::OpenPopup("Rename Entity");
+                }
+
+                if (ImGui::BeginDragDropSource()) {
+                    entt::entity payload = entity;
+                    ImGui::SetDragDropPayload("SCENE_ENTITY", &payload, sizeof(entt::entity));
+                    ImGui::TextUnformatted(label.c_str());
+                    ImGui::EndDragDropSource();
+                }
+
+                if (ImGui::BeginDragDropTarget()) {
+                    if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("SCENE_ENTITY")) {
+                        if (payload && payload->DataSize == sizeof(entt::entity)) {
+                            entt::entity dropped = *reinterpret_cast<const entt::entity*>(payload->Data);
+                            if (hierarchyReg.valid(dropped) && dropped != entity) {
+                                SetParentWithUndo(dropped, entity);
+                            }
+                        }
+                    }
+                    ImGui::EndDragDropTarget();
                 }
 
                 if (ImGui::BeginPopupContextItem()) {
                     if (ImGui::MenuItem("Rename", "F2")) {
                         renameEntity = entity;
-                        std::string curName = label;
-                        strncpy_s(renameBuf, curName.c_str(), sizeof(renameBuf) - 1);
-                        renameOriginalName = curName;
+                        strncpy_s(renameBuf, label.c_str(), sizeof(renameBuf) - 1);
+                        renameOriginalName = label;
                         ImGui::OpenPopup("Rename Entity");
                     }
                     if (ImGui::MenuItem("Duplicate")) {
                         DuplicateEntityWithUndo(entity);
                     }
+                    const bool hasParent = hierarchyReg.any_of<Genesis::Engine::ParentComponent>(entity);
+                    if (ImGui::MenuItem("Unparent", nullptr, false, hasParent)) {
+                        SetParentWithUndo(entity, entt::null);
+                    }
                     if (ImGui::MenuItem("Delete", "Del")) {
-                        if (activeScene->Registry().valid(entity)) {
-                            DeleteEntityWithUndo(entity);
-                        }
+                        DeleteEntityWithUndo(entity);
                     }
                     ImGui::EndPopup();
                 }
 
-                if (isSelected) {
+                if (opened && hasChildren) {
+                    for (auto child : childrenMap[entity]) {
+                        self(self, child);
+                    }
+                    ImGui::TreePop();
+                }
+
+                if (selectedEntity == entity) {
                     ImGui::SetItemDefaultFocus();
                 }
                 ImGui::PopID();
-            });
+            };
+
+            for (auto entity : roots) {
+                DrawNode(DrawNode, entity);
+            }
+
+            if (ImGui::BeginDragDropTarget()) {
+                if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("SCENE_ENTITY")) {
+                    if (payload && payload->DataSize == sizeof(entt::entity)) {
+                        entt::entity dropped = *reinterpret_cast<const entt::entity*>(payload->Data);
+                        if (hierarchyReg.valid(dropped)) {
+                            SetParentWithUndo(dropped, entt::null);
+                        }
+                    }
+                }
+                ImGui::EndDragDropTarget();
+            }
 
             if (ImGui::IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem)
                 && ImGui::IsMouseClicked(ImGuiMouseButton_Left)
@@ -2677,6 +2893,29 @@ int main(int argc, char** argv) {
                 }
                 if (ImGui::IsItemDeactivatedAfterEdit()) {
                     PushRenameCommand(selectedEntity, nameBeforeEdit, std::string(nameEditBuf));
+                }
+                {
+                    entt::entity parent = entt::null;
+                    if (activeScene->Registry().any_of<Genesis::Engine::ParentComponent>(selectedEntity)) {
+                        parent = activeScene->Registry().get<Genesis::Engine::ParentComponent>(selectedEntity).parent;
+                    }
+                    std::string parentLabel = "(none)";
+                    if (parent != entt::null && activeScene->Registry().valid(parent)) {
+                        if (activeScene->Registry().any_of<Genesis::Engine::NameComponent>(parent)) {
+                            const auto& nc = activeScene->Registry().get<Genesis::Engine::NameComponent>(parent);
+                            if (!nc.name.empty()) parentLabel = nc.name;
+                            else parentLabel = "Entity " + std::to_string((uint32_t)parent);
+                        } else {
+                            parentLabel = "Entity " + std::to_string((uint32_t)parent);
+                        }
+                    }
+                    ImGui::Text("Parent: %s", parentLabel.c_str());
+                    if (parent != entt::null) {
+                        ImGui::SameLine();
+                        if (ImGui::Button("Clear Parent")) {
+                            SetParentWithUndo(selectedEntity, entt::null);
+                        }
+                    }
                 }
                 ImGui::Text("Entity ID: %u", (uint32_t)selectedEntity);
                 ImGui::Separator();

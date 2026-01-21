@@ -27,15 +27,7 @@ void DebugRenderer::Render(Scene& scene, IGraphicsAPI* renderer) {
     auto boxView = registry.view<BoxColliderComponent, Transform>();
     for (auto entity : boxView) {
         auto& collider = boxView.get<BoxColliderComponent>(entity);
-        auto& t = boxView.get<Transform>(entity);
-
-        Matrix4 transMat = Matrix4::CreateTranslation(t.x, t.y, t.z);
-        Matrix4 rotX = Matrix4::CreateRotationX(t.rx);
-        Matrix4 rotY = Matrix4::CreateRotationY(t.ry);
-        Matrix4 rotZ = Matrix4::CreateRotationZ(t.rz);
-        Matrix4 scaleMat = Matrix4::CreateScale(t.sx, t.sy, t.sz);
-        // T * R * S
-        Matrix4 worldParams = transMat * rotZ * rotY * rotX * scaleMat;
+        Matrix4 worldParams = scene.GetWorldMatrix(entity);
 
         float hx = collider.size[0] * 0.5f;
         float hy = collider.size[1] * 0.5f;
@@ -81,14 +73,7 @@ void DebugRenderer::Render(Scene& scene, IGraphicsAPI* renderer) {
 
     for (auto entity : sphereView) {
         auto& collider = sphereView.get<SphereColliderComponent>(entity);
-        auto& t = sphereView.get<Transform>(entity);
-
-        Matrix4 transMat = Matrix4::CreateTranslation(t.x, t.y, t.z);
-        Matrix4 rotX = Matrix4::CreateRotationX(t.rx);
-        Matrix4 rotY = Matrix4::CreateRotationY(t.ry);
-        Matrix4 rotZ = Matrix4::CreateRotationZ(t.rz);
-        Matrix4 scaleMat = Matrix4::CreateScale(t.sx, t.sy, t.sz);
-        Matrix4 worldParams = transMat * rotZ * rotY * rotX * scaleMat;
+        Matrix4 worldParams = scene.GetWorldMatrix(entity);
 
         float r = collider.radius;
         float ox = collider.offset[0];

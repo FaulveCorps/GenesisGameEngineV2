@@ -3,6 +3,7 @@
 #include <memory>
 #include <string>
 #include <map>
+#include <entt/entt.hpp>
 #include "engine/Model.h"
 #include "engine/Material.h"
 
@@ -33,6 +34,11 @@ struct Transform {
 // Optional human-readable entity name (Editor / tooling).
 struct NameComponent {
     std::string name;
+};
+
+// Hierarchy relationship (Editor + Runtime)
+struct ParentComponent {
+    entt::entity parent = entt::null;
 };
 
 struct ModelComponent {
