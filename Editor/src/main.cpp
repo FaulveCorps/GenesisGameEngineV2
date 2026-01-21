@@ -26,6 +26,7 @@
 #include <cstdlib>
 #include <unordered_map>
 #include <cstdint>
+#include <functional>
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -291,6 +292,114 @@ static std::string ToLowerCopy(std::string s) {
 
 static bool IsImageExtension(const std::string& extLower) {
     return extLower == ".png" || extLower == ".jpg" || extLower == ".jpeg" || extLower == ".bmp" || extLower == ".tga";
+}
+
+struct EditorCommand {
+    std::string label;
+    std::function<void()> undo;
+    std::function<void()> redo;
+};
+
+struct EntitySnapshot {
+    bool hasName = false;
+    Genesis::Engine::NameComponent name;
+    bool hasTransform = false;
+    Genesis::Engine::Transform transform;
+    bool hasModel = false;
+    Genesis::Engine::ModelComponent model;
+    bool hasLight = false;
+    Genesis::Engine::LightComponent light;
+    bool hasCamera = false;
+    Genesis::Engine::CameraComponent camera;
+    bool hasAudio = false;
+    Genesis::Engine::AudioComponent audio;
+    bool hasParticle = false;
+    Genesis::Engine::ParticleSystemComponent particle;
+    bool hasRigidBody = false;
+    Genesis::Engine::RigidBodyComponent rigidBody;
+    bool hasBoxCollider = false;
+    Genesis::Engine::BoxColliderComponent boxCollider;
+    bool hasSphereCollider = false;
+    Genesis::Engine::SphereColliderComponent sphereCollider;
+    bool hasScript = false;
+    Genesis::Engine::ScriptComponent script;
+};
+
+static EntitySnapshot CaptureEntitySnapshot(const entt::registry& reg, entt::entity entity) {
+    EntitySnapshot snap;
+    if (reg.any_of<Genesis::Engine::NameComponent>(entity)) {
+        snap.hasName = true;
+        snap.name = reg.get<Genesis::Engine::NameComponent>(entity);
+    }
+    if (reg.any_of<Genesis::Engine::Transform>(entity)) {
+        snap.hasTransform = true;
+        snap.transform = reg.get<Genesis::Engine::Transform>(entity);
+    }
+    if (reg.any_of<Genesis::Engine::ModelComponent>(entity)) {
+        snap.hasModel = true;
+        snap.model = reg.get<Genesis::Engine::ModelComponent>(entity);
+    }
+    if (reg.any_of<Genesis::Engine::LightComponent>(entity)) {
+        snap.hasLight = true;
+        snap.light = reg.get<Genesis::Engine::LightComponent>(entity);
+    }
+    if (reg.any_of<Genesis::Engine::CameraComponent>(entity)) {
+        snap.hasCamera = true;
+        snap.camera = reg.get<Genesis::Engine::CameraComponent>(entity);
+    }
+    if (reg.any_of<Genesis::Engine::AudioComponent>(entity)) {
+        snap.hasAudio = true;
+        snap.audio = reg.get<Genesis::Engine::AudioComponent>(entity);
+    }
+    if (reg.any_of<Genesis::Engine::ParticleSystemComponent>(entity)) {
+        snap.hasParticle = true;
+        snap.particle = reg.get<Genesis::Engine::ParticleSystemComponent>(entity);
+    }
+    if (reg.any_of<Genesis::Engine::RigidBodyComponent>(entity)) {
+        snap.hasRigidBody = true;
+        snap.rigidBody = reg.get<Genesis::Engine::RigidBodyComponent>(entity);
+    }
+    if (reg.any_of<Genesis::Engine::BoxColliderComponent>(entity)) {
+        snap.hasBoxCollider = true;
+        snap.boxCollider = reg.get<Genesis::Engine::BoxColliderComponent>(entity);
+    }
+    if (reg.any_of<Genesis::Engine::SphereColliderComponent>(entity)) {
+        snap.hasSphereCollider = true;
+        snap.sphereCollider = reg.get<Genesis::Engine::SphereColliderComponent>(entity);
+    }
+    if (reg.any_of<Genesis::Engine::ScriptComponent>(entity)) {
+        snap.hasScript = true;
+        snap.script = reg.get<Genesis::Engine::ScriptComponent>(entity);
+        snap.script.Instance = nullptr;
+    }
+    return snap;
+}
+
+static entt::entity CreateEntityFromSnapshot(entt::registry& reg, const EntitySnapshot& snap) {
+    auto e = reg.create();
+    if (snap.hasName) reg.emplace<Genesis::Engine::NameComponent>(e, snap.name);
+    if (snap.hasTransform) reg.emplace<Genesis::Engine::Transform>(e, snap.transform);
+    if (snap.hasModel) reg.emplace<Genesis::Engine::ModelComponent>(e, snap.model);
+    if (snap.hasLight) reg.emplace<Genesis::Engine::LightComponent>(e, snap.light);
+    if (snap.hasCamera) reg.emplace<Genesis::Engine::CameraComponent>(e, snap.camera);
+    if (snap.hasAudio) reg.emplace<Genesis::Engine::AudioComponent>(e, snap.audio);
+    if (snap.hasParticle) reg.emplace<Genesis::Engine::ParticleSystemComponent>(e, snap.particle);
+    if (snap.hasRigidBody) reg.emplace<Genesis::Engine::RigidBodyComponent>(e, snap.rigidBody);
+    if (snap.hasBoxCollider) reg.emplace<Genesis::Engine::BoxColliderComponent>(e, snap.boxCollider);
+    if (snap.hasSphereCollider) reg.emplace<Genesis::Engine::SphereColliderComponent>(e, snap.sphereCollider);
+    if (snap.hasScript) {
+        Genesis::Engine::ScriptComponent copy = snap.script;
+        copy.Instance = nullptr;
+        reg.emplace<Genesis::Engine::ScriptComponent>(e, copy);
+    }
+    return e;
+}
+
+static bool TransformNearlyEqual(const Genesis::Engine::Transform& a, const Genesis::Engine::Transform& b) {
+    auto near = [](float lhs, float rhs) { return std::fabs(lhs - rhs) < 1e-4f; };
+    return near(a.x, b.x) && near(a.y, b.y) && near(a.z, b.z)
+        && near(a.rx, b.rx) && near(a.ry, b.ry) && near(a.rz, b.rz)
+        && near(a.sx, b.sx) && near(a.sy, b.sy) && near(a.sz, b.sz);
 }
 
 struct RecentProjectEntry {
@@ -756,6 +865,38 @@ int main(int argc, char** argv) {
     EditorState editorState = EditorState::Edit;
     bool stepRuntime = false;
 
+    std::vector<EditorCommand> undoStack;
+    std::vector<EditorCommand> redoStack;
+    const size_t kMaxUndo = 64;
+
+    auto PushCommand = [&](EditorCommand cmd) {
+        undoStack.push_back(std::move(cmd));
+        redoStack.clear();
+        if (undoStack.size() > kMaxUndo) {
+            undoStack.erase(undoStack.begin());
+        }
+    };
+
+    auto DoUndo = [&]() {
+        if (editorState != EditorState::Edit) return;
+        if (undoStack.empty()) return;
+        auto cmd = std::move(undoStack.back());
+        undoStack.pop_back();
+        if (cmd.undo) cmd.undo();
+        redoStack.push_back(std::move(cmd));
+        sceneDirty = true;
+    };
+
+    auto DoRedo = [&]() {
+        if (editorState != EditorState::Edit) return;
+        if (redoStack.empty()) return;
+        auto cmd = std::move(redoStack.back());
+        redoStack.pop_back();
+        if (cmd.redo) cmd.redo();
+        undoStack.push_back(std::move(cmd));
+        sceneDirty = true;
+    };
+
     auto RecordScenePath = [&](const std::string& path) {
         const std::string stored = NormalizePathForSettings(path, projectRoot);
         editorSettings.lastProjectRoot = projectRoot.string();
@@ -797,6 +938,124 @@ int main(int argc, char** argv) {
         camTrans.z = 10.0f; // Move back
         editorScene.Registry().emplace<Genesis::Engine::Transform>(camEntity, camTrans);
         editorScene.Registry().emplace<Genesis::Engine::CameraComponent>(camEntity);
+    };
+
+    struct EntityUndoData {
+        EntitySnapshot snapshot;
+        entt::entity entity = entt::null;
+    };
+
+    auto CreateEntityWithDefaults = [&]() -> entt::entity {
+        auto& reg = editorScene.Registry();
+        auto e = reg.create();
+        reg.emplace<Genesis::Engine::NameComponent>(e, Genesis::Engine::NameComponent{"Entity " + std::to_string((uint32_t)e)});
+        reg.emplace<Genesis::Engine::Transform>(e);
+        return e;
+    };
+
+    auto PushCreateCommand = [&](const std::string& label, entt::entity created, const EntitySnapshot& snapshot) {
+        auto data = std::make_shared<EntityUndoData>();
+        data->snapshot = snapshot;
+        data->entity = created;
+
+        PushCommand(EditorCommand{
+            label,
+            [&, data]() {
+                if (editorScene.Registry().valid(data->entity)) {
+                    editorScene.Registry().destroy(data->entity);
+                    if (selectedEntity == data->entity) selectedEntity = entt::null;
+                }
+                sceneDirty = true;
+            },
+            [&, data]() {
+                entt::entity e = CreateEntityFromSnapshot(editorScene.Registry(), data->snapshot);
+                data->entity = e;
+                selectedEntity = e;
+                sceneDirty = true;
+            }
+        });
+    };
+
+    auto DeleteEntityWithUndo = [&](entt::entity entity) {
+        if (editorState != EditorState::Edit) return;
+        if (entity == entt::null || !editorScene.Registry().valid(entity)) return;
+
+        EntitySnapshot snapshot = CaptureEntitySnapshot(editorScene.Registry(), entity);
+        auto data = std::make_shared<EntityUndoData>();
+        data->snapshot = snapshot;
+
+        editorScene.Registry().destroy(entity);
+        if (selectedEntity == entity) selectedEntity = entt::null;
+        sceneDirty = true;
+
+        PushCommand(EditorCommand{
+            "Delete Entity",
+            [&, data]() {
+                entt::entity e = CreateEntityFromSnapshot(editorScene.Registry(), data->snapshot);
+                data->entity = e;
+                selectedEntity = e;
+                sceneDirty = true;
+            },
+            [&, data]() {
+                if (editorScene.Registry().valid(data->entity)) {
+                    editorScene.Registry().destroy(data->entity);
+                    if (selectedEntity == data->entity) selectedEntity = entt::null;
+                }
+                sceneDirty = true;
+            }
+        });
+    };
+
+    auto DuplicateEntityWithUndo = [&](entt::entity source) {
+        if (editorState != EditorState::Edit) return;
+        if (source == entt::null || !editorScene.Registry().valid(source)) return;
+
+        EntitySnapshot snapshot = CaptureEntitySnapshot(editorScene.Registry(), source);
+        if (snapshot.hasName && !snapshot.name.name.empty()) {
+            snapshot.name.name += " Copy";
+        }
+        entt::entity dup = CreateEntityFromSnapshot(editorScene.Registry(), snapshot);
+        selectedEntity = dup;
+        sceneDirty = true;
+        PushCreateCommand("Duplicate Entity", dup, snapshot);
+    };
+
+    auto PushRenameCommand = [&](entt::entity entity, const std::string& before, const std::string& after) {
+        if (before == after) return;
+        PushCommand(EditorCommand{
+            "Rename Entity",
+            [&, entity, before]() {
+                if (editorScene.Registry().valid(entity)) {
+                    editorScene.Registry().emplace_or_replace<Genesis::Engine::NameComponent>(entity, Genesis::Engine::NameComponent{ before });
+                    sceneDirty = true;
+                }
+            },
+            [&, entity, after]() {
+                if (editorScene.Registry().valid(entity)) {
+                    editorScene.Registry().emplace_or_replace<Genesis::Engine::NameComponent>(entity, Genesis::Engine::NameComponent{ after });
+                    sceneDirty = true;
+                }
+            }
+        });
+    };
+
+    auto PushTransformCommand = [&](entt::entity entity, const Genesis::Engine::Transform& before, const Genesis::Engine::Transform& after) {
+        if (TransformNearlyEqual(before, after)) return;
+        PushCommand(EditorCommand{
+            "Modify Transform",
+            [&, entity, before]() {
+                if (editorScene.Registry().valid(entity) && editorScene.Registry().any_of<Genesis::Engine::Transform>(entity)) {
+                    editorScene.Registry().get<Genesis::Engine::Transform>(entity) = before;
+                    sceneDirty = true;
+                }
+            },
+            [&, entity, after]() {
+                if (editorScene.Registry().valid(entity) && editorScene.Registry().any_of<Genesis::Engine::Transform>(entity)) {
+                    editorScene.Registry().get<Genesis::Engine::Transform>(entity) = after;
+                    sceneDirty = true;
+                }
+            }
+        });
     };
 
     auto ResolveScenePathForLoad = [&](const std::string& storedPath) {
@@ -1020,9 +1279,24 @@ int main(int argc, char** argv) {
         }
 
         if (!ImGui::GetIO().WantTextInput) {
+            if (ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Z)) {
+                if (ImGui::GetIO().KeyShift) {
+                    DoRedo();
+                } else {
+                    DoUndo();
+                }
+            }
+            if (ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Y)) {
+                DoRedo();
+            }
             if (ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_N)) {
                 if (!MaybePromptUnsaved(PendingSceneAction::NewScene)) {
                     DoNewScene();
+                }
+            }
+            if (ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_D)) {
+                if (selectedEntity != entt::null && activeScene->Registry().valid(selectedEntity)) {
+                    DuplicateEntityWithUndo(selectedEntity);
                 }
             }
             if (ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_O)) {
@@ -1061,9 +1335,7 @@ int main(int argc, char** argv) {
         }
         if (!ImGui::GetIO().WantTextInput && ImGui::IsKeyPressed(ImGuiKey_Delete)) {
             if (selectedEntity != entt::null && activeScene->Registry().valid(selectedEntity)) {
-                activeScene->Registry().destroy(selectedEntity);
-                selectedEntity = entt::null;
-                if (editorState == EditorState::Edit) sceneDirty = true;
+                DeleteEntityWithUndo(selectedEntity);
             }
         }
 
@@ -1189,6 +1461,17 @@ int main(int argc, char** argv) {
                 }
                 ImGui::Separator();
                 if (ImGui::MenuItem("Exit", "Alt+F4")) { RequestQuit(); }
+                ImGui::EndMenu();
+            }
+            if (ImGui::BeginMenu("Edit")) {
+                const bool canUndo = !undoStack.empty();
+                const bool canRedo = !redoStack.empty();
+                const bool hasSelection = (selectedEntity != entt::null && activeScene->Registry().valid(selectedEntity));
+                if (ImGui::MenuItem("Undo", "Ctrl+Z", false, canUndo)) { DoUndo(); }
+                if (ImGui::MenuItem("Redo", "Ctrl+Y", false, canRedo)) { DoRedo(); }
+                ImGui::Separator();
+                if (ImGui::MenuItem("Duplicate", "Ctrl+D", false, hasSelection)) { DuplicateEntityWithUndo(selectedEntity); }
+                if (ImGui::MenuItem("Delete", "Del", false, hasSelection)) { DeleteEntityWithUndo(selectedEntity); }
                 ImGui::EndMenu();
             }
             if (ImGui::BeginMenu("View")) {
@@ -2019,18 +2302,22 @@ int main(int argc, char** argv) {
                             LoadSceneFromPath(p.string(), true);
                         }
                     } else if (ext == ".gltf" || ext == ".glb" || ext == ".obj" || ext == ".fbx") {
-                        auto e = activeScene->Registry().create();
-                        activeScene->Registry().emplace<Genesis::Engine::NameComponent>(e, Genesis::Engine::NameComponent{p.stem().string()});
-                        activeScene->Registry().emplace<Genesis::Engine::Transform>(e);
-                        Genesis::Engine::ModelComponent mc;
-                        mc.model = std::make_shared<Genesis::Engine::Model>();
-                        mc.sourcePath = p.string();
-                        if (mc.model->Load(mc.sourcePath)) {
-                            activeScene->Registry().emplace<Genesis::Engine::ModelComponent>(e, mc);
-                            selectedEntity = e;
-                            if (editorState == EditorState::Edit) sceneDirty = true;
-                        } else {
-                            activeScene->Registry().destroy(e);
+                        if (editorState == EditorState::Edit) {
+                            auto& reg = editorScene.Registry();
+                            auto e = reg.create();
+                            reg.emplace<Genesis::Engine::NameComponent>(e, Genesis::Engine::NameComponent{p.stem().string()});
+                            reg.emplace<Genesis::Engine::Transform>(e);
+                            Genesis::Engine::ModelComponent mc;
+                            mc.model = std::make_shared<Genesis::Engine::Model>();
+                            mc.sourcePath = p.string();
+                            if (mc.model->Load(mc.sourcePath)) {
+                                reg.emplace<Genesis::Engine::ModelComponent>(e, mc);
+                                selectedEntity = e;
+                                sceneDirty = true;
+                                PushCreateCommand("Create Model", e, CaptureEntitySnapshot(reg, e));
+                            } else {
+                                reg.destroy(e);
+                            }
                         }
                     }
                 }
@@ -2187,6 +2474,7 @@ int main(int argc, char** argv) {
             static entt::entity gizmoEntity = entt::null;
             static glm::mat4 gizmoMatrix = glm::mat4(1.0f);
             static bool gizmoWasUsing = false;
+            static Genesis::Engine::Transform gizmoStartTransform{};
             const bool gizmoUsingNow = ImGuizmo::IsUsing();
 
             if (gizmoEntity != selectedEntity || (!gizmoUsingNow && !gizmoWasUsing)) {
@@ -2216,6 +2504,9 @@ int main(int argc, char** argv) {
 
             const bool usingThisFrame = gizmoInteractive && ImGuizmo::IsUsing();
             if (usingThisFrame) {
+                if (!gizmoWasUsing) {
+                    gizmoStartTransform = tc;
+                }
                 gizmoMatrix = manipulated;
                 DecomposeEngineTRS(gizmoMatrix, tc);
                 sceneDirty = true;
@@ -2223,6 +2514,12 @@ int main(int argc, char** argv) {
                 // Not using: keep gizmo matrix in sync with component so it stays aligned to the rendered model.
                 // (If you don't do this, the gizmo can drift after other systems edit tc.)
                 gizmoMatrix = ComposeEngineTRS(tc);
+            }
+
+            if (!usingThisFrame && gizmoWasUsing) {
+                if (editorState == EditorState::Edit) {
+                    PushTransformCommand(selectedEntity, gizmoStartTransform, tc);
+                }
             }
 
             gizmoWasUsing = usingThisFrame;
@@ -2235,17 +2532,19 @@ int main(int argc, char** argv) {
         if (!zenMode) {
             ImGui::Begin("Scene Hierarchy");
             if (ImGui::Button("Create Entity")) {
-                auto e = activeScene->Registry().create();
-                activeScene->Registry().emplace<Genesis::Engine::NameComponent>(e, Genesis::Engine::NameComponent{"Entity " + std::to_string((uint32_t)e)});
-                activeScene->Registry().emplace<Genesis::Engine::Transform>(e);
-                selectedEntity = e;
-                if (editorState == EditorState::Edit) sceneDirty = true;
+                if (editorState == EditorState::Edit) {
+                    auto e = CreateEntityWithDefaults();
+                    selectedEntity = e;
+                    sceneDirty = true;
+                    PushCreateCommand("Create Entity", e, CaptureEntitySnapshot(editorScene.Registry(), e));
+                }
             }
             ImGui::Separator();
 
             // Rename popup state
             static entt::entity renameEntity = entt::null;
             static char renameBuf[128] = "";
+            static std::string renameOriginalName;
 
             // F2 focuses rename for selected entity
             if (ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) && ImGui::IsKeyPressed(ImGuiKey_F2)) {
@@ -2259,6 +2558,7 @@ int main(int argc, char** argv) {
                         label = "Entity " + std::to_string((uint32_t)selectedEntity);
                     }
                     strncpy_s(renameBuf, label.c_str(), sizeof(renameBuf) - 1);
+                    renameOriginalName = label;
                     ImGui::OpenPopup("Rename Entity");
                 }
             }
@@ -2281,6 +2581,7 @@ int main(int argc, char** argv) {
                     renameEntity = entity;
                     std::string curName = label;
                     strncpy_s(renameBuf, curName.c_str(), sizeof(renameBuf) - 1);
+                    renameOriginalName = curName;
                     ImGui::OpenPopup("Rename Entity");
                 }
 
@@ -2289,50 +2590,15 @@ int main(int argc, char** argv) {
                         renameEntity = entity;
                         std::string curName = label;
                         strncpy_s(renameBuf, curName.c_str(), sizeof(renameBuf) - 1);
+                        renameOriginalName = curName;
                         ImGui::OpenPopup("Rename Entity");
                     }
                     if (ImGui::MenuItem("Duplicate")) {
-                        auto dup = activeScene->Registry().create();
-                        if (activeScene->Registry().any_of<Genesis::Engine::NameComponent>(entity)) {
-                            auto nc = activeScene->Registry().get<Genesis::Engine::NameComponent>(entity);
-                            if (!nc.name.empty()) nc.name += " Copy";
-                            activeScene->Registry().emplace<Genesis::Engine::NameComponent>(dup, nc);
-                        }
-                        if (activeScene->Registry().any_of<Genesis::Engine::Transform>(entity)) {
-                            activeScene->Registry().emplace<Genesis::Engine::Transform>(dup, activeScene->Registry().get<Genesis::Engine::Transform>(entity));
-                        }
-                        if (activeScene->Registry().any_of<Genesis::Engine::LightComponent>(entity)) {
-                            activeScene->Registry().emplace<Genesis::Engine::LightComponent>(dup, activeScene->Registry().get<Genesis::Engine::LightComponent>(entity));
-                        }
-                        if (activeScene->Registry().any_of<Genesis::Engine::ModelComponent>(entity)) {
-                            activeScene->Registry().emplace<Genesis::Engine::ModelComponent>(dup, activeScene->Registry().get<Genesis::Engine::ModelComponent>(entity));
-                        }
-                        if (activeScene->Registry().any_of<Genesis::Engine::CameraComponent>(entity)) {
-                            activeScene->Registry().emplace<Genesis::Engine::CameraComponent>(dup, activeScene->Registry().get<Genesis::Engine::CameraComponent>(entity));
-                        }
-                        if (activeScene->Registry().any_of<Genesis::Engine::AudioComponent>(entity)) {
-                            activeScene->Registry().emplace<Genesis::Engine::AudioComponent>(dup, activeScene->Registry().get<Genesis::Engine::AudioComponent>(entity));
-                        }
-                        if (activeScene->Registry().any_of<Genesis::Engine::ParticleSystemComponent>(entity)) {
-                            activeScene->Registry().emplace<Genesis::Engine::ParticleSystemComponent>(dup, activeScene->Registry().get<Genesis::Engine::ParticleSystemComponent>(entity));
-                        }
-                        if (activeScene->Registry().any_of<Genesis::Engine::RigidBodyComponent>(entity)) {
-                            activeScene->Registry().emplace<Genesis::Engine::RigidBodyComponent>(dup, activeScene->Registry().get<Genesis::Engine::RigidBodyComponent>(entity));
-                        }
-                        if (activeScene->Registry().any_of<Genesis::Engine::BoxColliderComponent>(entity)) {
-                            activeScene->Registry().emplace<Genesis::Engine::BoxColliderComponent>(dup, activeScene->Registry().get<Genesis::Engine::BoxColliderComponent>(entity));
-                        }
-                        if (activeScene->Registry().any_of<Genesis::Engine::SphereColliderComponent>(entity)) {
-                            activeScene->Registry().emplace<Genesis::Engine::SphereColliderComponent>(dup, activeScene->Registry().get<Genesis::Engine::SphereColliderComponent>(entity));
-                        }
-                        selectedEntity = dup;
-                        if (editorState == EditorState::Edit) sceneDirty = true;
+                        DuplicateEntityWithUndo(entity);
                     }
                     if (ImGui::MenuItem("Delete", "Del")) {
                         if (activeScene->Registry().valid(entity)) {
-                            activeScene->Registry().destroy(entity);
-                            if (selectedEntity == entity) selectedEntity = entt::null;
-                            if (editorState == EditorState::Edit) sceneDirty = true;
+                            DeleteEntityWithUndo(entity);
                         }
                     }
                     ImGui::EndPopup();
@@ -2364,6 +2630,7 @@ int main(int argc, char** argv) {
                     if (renameEntity != entt::null && activeScene->Registry().valid(renameEntity)) {
                         activeScene->Registry().emplace_or_replace<Genesis::Engine::NameComponent>(renameEntity, Genesis::Engine::NameComponent{std::string(renameBuf)});
                         if (editorState == EditorState::Edit) sceneDirty = true;
+                        PushRenameCommand(renameEntity, renameOriginalName, std::string(renameBuf));
                     }
                     renameEntity = entt::null;
                     ImGui::CloseCurrentPopup();
@@ -2399,9 +2666,17 @@ int main(int argc, char** argv) {
                     ImGui::SetKeyboardFocusHere();
                     focusInspectorName = false;
                 }
+                static std::string nameBeforeEdit;
+                std::string nameBefore = nameEditBuf;
                 if (ImGui::InputText("Name", nameEditBuf, sizeof(nameEditBuf))) {
                     activeScene->Registry().emplace_or_replace<Genesis::Engine::NameComponent>(selectedEntity, Genesis::Engine::NameComponent{std::string(nameEditBuf)});
                     if (editorState == EditorState::Edit) sceneDirty = true;
+                }
+                if (ImGui::IsItemActivated()) {
+                    nameBeforeEdit = nameBefore;
+                }
+                if (ImGui::IsItemDeactivatedAfterEdit()) {
+                    PushRenameCommand(selectedEntity, nameBeforeEdit, std::string(nameEditBuf));
                 }
                 ImGui::Text("Entity ID: %u", (uint32_t)selectedEntity);
                 ImGui::Separator();
@@ -2424,25 +2699,51 @@ int main(int argc, char** argv) {
 
                 static entt::entity lastAudioEntity = entt::null;
                 static char audioPathBuf[512] = "";
+                static entt::entity transformEditEntity = entt::null;
+                static Genesis::Engine::Transform transformEditStart{};
 
                 if (activeScene->Registry().all_of<Genesis::Engine::Transform>(selectedEntity)) {
                     if (ImGui::CollapsingHeader("Transform", ImGuiTreeNodeFlags_DefaultOpen)) {
                         auto& tc = activeScene->Registry().get<Genesis::Engine::Transform>(selectedEntity);
+                        Genesis::Engine::Transform beforePos = tc;
                         if (ImGui::DragFloat3("Position", &tc.x, 0.1f)) {
                             if (editorState == EditorState::Edit) sceneDirty = true;
+                        }
+                        if (ImGui::IsItemActivated()) {
+                            transformEditEntity = selectedEntity;
+                            transformEditStart = beforePos;
+                        }
+                        if (ImGui::IsItemDeactivatedAfterEdit() && transformEditEntity == selectedEntity) {
+                            PushTransformCommand(selectedEntity, transformEditStart, tc);
                         }
 
                         // Show rotation in degrees, store radians.
                         float rotDeg[3] = { glm::degrees(tc.rx), glm::degrees(tc.ry), glm::degrees(tc.rz) };
+                        Genesis::Engine::Transform beforeRot = tc;
                         if (ImGui::DragFloat3("Rotation (deg)", rotDeg, 0.5f)) {
                             tc.rx = glm::radians(rotDeg[0]);
                             tc.ry = glm::radians(rotDeg[1]);
                             tc.rz = glm::radians(rotDeg[2]);
                             if (editorState == EditorState::Edit) sceneDirty = true;
                         }
+                        if (ImGui::IsItemActivated()) {
+                            transformEditEntity = selectedEntity;
+                            transformEditStart = beforeRot;
+                        }
+                        if (ImGui::IsItemDeactivatedAfterEdit() && transformEditEntity == selectedEntity) {
+                            PushTransformCommand(selectedEntity, transformEditStart, tc);
+                        }
 
+                        Genesis::Engine::Transform beforeScale = tc;
                         if (ImGui::DragFloat3("Scale", &tc.sx, 0.01f, 0.0f, 1000.0f)) {
                             if (editorState == EditorState::Edit) sceneDirty = true;
+                        }
+                        if (ImGui::IsItemActivated()) {
+                            transformEditEntity = selectedEntity;
+                            transformEditStart = beforeScale;
+                        }
+                        if (ImGui::IsItemDeactivatedAfterEdit() && transformEditEntity == selectedEntity) {
+                            PushTransformCommand(selectedEntity, transformEditStart, tc);
                         }
                     }
                 }
@@ -2877,11 +3178,12 @@ int main(int argc, char** argv) {
                         requestResetLayout = true;
                     }
                     else if (cmd == "Entity: Create New") {
-                        auto e = activeScene->Registry().create();
-                        activeScene->Registry().emplace<Genesis::Engine::NameComponent>(e, Genesis::Engine::NameComponent{"Entity " + std::to_string((uint32_t)e)});
-                        activeScene->Registry().emplace<Genesis::Engine::Transform>(e);
-                        selectedEntity = e;
-                        if (editorState == EditorState::Edit) sceneDirty = true;
+                        if (editorState == EditorState::Edit) {
+                            auto e = CreateEntityWithDefaults();
+                            selectedEntity = e;
+                            sceneDirty = true;
+                            PushCreateCommand("Create Entity", e, CaptureEntitySnapshot(editorScene.Registry(), e));
+                        }
                     }
                     else if (cmd == "Entity: Rename Selected") {
                         if (selectedEntity != entt::null && activeScene->Registry().valid(selectedEntity)) {
@@ -2891,9 +3193,7 @@ int main(int argc, char** argv) {
                     }
                     else if (cmd == "Entity: Delete Selected") {
                         if (selectedEntity != entt::null && activeScene->Registry().valid(selectedEntity)) {
-                            activeScene->Registry().destroy(selectedEntity);
-                            selectedEntity = entt::null;
-                            if (editorState == EditorState::Edit) sceneDirty = true;
+                            DeleteEntityWithUndo(selectedEntity);
                         }
                     }
                     else if (cmd == "Window: Toggle Fullscreen") {
