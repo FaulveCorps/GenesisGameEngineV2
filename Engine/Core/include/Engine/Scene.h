@@ -28,8 +28,14 @@ public:
     // Helper to copy scene state (for Play Mode)
     void CopyFrom(const Scene& other);
 
+    // Control whether Render() sets view/projection from the scene camera.
+    void SetUseSceneCamera(bool enabled) { m_useSceneCamera = enabled; }
+    bool GetUseSceneCamera() const { return m_useSceneCamera; }
+
 private:
     entt::registry m_registry;
+    bool m_runtimeActive = false;
+    bool m_useSceneCamera = true;
 };
 
 } // namespace Genesis::Engine

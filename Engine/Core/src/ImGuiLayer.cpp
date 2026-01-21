@@ -10,6 +10,7 @@
 #include <string>
 #include <iostream>
 #include <typeinfo>
+#include <cstring>
 
 namespace Genesis::Engine {
 
@@ -46,6 +47,8 @@ struct ImGuiLayer::Impl {
     SDL_Window* window = nullptr;
     SDL_GLContext context = nullptr;
     entt::entity selectedEntity = entt::null;
+    entt::entity lastAudioEntity = entt::null;
+    char audioPathBuf[512] = "";
 };
 
 ImGuiLayer::ImGuiLayer(SDL_Window* window, SDL_GLContext context)
@@ -122,9 +125,103 @@ void ImGuiLayer::Render(Profiler& /*profiler*/, Scene* scene) {
     ImGui::End();
 
     if (scene) {
+        auto& registry = scene->Registry();
+
         ImGui::Begin("Scene Hierarchy");
-        scene->Registry().each([&](auto entity) {
-            std::string label = "Entity " + std::to_string((uint32_t)entity);
+        auto HasPrimaryCamera = [&]() -> bool {
+            auto view = registry.view<CameraComponent>();
+            for (auto entity : view) {
+                if (view.get<CameraComponent>(entity).primary) {
+                    return true;
+                }
+            }
+            return false;
+        };
+
+        auto MakeCameraPrimary = [&](entt::entity primary) {
+            auto view = registry.view<CameraComponent>();
+            for (auto entity : view) {
+                auto& cam = view.get<CameraComponent>(entity);
+                cam.primary = (entity == primary);
+            }
+        };
+
+        auto CreateEmptyEntity = [&]() {
+            auto e = registry.create();
+            registry.emplace<NameComponent>(e, NameComponent{"Entity " + std::to_string((uint32_t)e)});
+            registry.emplace<Transform>(e);
+            m_impl->selectedEntity = e;
+            return e;
+        };
+
+        auto CreateNamedEntity = [&](const std::string& name) {
+            auto e = registry.create();
+            registry.emplace<NameComponent>(e, NameComponent{name});
+            registry.emplace<Transform>(e);
+            m_impl->selectedEntity = e;
+            return e;
+        };
+
+        if (ImGui::Button("Create")) {
+            ImGui::OpenPopup("CreateEntityPopup");
+        }
+        if (ImGui::BeginPopup("CreateEntityPopup")) {
+            if (ImGui::MenuItem("Empty")) {
+                CreateEmptyEntity();
+            }
+            ImGui::Separator();
+            if (ImGui::MenuItem("Camera")) {
+                const bool hasPrimary = HasPrimaryCamera();
+                auto e = CreateNamedEntity(hasPrimary ? "Camera" : "Main Camera");
+                auto& cam = registry.emplace<CameraComponent>(e);
+                cam.primary = !hasPrimary;
+                if (cam.primary) {
+                    MakeCameraPrimary(e);
+                }
+                auto& t = registry.get<Transform>(e);
+                t.z = 10.0f;
+            }
+            if (ImGui::MenuItem("Directional Light")) {
+                auto e = CreateNamedEntity("Directional Light");
+                LightComponent lc;
+                lc.type = LightType::Directional;
+                lc.color[0] = 1.0f; lc.color[1] = 0.95f; lc.color[2] = 0.8f;
+                lc.intensity = 1.5f;
+                registry.emplace<LightComponent>(e, lc);
+                auto& t = registry.get<Transform>(e);
+                t.rx = -0.5f;
+                t.ry = 0.5f;
+            }
+            if (ImGui::MenuItem("Point Light")) {
+                auto e = CreateNamedEntity("Point Light");
+                LightComponent lc;
+                lc.type = LightType::Point;
+                lc.color[0] = 1.0f; lc.color[1] = 1.0f; lc.color[2] = 1.0f;
+                lc.intensity = 1.0f;
+                lc.range = 10.0f;
+                registry.emplace<LightComponent>(e, lc);
+                auto& t = registry.get<Transform>(e);
+                t.y = 2.0f;
+            }
+            if (ImGui::MenuItem("Audio Source")) {
+                auto e = CreateNamedEntity("Audio Source");
+                registry.emplace<AudioComponent>(e);
+            }
+            if (ImGui::MenuItem("Particle System")) {
+                auto e = CreateNamedEntity("Particle System");
+                registry.emplace<ParticleSystemComponent>(e);
+            }
+            ImGui::EndPopup();
+        }
+
+        registry.each([&](auto entity) {
+            std::string label;
+            if (registry.any_of<NameComponent>(entity)) {
+                const auto& nc = registry.get<NameComponent>(entity);
+                label = nc.name.empty() ? ("Entity " + std::to_string((uint32_t)entity)) : nc.name;
+            } else {
+                label = "Entity " + std::to_string((uint32_t)entity);
+            }
             if (ImGui::Selectable(label.c_str(), m_impl->selectedEntity == entity)) {
                 m_impl->selectedEntity = entity;
             }
@@ -166,8 +263,6 @@ void ImGuiLayer::Render(Profiler& /*profiler*/, Scene* scene) {
                 }
             }
 
-            auto& registry = scene->Registry();
-
             DrawComponent<CameraComponent>("Camera", registry, entity, [](auto& component) {
                 ImGui::Checkbox("Primary", &component.primary);
                 ImGui::DragFloat("FOV", &component.fov, 0.1f);
@@ -193,6 +288,35 @@ void ImGuiLayer::Render(Profiler& /*profiler*/, Scene* scene) {
                 ImGui::Checkbox("Is Trigger", &component.isTrigger);
             });
 
+            DrawComponent<AudioComponent>("Audio", registry, entity, [&](auto& component) {
+                if (entity != m_impl->lastAudioEntity) {
+                    strncpy_s(m_impl->audioPathBuf, component.soundPath.c_str(), sizeof(m_impl->audioPathBuf) - 1);
+                    m_impl->lastAudioEntity = entity;
+                }
+                if (ImGui::InputText("Sound Path", m_impl->audioPathBuf, sizeof(m_impl->audioPathBuf))) {
+                    component.soundPath = m_impl->audioPathBuf;
+                }
+                ImGui::DragFloat("Volume", &component.volume, 0.01f, 0.0f, 5.0f);
+                ImGui::DragFloat("Pitch", &component.pitch, 0.01f, 0.1f, 4.0f);
+                ImGui::Checkbox("Loop", &component.loop);
+                ImGui::Checkbox("Play On Awake", &component.playOnAwake);
+                ImGui::Checkbox("Spatial", &component.spatial);
+                ImGui::DragFloat("Min Distance", &component.minDistance, 0.1f, 0.0f, 1000.0f);
+                ImGui::DragFloat("Max Distance", &component.maxDistance, 0.1f, 0.0f, 10000.0f);
+            });
+
+            DrawComponent<ParticleSystemComponent>("Particle System", registry, entity, [](auto& component) {
+                ImGui::DragFloat("Duration", &component.duration, 0.1f, 0.0f, 100.0f);
+                ImGui::Checkbox("Looping", &component.looping);
+                ImGui::Checkbox("Play On Awake", &component.playOnAwake);
+                ImGui::DragFloat("Start Lifetime", &component.startLifetime, 0.1f, 0.0f, 100.0f);
+                ImGui::DragFloat("Start Speed", &component.startSpeed, 0.1f, 0.0f, 100.0f);
+                ImGui::DragFloat("Start Size", &component.startSize, 0.01f, 0.0f, 100.0f);
+                ImGui::ColorEdit4("Start Color", component.startColor);
+                ImGui::DragFloat("Rate Over Time", &component.rateOverTime, 0.1f, 0.0f, 10000.0f);
+                ImGui::DragFloat("Emitter Radius", &component.emitterRadius, 0.01f, 0.0f, 1000.0f);
+            });
+
             ImGui::Separator();
 
             if (ImGui::Button("Add Component"))
@@ -200,7 +324,12 @@ void ImGuiLayer::Render(Profiler& /*profiler*/, Scene* scene) {
 
             if (ImGui::BeginPopup("AddComponent")) {
                 if (!registry.all_of<CameraComponent>(entity) && ImGui::MenuItem("Camera")) {
-                    registry.emplace<CameraComponent>(entity);
+                    const bool hasPrimary = HasPrimaryCamera();
+                    auto& cam = registry.emplace<CameraComponent>(entity);
+                    cam.primary = !hasPrimary;
+                    if (cam.primary) {
+                        MakeCameraPrimary(entity);
+                    }
                     ImGui::CloseCurrentPopup();
                 }
                 if (!registry.all_of<RigidBodyComponent>(entity) && ImGui::MenuItem("Rigid Body")) {
@@ -217,6 +346,14 @@ void ImGuiLayer::Render(Profiler& /*profiler*/, Scene* scene) {
                 }
                 if (!registry.all_of<LightComponent>(entity) && ImGui::MenuItem("Light")) {
                     registry.emplace<LightComponent>(entity);
+                    ImGui::CloseCurrentPopup();
+                }
+                if (!registry.all_of<AudioComponent>(entity) && ImGui::MenuItem("Audio")) {
+                    registry.emplace<AudioComponent>(entity);
+                    ImGui::CloseCurrentPopup();
+                }
+                if (!registry.all_of<ParticleSystemComponent>(entity) && ImGui::MenuItem("Particle System")) {
+                    registry.emplace<ParticleSystemComponent>(entity);
                     ImGui::CloseCurrentPopup();
                 }
                 ImGui::EndPopup();

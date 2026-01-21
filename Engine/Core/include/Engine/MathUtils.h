@@ -129,6 +129,18 @@ struct Matrix4 {
         mat.m[15] = 1.0f;
         return mat;
     }
+
+    static Matrix4 CreatePerspective(float fovYRadians, float aspect, float zNear, float zFar) {
+        Matrix4 mat;
+        const float f = 1.0f / std::tan(fovYRadians * 0.5f);
+        mat.m[0] = f / aspect;
+        mat.m[5] = f;
+        mat.m[10] = (zFar + zNear) / (zNear - zFar);
+        mat.m[11] = -1.0f;
+        mat.m[14] = (2.0f * zFar * zNear) / (zNear - zFar);
+        mat.m[15] = 0.0f;
+        return mat;
+    }
 };
 
 } // namespace Genesis::Engine

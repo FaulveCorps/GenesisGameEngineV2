@@ -2,18 +2,39 @@
 #include "engine/Components.h"
 #include "engine/ScriptableEntity.h"
 #include "engine/IGraphics.h"
+#include "engine/IAudio.h"
 #include "engine/MathUtils.h"
 #include "engine/Animation.h"
 #include "engine/UI.h"
 #include "engine/DebugRenderer.h"
+#include "engine/Engine.h"
 #include <iostream>
+#include <cmath>
 
 namespace Genesis::Engine {
 
 void Scene::OnRuntimeStart() {
+    m_runtimeActive = true;
+
+    // Reset runtime-only state for audio/particles on each run.
+    auto audioStateView = m_registry.view<AudioPlaybackState>();
+    for (auto entity : audioStateView) {
+        m_registry.remove<AudioPlaybackState>(entity);
+    }
+
+    auto particleStateView = m_registry.view<ParticleSystemState>();
+    for (auto entity : particleStateView) {
+        m_registry.remove<ParticleSystemState>(entity);
+    }
 }
 
 void Scene::OnRuntimeStop() {
+    m_runtimeActive = false;
+
+    if (auto audio = GetAudioSubsystem()) {
+        audio->StopAll();
+    }
+
     auto view = m_registry.view<ScriptComponent>();
     for (auto entity : view) {
         auto& sc = view.get<ScriptComponent>(entity);
@@ -22,9 +43,21 @@ void Scene::OnRuntimeStop() {
             if (sc.DestroyScript) sc.DestroyScript(&sc);
         }
     }
+
+    auto audioStateView = m_registry.view<AudioPlaybackState>();
+    for (auto entity : audioStateView) {
+        m_registry.remove<AudioPlaybackState>(entity);
+    }
+
+    auto particleStateView = m_registry.view<ParticleSystemState>();
+    for (auto entity : particleStateView) {
+        m_registry.remove<ParticleSystemState>(entity);
+    }
 }
 
 void Scene::OnUpdateRuntime(double dt) {
+    m_runtimeActive = true;
+
     // Scripts
     {
         auto view = m_registry.view<ScriptComponent>();
@@ -47,6 +80,48 @@ void Scene::OnUpdateRuntime(double dt) {
 
     AnimationSystem::Update(*this, dt);
     UISystem::Update(*this, dt);
+
+    if (auto audio = GetAudioSubsystem()) {
+        audio->Update(dt);
+        auto audioView = m_registry.view<AudioComponent>();
+        for (auto entity : audioView) {
+            auto& ac = audioView.get<AudioComponent>(entity);
+            auto* state = m_registry.try_get<AudioPlaybackState>(entity);
+            if (!state) {
+                state = &m_registry.emplace<AudioPlaybackState>(entity);
+            }
+            if (ac.playOnAwake && !state->started && !ac.soundPath.empty()) {
+                audio->PlayOneShot(ac.soundPath, ac.volume);
+                state->started = true;
+            }
+        }
+    }
+
+    auto particleView = m_registry.view<ParticleSystemComponent>();
+    for (auto entity : particleView) {
+        auto& pc = particleView.get<ParticleSystemComponent>(entity);
+        auto* state = m_registry.try_get<ParticleSystemState>(entity);
+        if (!state) {
+            state = &m_registry.emplace<ParticleSystemState>(entity);
+        }
+
+        if (pc.playOnAwake && !state->started) {
+            state->started = true;
+            state->playing = true;
+            state->time = 0.0f;
+        }
+
+        if (state->playing) {
+            state->time += static_cast<float>(dt);
+            if (pc.duration > 0.0f && state->time >= pc.duration) {
+                if (pc.looping) {
+                    state->time = std::fmod(state->time, pc.duration);
+                } else {
+                    state->playing = false;
+                }
+            }
+        }
+    }
 
     // Demonstration: Rotate entities named "Cube" to visible show Play Mode is working
     auto view = m_registry.view<Transform, NameComponent>();
@@ -73,6 +148,44 @@ void Scene::CopyFrom(const Scene& other) {
 
 void Scene::Render(IGraphicsAPI* renderer) {
     if (!renderer) return;
+
+    if (m_runtimeActive && m_useSceneCamera) {
+        auto camView = m_registry.view<CameraComponent, Transform>();
+        entt::entity chosen = entt::null;
+        for (auto entity : camView) {
+            const auto& cam = camView.get<CameraComponent>(entity);
+            if (cam.primary) {
+                chosen = entity;
+                break;
+            }
+            if (chosen == entt::null) {
+                chosen = entity;
+            }
+        }
+
+        if (chosen != entt::null) {
+            const auto& cam = camView.get<CameraComponent>(chosen);
+            const auto& t = camView.get<Transform>(chosen);
+
+            Matrix4 rotX = Matrix4::CreateRotationX(-t.rx);
+            Matrix4 rotY = Matrix4::CreateRotationY(-t.ry);
+            Matrix4 rotZ = Matrix4::CreateRotationZ(-t.rz);
+            Matrix4 trans = Matrix4::CreateTranslation(-t.x, -t.y, -t.z);
+            Matrix4 view = rotX * rotY * rotZ * trans;
+
+            const float aspect = 16.0f / 9.0f;
+            float nearPlane = (cam.nearPlane < 0.01f) ? 0.01f : cam.nearPlane;
+            float farPlane = (cam.farPlane <= nearPlane) ? (nearPlane + 0.01f) : cam.farPlane;
+            const float fovRad = cam.fov * 0.01745329252f;
+            Matrix4 projection = Matrix4::CreatePerspective(fovRad, aspect, nearPlane, farPlane);
+
+            renderer->SetViewProjection(view.m, projection.m);
+        } else {
+            Matrix4 view = Matrix4::CreateIdentity();
+            Matrix4 projection = Matrix4::CreateIdentity();
+            renderer->SetViewProjection(view.m, projection.m);
+        }
+    }
 
     // Clear old point lights
     renderer->ClearPointLights();

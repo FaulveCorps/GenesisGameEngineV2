@@ -128,6 +128,22 @@ bool SceneLoader::LoadScene(Scene& scene, const std::string& filePath) {
             r.isKinematic = (kin != 0);
             scene.Registry().emplace<RigidBodyComponent>(currentEntity, r);
         }
+        else if (token == "BOX_COLLIDER" && currentEntity != entt::null) {
+            BoxColliderComponent b;
+            int trigger = 0;
+            ss >> b.size[0] >> b.size[1] >> b.size[2]
+               >> b.offset[0] >> b.offset[1] >> b.offset[2]
+               >> trigger;
+            b.isTrigger = (trigger != 0);
+            scene.Registry().emplace<BoxColliderComponent>(currentEntity, b);
+        }
+        else if (token == "SPHERE_COLLIDER" && currentEntity != entt::null) {
+            SphereColliderComponent s;
+            int trigger = 0;
+            ss >> s.radius >> s.offset[0] >> s.offset[1] >> s.offset[2] >> trigger;
+            s.isTrigger = (trigger != 0);
+            scene.Registry().emplace<SphereColliderComponent>(currentEntity, s);
+        }
     }
     
     std::cout << "SceneLoader: Loaded scene from " << filePath << std::endl;
@@ -226,6 +242,22 @@ bool SceneLoader::SaveScene(const Scene& scene, const std::string& filePath) {
             if (reg.any_of<RigidBodyComponent>(entity)) {
                 const auto& r = reg.get<RigidBodyComponent>(entity);
                 file << "RIGIDBODY " << r.mass << " " << (r.useGravity ? 1 : 0) << " " << (r.isKinematic ? 1 : 0) << "\n";
+            }
+
+            if (reg.any_of<BoxColliderComponent>(entity)) {
+                const auto& b = reg.get<BoxColliderComponent>(entity);
+                file << "BOX_COLLIDER "
+                     << b.size[0] << " " << b.size[1] << " " << b.size[2] << " "
+                     << b.offset[0] << " " << b.offset[1] << " " << b.offset[2] << " "
+                     << (b.isTrigger ? 1 : 0) << "\n";
+            }
+
+            if (reg.any_of<SphereColliderComponent>(entity)) {
+                const auto& s = reg.get<SphereColliderComponent>(entity);
+                file << "SPHERE_COLLIDER "
+                     << s.radius << " "
+                     << s.offset[0] << " " << s.offset[1] << " " << s.offset[2] << " "
+                     << (s.isTrigger ? 1 : 0) << "\n";
             }
 
             file << "\n";

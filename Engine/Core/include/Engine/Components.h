@@ -80,6 +80,11 @@ struct AudioComponent {
     float maxDistance = 20.0f;
 };
 
+// Runtime-only state for AudioComponent (not serialized)
+struct AudioPlaybackState {
+    bool started = false;
+};
+
 struct ParticleSystemComponent {
     float duration = 5.0f;
     bool looping = true;
@@ -96,6 +101,13 @@ struct ParticleSystemComponent {
     // Shape (Cone, Sphere, Box)
     // For now simplistic
     float emitterRadius = 0.5f;
+};
+
+// Runtime-only state for ParticleSystemComponent (not serialized)
+struct ParticleSystemState {
+    float time = 0.0f;
+    bool playing = false;
+    bool started = false;
 };
 
 struct BoxColliderComponent {

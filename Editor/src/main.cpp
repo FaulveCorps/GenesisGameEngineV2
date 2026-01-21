@@ -1500,6 +1500,57 @@ int main(int argc, char** argv) {
                 dl->AddCircle(center, coreR, Shade(color, 1.35f), 24, 1.1f);
                 dl->AddCircle(center, glowR, IM_COL32(255, 255, 255, 140), 24, 1.2f);
             };
+            auto DrawAudioIcon = [&](ImVec2 center, float size, const ImVec4& base) {
+                ImVec4 color = BoostColor(base, 0.08f);
+                const float bodyW = size * 0.28f;
+                const float bodyH = size * 0.36f;
+                ImVec2 bodyMin(center.x - size * 0.38f, center.y - bodyH * 0.5f);
+                ImVec2 bodyMax(bodyMin.x + bodyW, bodyMin.y + bodyH);
+                dl->AddRectFilled(bodyMin, bodyMax, Shade(color, 0.95f), size * 0.08f);
+                dl->AddRect(bodyMin, bodyMax, Shade(color, 1.25f), size * 0.08f, 0, 1.0f);
+
+                ImVec2 triA(bodyMax.x, center.y - bodyH * 0.7f);
+                ImVec2 triB(bodyMax.x, center.y + bodyH * 0.7f);
+                ImVec2 triC(center.x + size * 0.38f, center.y);
+                dl->AddTriangleFilled(triA, triB, triC, Shade(color, 1.1f));
+
+                dl->AddLine(ImVec2(center.x + size * 0.18f, center.y - size * 0.18f), ImVec2(center.x + size * 0.34f, center.y - size * 0.32f), Shade(color, 1.3f), 1.2f);
+                dl->AddLine(ImVec2(center.x + size * 0.18f, center.y + size * 0.18f), ImVec2(center.x + size * 0.34f, center.y + size * 0.32f), Shade(color, 1.3f), 1.2f);
+            };
+            auto DrawParticleIcon = [&](ImVec2 center, float size, const ImVec4& base) {
+                ImVec4 color = BoostColor(base, 0.08f);
+                const float len = size * 0.46f;
+                dl->AddLine(ImVec2(center.x - len, center.y), ImVec2(center.x + len, center.y), Shade(color, 1.25f), 1.6f);
+                dl->AddLine(ImVec2(center.x, center.y - len), ImVec2(center.x, center.y + len), Shade(color, 1.25f), 1.6f);
+                dl->AddLine(ImVec2(center.x - len * 0.6f, center.y - len * 0.6f), ImVec2(center.x + len * 0.6f, center.y + len * 0.6f), Shade(color, 1.1f), 1.2f);
+                dl->AddLine(ImVec2(center.x - len * 0.6f, center.y + len * 0.6f), ImVec2(center.x + len * 0.6f, center.y - len * 0.6f), Shade(color, 1.1f), 1.2f);
+                dl->AddCircleFilled(center, size * 0.08f, Shade(color, 1.35f));
+            };
+            auto DrawRigidBodyIcon = [&](ImVec2 center, float size, const ImVec4& base) {
+                ImVec4 color = BoostColor(base, 0.05f);
+                const float half = size * 0.36f;
+                ImVec2 pMin(center.x - half, center.y - half);
+                ImVec2 pMax(center.x + half, center.y + half);
+                dl->AddRectFilled(ImVec2(pMin.x + 1.0f, pMin.y + 1.0f), ImVec2(pMax.x + 1.0f, pMax.y + 1.0f), IM_COL32(0, 0, 0, 70), size * 0.08f);
+                dl->AddRectFilled(pMin, pMax, Shade(color, 0.92f), size * 0.08f);
+                dl->AddRect(pMin, pMax, Shade(color, 1.25f), size * 0.08f, 0, 1.2f);
+                dl->AddCircleFilled(ImVec2(center.x, center.y + half * 0.55f), size * 0.07f, Shade(color, 1.3f));
+            };
+            auto DrawBoxColliderIcon = [&](ImVec2 center, float size, const ImVec4& base) {
+                ImVec4 color = BoostColor(base, 0.05f);
+                const float half = size * 0.4f;
+                ImVec2 pMin(center.x - half, center.y - half);
+                ImVec2 pMax(center.x + half, center.y + half);
+                dl->AddRect(pMin, pMax, Shade(color, 1.25f), 0.0f, 0, 1.4f);
+                dl->AddRect(ImVec2(pMin.x + size * 0.12f, pMin.y + size * 0.12f), ImVec2(pMax.x - size * 0.12f, pMax.y - size * 0.12f), Shade(color, 0.95f), 0.0f, 0, 1.0f);
+            };
+            auto DrawSphereColliderIcon = [&](ImVec2 center, float size, const ImVec4& base) {
+                ImVec4 color = BoostColor(base, 0.05f);
+                const float r = size * 0.4f;
+                dl->AddCircle(center, r, Shade(color, 1.2f), 24, 1.4f);
+                dl->AddCircle(center, r * 0.6f, Shade(color, 0.95f), 24, 1.0f);
+                dl->AddCircleFilled(center, size * 0.08f, Shade(color, 1.3f));
+            };
 
             // Camera icons
             {
@@ -1587,6 +1638,173 @@ int main(int argc, char** argv) {
                     if (dx * dx + dy * dy <= hitRadiusSq) {
                         selectedEntity = entity;
                         consumedClick = true;
+                    }
+                }
+            }
+
+            // Audio icons
+            {
+                auto audioView = activeScene->Registry().view<Genesis::Engine::AudioComponent, Genesis::Engine::Transform>();
+                for (auto entity : audioView) {
+                    const auto& tc = audioView.get<Genesis::Engine::Transform>(entity);
+                    glm::vec3 wp(tc.x, tc.y, tc.z);
+                    glm::vec2 sp, uv;
+                    float depth01 = 1.0f;
+                    if (!WorldToScreen(wp, sp, uv, depth01)) continue;
+                    if (IsOccluded(uv, depth01)) continue;
+
+                    ImVec2 p(sp.x, sp.y);
+                    ImVec2 half(iconSize * 0.5f, iconSize * 0.5f);
+                    ImVec2 pMin(p.x - half.x, p.y - half.y);
+                    ImVec2 pMax(p.x + half.x, p.y + half.y);
+                    ImVec4 baseColor(0.78f, 0.6f, 1.0f, 1.0f);
+                    DrawAudioIcon(p, iconSize, baseColor);
+
+                    if (selectedEntity == entity) {
+                        dl->AddRect(pMin, pMax, IM_COL32(255, 255, 255, 200), 2.0f, 0, 1.5f);
+                    }
+
+                    if (clicked && !consumedClick) {
+                        float dx = io.MousePos.x - p.x;
+                        float dy = io.MousePos.y - p.y;
+                        if (dx * dx + dy * dy <= hitRadiusSq) {
+                            selectedEntity = entity;
+                            consumedClick = true;
+                        }
+                    }
+                }
+            }
+
+            // Particle system icons
+            {
+                auto particleView = activeScene->Registry().view<Genesis::Engine::ParticleSystemComponent, Genesis::Engine::Transform>();
+                for (auto entity : particleView) {
+                    const auto& tc = particleView.get<Genesis::Engine::Transform>(entity);
+                    glm::vec3 wp(tc.x, tc.y, tc.z);
+                    glm::vec2 sp, uv;
+                    float depth01 = 1.0f;
+                    if (!WorldToScreen(wp, sp, uv, depth01)) continue;
+                    if (IsOccluded(uv, depth01)) continue;
+
+                    ImVec2 p(sp.x, sp.y);
+                    ImVec2 half(iconSize * 0.5f, iconSize * 0.5f);
+                    ImVec2 pMin(p.x - half.x, p.y - half.y);
+                    ImVec2 pMax(p.x + half.x, p.y + half.y);
+                    ImVec4 baseColor(1.0f, 0.78f, 0.35f, 1.0f);
+                    DrawParticleIcon(p, iconSize, baseColor);
+
+                    if (selectedEntity == entity) {
+                        dl->AddRect(pMin, pMax, IM_COL32(255, 255, 255, 200), 2.0f, 0, 1.5f);
+                    }
+
+                    if (clicked && !consumedClick) {
+                        float dx = io.MousePos.x - p.x;
+                        float dy = io.MousePos.y - p.y;
+                        if (dx * dx + dy * dy <= hitRadiusSq) {
+                            selectedEntity = entity;
+                            consumedClick = true;
+                        }
+                    }
+                }
+            }
+
+            // Rigid body icons
+            {
+                auto rbView = activeScene->Registry().view<Genesis::Engine::RigidBodyComponent, Genesis::Engine::Transform>();
+                for (auto entity : rbView) {
+                    const auto& tc = rbView.get<Genesis::Engine::Transform>(entity);
+                    glm::vec3 wp(tc.x, tc.y, tc.z);
+                    glm::vec2 sp, uv;
+                    float depth01 = 1.0f;
+                    if (!WorldToScreen(wp, sp, uv, depth01)) continue;
+                    if (IsOccluded(uv, depth01)) continue;
+
+                    ImVec2 p(sp.x, sp.y);
+                    ImVec2 half(iconSize * 0.5f, iconSize * 0.5f);
+                    ImVec2 pMin(p.x - half.x, p.y - half.y);
+                    ImVec2 pMax(p.x + half.x, p.y + half.y);
+                    ImVec4 baseColor(0.78f, 0.78f, 0.82f, 1.0f);
+                    DrawRigidBodyIcon(p, iconSize, baseColor);
+
+                    if (selectedEntity == entity) {
+                        dl->AddRect(pMin, pMax, IM_COL32(255, 255, 255, 200), 2.0f, 0, 1.5f);
+                    }
+
+                    if (clicked && !consumedClick) {
+                        float dx = io.MousePos.x - p.x;
+                        float dy = io.MousePos.y - p.y;
+                        if (dx * dx + dy * dy <= hitRadiusSq) {
+                            selectedEntity = entity;
+                            consumedClick = true;
+                        }
+                    }
+                }
+            }
+
+            // Box collider icons
+            {
+                auto boxView = activeScene->Registry().view<Genesis::Engine::BoxColliderComponent, Genesis::Engine::Transform>();
+                for (auto entity : boxView) {
+                    const auto& tc = boxView.get<Genesis::Engine::Transform>(entity);
+                    const auto& bc = boxView.get<Genesis::Engine::BoxColliderComponent>(entity);
+                    glm::vec3 wp(tc.x + bc.offset[0], tc.y + bc.offset[1], tc.z + bc.offset[2]);
+                    glm::vec2 sp, uv;
+                    float depth01 = 1.0f;
+                    if (!WorldToScreen(wp, sp, uv, depth01)) continue;
+                    if (IsOccluded(uv, depth01)) continue;
+
+                    ImVec2 p(sp.x, sp.y);
+                    ImVec2 half(iconSize * 0.5f, iconSize * 0.5f);
+                    ImVec2 pMin(p.x - half.x, p.y - half.y);
+                    ImVec2 pMax(p.x + half.x, p.y + half.y);
+                    ImVec4 baseColor(0.45f, 0.92f, 0.55f, 1.0f);
+                    DrawBoxColliderIcon(p, iconSize, baseColor);
+
+                    if (selectedEntity == entity) {
+                        dl->AddRect(pMin, pMax, IM_COL32(255, 255, 255, 200), 2.0f, 0, 1.5f);
+                    }
+
+                    if (clicked && !consumedClick) {
+                        float dx = io.MousePos.x - p.x;
+                        float dy = io.MousePos.y - p.y;
+                        if (dx * dx + dy * dy <= hitRadiusSq) {
+                            selectedEntity = entity;
+                            consumedClick = true;
+                        }
+                    }
+                }
+            }
+
+            // Sphere collider icons
+            {
+                auto sphereView = activeScene->Registry().view<Genesis::Engine::SphereColliderComponent, Genesis::Engine::Transform>();
+                for (auto entity : sphereView) {
+                    const auto& tc = sphereView.get<Genesis::Engine::Transform>(entity);
+                    const auto& sc = sphereView.get<Genesis::Engine::SphereColliderComponent>(entity);
+                    glm::vec3 wp(tc.x + sc.offset[0], tc.y + sc.offset[1], tc.z + sc.offset[2]);
+                    glm::vec2 sp, uv;
+                    float depth01 = 1.0f;
+                    if (!WorldToScreen(wp, sp, uv, depth01)) continue;
+                    if (IsOccluded(uv, depth01)) continue;
+
+                    ImVec2 p(sp.x, sp.y);
+                    ImVec2 half(iconSize * 0.5f, iconSize * 0.5f);
+                    ImVec2 pMin(p.x - half.x, p.y - half.y);
+                    ImVec2 pMax(p.x + half.x, p.y + half.y);
+                    ImVec4 baseColor(0.35f, 0.85f, 0.8f, 1.0f);
+                    DrawSphereColliderIcon(p, iconSize, baseColor);
+
+                    if (selectedEntity == entity) {
+                        dl->AddRect(pMin, pMax, IM_COL32(255, 255, 255, 200), 2.0f, 0, 1.5f);
+                    }
+
+                    if (clicked && !consumedClick) {
+                        float dx = io.MousePos.x - p.x;
+                        float dy = io.MousePos.y - p.y;
+                        if (dx * dx + dy * dy <= hitRadiusSq) {
+                            selectedEntity = entity;
+                            consumedClick = true;
+                        }
                     }
                 }
             }
@@ -1894,6 +2112,24 @@ int main(int argc, char** argv) {
                         if (activeScene->Registry().any_of<Genesis::Engine::ModelComponent>(entity)) {
                             activeScene->Registry().emplace<Genesis::Engine::ModelComponent>(dup, activeScene->Registry().get<Genesis::Engine::ModelComponent>(entity));
                         }
+                        if (activeScene->Registry().any_of<Genesis::Engine::CameraComponent>(entity)) {
+                            activeScene->Registry().emplace<Genesis::Engine::CameraComponent>(dup, activeScene->Registry().get<Genesis::Engine::CameraComponent>(entity));
+                        }
+                        if (activeScene->Registry().any_of<Genesis::Engine::AudioComponent>(entity)) {
+                            activeScene->Registry().emplace<Genesis::Engine::AudioComponent>(dup, activeScene->Registry().get<Genesis::Engine::AudioComponent>(entity));
+                        }
+                        if (activeScene->Registry().any_of<Genesis::Engine::ParticleSystemComponent>(entity)) {
+                            activeScene->Registry().emplace<Genesis::Engine::ParticleSystemComponent>(dup, activeScene->Registry().get<Genesis::Engine::ParticleSystemComponent>(entity));
+                        }
+                        if (activeScene->Registry().any_of<Genesis::Engine::RigidBodyComponent>(entity)) {
+                            activeScene->Registry().emplace<Genesis::Engine::RigidBodyComponent>(dup, activeScene->Registry().get<Genesis::Engine::RigidBodyComponent>(entity));
+                        }
+                        if (activeScene->Registry().any_of<Genesis::Engine::BoxColliderComponent>(entity)) {
+                            activeScene->Registry().emplace<Genesis::Engine::BoxColliderComponent>(dup, activeScene->Registry().get<Genesis::Engine::BoxColliderComponent>(entity));
+                        }
+                        if (activeScene->Registry().any_of<Genesis::Engine::SphereColliderComponent>(entity)) {
+                            activeScene->Registry().emplace<Genesis::Engine::SphereColliderComponent>(dup, activeScene->Registry().get<Genesis::Engine::SphereColliderComponent>(entity));
+                        }
                         selectedEntity = dup;
                         if (editorState == EditorState::Edit) sceneDirty = true;
                     }
@@ -1975,6 +2211,25 @@ int main(int argc, char** argv) {
                 ImGui::Text("Entity ID: %u", (uint32_t)selectedEntity);
                 ImGui::Separator();
 
+                auto HasPrimaryCamera = [&]() -> bool {
+                    auto view = activeScene->Registry().view<Genesis::Engine::CameraComponent>();
+                    for (auto entity : view) {
+                        if (view.get<Genesis::Engine::CameraComponent>(entity).primary) return true;
+                    }
+                    return false;
+                };
+
+                auto MakeCameraPrimary = [&](entt::entity primary) {
+                    auto view = activeScene->Registry().view<Genesis::Engine::CameraComponent>();
+                    for (auto entity : view) {
+                        auto& cam = view.get<Genesis::Engine::CameraComponent>(entity);
+                        cam.primary = (entity == primary);
+                    }
+                };
+
+                static entt::entity lastAudioEntity = entt::null;
+                static char audioPathBuf[512] = "";
+
                 if (activeScene->Registry().all_of<Genesis::Engine::Transform>(selectedEntity)) {
                     if (ImGui::CollapsingHeader("Transform", ImGuiTreeNodeFlags_DefaultOpen)) {
                         auto& tc = activeScene->Registry().get<Genesis::Engine::Transform>(selectedEntity);
@@ -1994,6 +2249,23 @@ int main(int argc, char** argv) {
                         if (ImGui::DragFloat3("Scale", &tc.sx, 0.01f, 0.0f, 1000.0f)) {
                             if (editorState == EditorState::Edit) sceneDirty = true;
                         }
+                    }
+                }
+
+                if (activeScene->Registry().all_of<Genesis::Engine::CameraComponent>(selectedEntity)) {
+                    if (ImGui::CollapsingHeader("Camera", ImGuiTreeNodeFlags_DefaultOpen)) {
+                        auto& cc = activeScene->Registry().get<Genesis::Engine::CameraComponent>(selectedEntity);
+                        bool primary = cc.primary;
+                        if (ImGui::Checkbox("Primary", &primary)) {
+                            cc.primary = primary;
+                            if (cc.primary) {
+                                MakeCameraPrimary(selectedEntity);
+                            }
+                            if (editorState == EditorState::Edit) sceneDirty = true;
+                        }
+                        if (ImGui::DragFloat("FOV", &cc.fov, 0.1f, 1.0f, 179.0f)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        if (ImGui::DragFloat("Near Plane", &cc.nearPlane, 0.01f, 0.001f, 10.0f)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        if (ImGui::DragFloat("Far Plane", &cc.farPlane, 0.1f, 0.1f, 10000.0f)) if (editorState == EditorState::Edit) sceneDirty = true;
                     }
                 }
 
@@ -2049,10 +2321,84 @@ int main(int argc, char** argv) {
                     }
                 }
 
+                if (activeScene->Registry().all_of<Genesis::Engine::AudioComponent>(selectedEntity)) {
+                    if (ImGui::CollapsingHeader("Audio", ImGuiTreeNodeFlags_DefaultOpen)) {
+                        auto& ac = activeScene->Registry().get<Genesis::Engine::AudioComponent>(selectedEntity);
+                        if (selectedEntity != lastAudioEntity) {
+                            strncpy_s(audioPathBuf, ac.soundPath.c_str(), sizeof(audioPathBuf) - 1);
+                            lastAudioEntity = selectedEntity;
+                        }
+                        if (ImGui::InputText("Sound Path", audioPathBuf, sizeof(audioPathBuf))) {
+                            ac.soundPath = audioPathBuf;
+                            if (editorState == EditorState::Edit) sceneDirty = true;
+                        }
+                        if (ImGui::DragFloat("Volume", &ac.volume, 0.01f, 0.0f, 5.0f)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        if (ImGui::DragFloat("Pitch", &ac.pitch, 0.01f, 0.1f, 4.0f)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        if (ImGui::Checkbox("Loop", &ac.loop)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        if (ImGui::Checkbox("Play On Awake", &ac.playOnAwake)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        if (ImGui::Checkbox("Spatial", &ac.spatial)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        if (ImGui::DragFloat("Min Distance", &ac.minDistance, 0.1f, 0.0f, 1000.0f)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        if (ImGui::DragFloat("Max Distance", &ac.maxDistance, 0.1f, 0.0f, 10000.0f)) if (editorState == EditorState::Edit) sceneDirty = true;
+                    }
+                }
+
+                if (activeScene->Registry().all_of<Genesis::Engine::ParticleSystemComponent>(selectedEntity)) {
+                    if (ImGui::CollapsingHeader("Particle System", ImGuiTreeNodeFlags_DefaultOpen)) {
+                        auto& pc = activeScene->Registry().get<Genesis::Engine::ParticleSystemComponent>(selectedEntity);
+                        if (ImGui::DragFloat("Duration", &pc.duration, 0.1f, 0.0f, 100.0f)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        if (ImGui::Checkbox("Looping", &pc.looping)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        if (ImGui::Checkbox("Play On Awake", &pc.playOnAwake)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        if (ImGui::DragFloat("Start Lifetime", &pc.startLifetime, 0.1f, 0.0f, 100.0f)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        if (ImGui::DragFloat("Start Speed", &pc.startSpeed, 0.1f, 0.0f, 100.0f)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        if (ImGui::DragFloat("Start Size", &pc.startSize, 0.01f, 0.0f, 100.0f)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        if (ImGui::ColorEdit4("Start Color", pc.startColor)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        if (ImGui::DragFloat("Rate Over Time", &pc.rateOverTime, 0.1f, 0.0f, 10000.0f)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        if (ImGui::DragFloat("Emitter Radius", &pc.emitterRadius, 0.01f, 0.0f, 1000.0f)) if (editorState == EditorState::Edit) sceneDirty = true;
+                    }
+                }
+
+                if (activeScene->Registry().all_of<Genesis::Engine::RigidBodyComponent>(selectedEntity)) {
+                    if (ImGui::CollapsingHeader("Rigid Body", ImGuiTreeNodeFlags_DefaultOpen)) {
+                        auto& rc = activeScene->Registry().get<Genesis::Engine::RigidBodyComponent>(selectedEntity);
+                        if (ImGui::DragFloat("Mass", &rc.mass, 0.1f, 0.0f, 10000.0f)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        if (ImGui::Checkbox("Use Gravity", &rc.useGravity)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        if (ImGui::Checkbox("Is Kinematic", &rc.isKinematic)) if (editorState == EditorState::Edit) sceneDirty = true;
+                    }
+                }
+
+                if (activeScene->Registry().all_of<Genesis::Engine::BoxColliderComponent>(selectedEntity)) {
+                    if (ImGui::CollapsingHeader("Box Collider", ImGuiTreeNodeFlags_DefaultOpen)) {
+                        auto& bc = activeScene->Registry().get<Genesis::Engine::BoxColliderComponent>(selectedEntity);
+                        if (ImGui::DragFloat3("Size", bc.size, 0.1f, 0.0f, 10000.0f)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        if (ImGui::DragFloat3("Offset", bc.offset, 0.1f, -10000.0f, 10000.0f)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        if (ImGui::Checkbox("Is Trigger", &bc.isTrigger)) if (editorState == EditorState::Edit) sceneDirty = true;
+                    }
+                }
+
+                if (activeScene->Registry().all_of<Genesis::Engine::SphereColliderComponent>(selectedEntity)) {
+                    if (ImGui::CollapsingHeader("Sphere Collider", ImGuiTreeNodeFlags_DefaultOpen)) {
+                        auto& sc = activeScene->Registry().get<Genesis::Engine::SphereColliderComponent>(selectedEntity);
+                        if (ImGui::DragFloat("Radius", &sc.radius, 0.1f, 0.0f, 10000.0f)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        if (ImGui::DragFloat3("Offset", sc.offset, 0.1f, -10000.0f, 10000.0f)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        if (ImGui::Checkbox("Is Trigger", &sc.isTrigger)) if (editorState == EditorState::Edit) sceneDirty = true;
+                    }
+                }
+
                 if (ImGui::Button("Add Component")) {
                     ImGui::OpenPopup("AddComponentPopup");
                 }
                 if (ImGui::BeginPopup("AddComponentPopup")) {
+                    if (ImGui::MenuItem("Camera")) {
+                        if (!activeScene->Registry().all_of<Genesis::Engine::CameraComponent>(selectedEntity)) {
+                            Genesis::Engine::CameraComponent cc;
+                            cc.primary = !HasPrimaryCamera();
+                            activeScene->Registry().emplace<Genesis::Engine::CameraComponent>(selectedEntity, cc);
+                            if (cc.primary) {
+                                MakeCameraPrimary(selectedEntity);
+                            }
+                            if (editorState == EditorState::Edit) sceneDirty = true;
+                        }
+                    }
                     if (ImGui::MenuItem("Light")) {
                         if (!activeScene->Registry().all_of<Genesis::Engine::LightComponent>(selectedEntity)) {
                             activeScene->Registry().emplace<Genesis::Engine::LightComponent>(selectedEntity);
@@ -2065,6 +2411,36 @@ int main(int argc, char** argv) {
                             mc.model = std::make_shared<Genesis::Engine::Model>();
                             mc.sourcePath.clear();
                             activeScene->Registry().emplace<Genesis::Engine::ModelComponent>(selectedEntity, mc);
+                            if (editorState == EditorState::Edit) sceneDirty = true;
+                        }
+                    }
+                    if (ImGui::MenuItem("Audio")) {
+                        if (!activeScene->Registry().all_of<Genesis::Engine::AudioComponent>(selectedEntity)) {
+                            activeScene->Registry().emplace<Genesis::Engine::AudioComponent>(selectedEntity);
+                            if (editorState == EditorState::Edit) sceneDirty = true;
+                        }
+                    }
+                    if (ImGui::MenuItem("Particle System")) {
+                        if (!activeScene->Registry().all_of<Genesis::Engine::ParticleSystemComponent>(selectedEntity)) {
+                            activeScene->Registry().emplace<Genesis::Engine::ParticleSystemComponent>(selectedEntity);
+                            if (editorState == EditorState::Edit) sceneDirty = true;
+                        }
+                    }
+                    if (ImGui::MenuItem("Rigid Body")) {
+                        if (!activeScene->Registry().all_of<Genesis::Engine::RigidBodyComponent>(selectedEntity)) {
+                            activeScene->Registry().emplace<Genesis::Engine::RigidBodyComponent>(selectedEntity);
+                            if (editorState == EditorState::Edit) sceneDirty = true;
+                        }
+                    }
+                    if (ImGui::MenuItem("Box Collider")) {
+                        if (!activeScene->Registry().all_of<Genesis::Engine::BoxColliderComponent>(selectedEntity)) {
+                            activeScene->Registry().emplace<Genesis::Engine::BoxColliderComponent>(selectedEntity);
+                            if (editorState == EditorState::Edit) sceneDirty = true;
+                        }
+                    }
+                    if (ImGui::MenuItem("Sphere Collider")) {
+                        if (!activeScene->Registry().all_of<Genesis::Engine::SphereColliderComponent>(selectedEntity)) {
+                            activeScene->Registry().emplace<Genesis::Engine::SphereColliderComponent>(selectedEntity);
                             if (editorState == EditorState::Edit) sceneDirty = true;
                         }
                     }
