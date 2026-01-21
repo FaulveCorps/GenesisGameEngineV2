@@ -143,7 +143,55 @@ void Scene::Update(double dt) {
 }
 
 void Scene::CopyFrom(const Scene& other) {
-    // Not implemented yet
+    m_registry.clear();
+    m_runtimeActive = false;
+    m_useSceneCamera = other.m_useSceneCamera;
+
+    other.m_registry.each([&](auto entity) {
+        const auto dst = m_registry.create();
+
+        if (auto* nc = other.m_registry.try_get<NameComponent>(entity)) {
+            m_registry.emplace<NameComponent>(dst, *nc);
+        }
+        if (auto* tc = other.m_registry.try_get<Transform>(entity)) {
+            m_registry.emplace<Transform>(dst, *tc);
+        }
+        if (auto* lc = other.m_registry.try_get<LightComponent>(entity)) {
+            m_registry.emplace<LightComponent>(dst, *lc);
+        }
+        if (auto* mc = other.m_registry.try_get<ModelComponent>(entity)) {
+            m_registry.emplace<ModelComponent>(dst, *mc);
+        }
+        if (auto* cc = other.m_registry.try_get<CameraComponent>(entity)) {
+            m_registry.emplace<CameraComponent>(dst, *cc);
+        }
+        if (auto* ac = other.m_registry.try_get<AudioComponent>(entity)) {
+            m_registry.emplace<AudioComponent>(dst, *ac);
+        }
+        if (auto* pc = other.m_registry.try_get<ParticleSystemComponent>(entity)) {
+            m_registry.emplace<ParticleSystemComponent>(dst, *pc);
+        }
+        if (auto* rc = other.m_registry.try_get<RigidBodyComponent>(entity)) {
+            m_registry.emplace<RigidBodyComponent>(dst, *rc);
+        }
+        if (auto* bc = other.m_registry.try_get<BoxColliderComponent>(entity)) {
+            m_registry.emplace<BoxColliderComponent>(dst, *bc);
+        }
+        if (auto* sc = other.m_registry.try_get<SphereColliderComponent>(entity)) {
+            m_registry.emplace<SphereColliderComponent>(dst, *sc);
+        }
+        if (auto* scp = other.m_registry.try_get<ScriptComponent>(entity)) {
+            ScriptComponent copy = *scp;
+            copy.Instance = nullptr;
+            m_registry.emplace<ScriptComponent>(dst, copy);
+        }
+        if (auto* ui = other.m_registry.try_get<UIComponent>(entity)) {
+            m_registry.emplace<UIComponent>(dst, *ui);
+        }
+        if (auto* anim = other.m_registry.try_get<AnimationComponent>(entity)) {
+            m_registry.emplace<AnimationComponent>(dst, *anim);
+        }
+    });
 }
 
 void Scene::Render(IGraphicsAPI* renderer) {

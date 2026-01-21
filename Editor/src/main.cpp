@@ -588,6 +588,7 @@ int main(int argc, char** argv) {
         Pause
     };
     EditorState editorState = EditorState::Edit;
+    bool stepRuntime = false;
 
     auto RecordScenePath = [&](const std::string& path) {
         const std::string stored = NormalizePathForSettings(path, projectRoot);
@@ -1053,22 +1054,13 @@ int main(int argc, char** argv) {
                 if (editorState == EditorState::Edit) {
                     if (ImGui::Button("Play", ImVec2(80, 0))) {
                         // Enter Play Mode
-                        // 1. Save Scene to temp
-                        if (Genesis::Engine::SceneLoader::SaveScene(editorScene, "tmp/play_backup.scene")) {
-                            // 2. Create Runtime Scene
-                            runtimeScene = std::make_unique<Genesis::Engine::Scene>();
-                            if (Genesis::Engine::SceneLoader::LoadScene(*runtimeScene, "tmp/play_backup.scene")) {
-                                activeScene = runtimeScene.get();
-                                activeScene->OnRuntimeStart();
-                                editorState = EditorState::Play;
-                                selectedEntity = entt::null;
-                            } else {
-                                std::cerr << "Failed to load backup scene for play mode" << std::endl;
-                                runtimeScene.reset();
-                            }
-                        } else {
-                             std::cerr << "Failed to save backup scene for play mode" << std::endl;
-                        }
+                        stepRuntime = false;
+                        runtimeScene = std::make_unique<Genesis::Engine::Scene>();
+                        runtimeScene->CopyFrom(editorScene);
+                        activeScene = runtimeScene.get();
+                        activeScene->OnRuntimeStart();
+                        editorState = EditorState::Play;
+                        selectedEntity = entt::null;
                     }
                 } else {
                     // Play / Pause / Stop controls
@@ -1080,6 +1072,10 @@ int main(int argc, char** argv) {
                         if (ImGui::Button("Resume", ImVec2(80, 0))) {
                             editorState = EditorState::Play;
                         }
+                        ImGui::SameLine();
+                        if (ImGui::Button("Step", ImVec2(80, 0))) {
+                            stepRuntime = true;
+                        }
                     }
 
                     ImGui::SameLine();
@@ -1090,6 +1086,7 @@ int main(int argc, char** argv) {
                          runtimeScene.reset();
                          editorState = EditorState::Edit;
                          selectedEntity = entt::null;
+                        stepRuntime = false;
                     }
                 }
             }
@@ -1381,7 +1378,10 @@ int main(int argc, char** argv) {
         if (editorState == EditorState::Play) {
             activeScene->OnUpdateRuntime(dt);
         } else if (editorState == EditorState::Pause) {
-            // No update, just render
+            if (stepRuntime) {
+                activeScene->OnUpdateRuntime(dt);
+                stepRuntime = false;
+            }
         } else {
             activeScene->OnUpdateEditor(dt);
         }
