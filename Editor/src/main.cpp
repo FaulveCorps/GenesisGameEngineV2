@@ -16,6 +16,7 @@
 #include "engine/OpenGLRenderer.h"
 #include "engine/ScriptRegistry.h"
 #include "engine/PrefabLoader.h"
+#include "engine/AssetDatabase.h"
 #include "imgui_impl_sdl3.h"
 #include "imgui_impl_opengl3.h"
 #include "ImGuizmo.h"
@@ -921,7 +922,10 @@ int main(int argc, char** argv) {
     bool showSaveAsSceneModal = false;
     bool showAboutModal = false;
     bool showSavePrefabModal = false;
+    bool showUpdatePrefabModal = false;
     entt::entity prefabTargetEntity = entt::null;
+    entt::entity prefabUpdateEntity = entt::null;
+    bool prefabUpdateApplyAll = true;
     bool focusInspectorName = false;
     char scenePathBuffer[512] = "";
     char prefabPathBuffer[512] = "";
@@ -1299,6 +1303,19 @@ int main(int argc, char** argv) {
                 if (prefabPath.empty() || link.prefabPath == prefabPath) {
                     reg.remove<Genesis::Engine::PrefabLinkComponent>(entity);
                 }
+            }
+        }
+        sceneDirty = true;
+    };
+
+    auto ApplyPrefabToAllInstances = [&](const std::string& prefabPath) {
+        if (prefabPath.empty()) return;
+        auto& reg = editorScene.Registry();
+        auto view = reg.view<Genesis::Engine::PrefabInstanceComponent>();
+        for (auto entity : view) {
+            const auto& pi = view.get<Genesis::Engine::PrefabInstanceComponent>(entity);
+            if (pi.prefabPath == prefabPath) {
+                Genesis::Engine::PrefabLoader::ApplyPrefab(editorScene, entity);
             }
         }
         sceneDirty = true;
@@ -3023,6 +3040,19 @@ int main(int argc, char** argv) {
                                 }
                             }
                             ImGui::SameLine();
+                            if (ImGui::Button("Apply To All Instances")) {
+                                if (editorState == EditorState::Edit && !pi.prefabPath.empty()) {
+                                    ApplyPrefabToAllInstances(pi.prefabPath);
+                                }
+                            }
+                            if (ImGui::Button("Update Prefab")) {
+                                if (editorState == EditorState::Edit && !pi.prefabPath.empty()) {
+                                    prefabUpdateEntity = selectedEntity;
+                                    prefabUpdateApplyAll = true;
+                                    showUpdatePrefabModal = true;
+                                }
+                            }
+                            ImGui::SameLine();
                             if (ImGui::Button("Break Prefab")) {
                                 if (editorState == EditorState::Edit) {
                                     BreakPrefabInstance(selectedEntity);
@@ -3397,6 +3427,7 @@ int main(int argc, char** argv) {
             static char contentSearch[128] = "";
             static std::unordered_map<std::string, std::shared_ptr<Genesis::Engine::Texture>> thumbnailCache;
             static std::unordered_map<std::string, std::shared_ptr<Genesis::Engine::Texture>> iconCache;
+            static std::unordered_set<std::string> metaEnsured;
 
             if (std::filesystem::exists(contentDir)) {
                 // Toolbar
@@ -3433,6 +3464,9 @@ int main(int argc, char** argv) {
                 for (const auto& entry : entries) {
                     std::string path = entry.path().string();
                     std::string filename = entry.path().filename().string();
+                    if (Genesis::Engine::AssetDatabase::IsMetaFile(entry.path())) {
+                        continue;
+                    }
 
                     if (contentSearch[0] != 0) {
                         std::string fLower = filename;
@@ -3440,6 +3474,12 @@ int main(int argc, char** argv) {
                         std::transform(fLower.begin(), fLower.end(), fLower.begin(), [](unsigned char c) { return (char)std::tolower(c); });
                         std::transform(sLower.begin(), sLower.end(), sLower.begin(), [](unsigned char c) { return (char)std::tolower(c); });
                         if (fLower.find(sLower) == std::string::npos) continue;
+                    }
+
+                    if (!entry.is_directory()) {
+                        if (metaEnsured.insert(path).second) {
+                            Genesis::Engine::AssetDatabase::EnsureMeta(entry.path(), projectRoot);
+                        }
                     }
                     
                     ImGui::PushID(filename.c_str());
@@ -3522,6 +3562,33 @@ int main(int argc, char** argv) {
                     if (ImGui::BeginDragDropSource()) {
                         ImGui::SetDragDropPayload("CONTENT_BROWSER_ITEM", path.c_str(), path.length() + 1);
                         ImGui::EndDragDropSource();
+                    }
+
+                    if (ImGui::BeginPopupContextItem()) {
+                        if (!entry.is_directory()) {
+                            if (ImGui::MenuItem("Reimport")) {
+                                Genesis::Engine::AssetDatabase::Reimport(entry.path(), projectRoot);
+                                std::string ext = ToLowerCopy(entry.path().extension().string());
+                                if (ext == ".gltf" || ext == ".glb" || ext == ".obj" || ext == ".fbx") {
+                                    auto& reg = editorScene.Registry();
+                                    auto view = reg.view<Genesis::Engine::ModelComponent>();
+                                    std::error_code ec;
+                                    auto reimportPath = std::filesystem::weakly_canonical(entry.path(), ec);
+                                    for (auto entity : view) {
+                                        auto& mc = view.get<Genesis::Engine::ModelComponent>(entity);
+                                        if (!mc.sourcePath.empty()) {
+                                            std::filesystem::path modelPath(mc.sourcePath);
+                                            auto modelAbs = std::filesystem::weakly_canonical(modelPath, ec);
+                                            if (!ec && modelAbs == reimportPath) {
+                                                if (!mc.model) mc.model = std::make_shared<Genesis::Engine::Model>();
+                                                mc.model->Load(mc.sourcePath);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        ImGui::EndPopup();
                     }
 
                     ImGui::TextWrapped("%s", filename.c_str());
@@ -3766,6 +3833,41 @@ int main(int argc, char** argv) {
             if (ImGui::Button("Cancel") || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
                 showSavePrefabModal = false;
                 prefabTargetEntity = entt::null;
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndPopup();
+        }
+
+        // Update Prefab modal
+        if (showUpdatePrefabModal) {
+            ImGui::OpenPopup("Update Prefab");
+        }
+        if (ImGui::BeginPopupModal("Update Prefab", &showUpdatePrefabModal, ImGuiWindowFlags_AlwaysAutoResize)) {
+            std::string prefabPath;
+            if (prefabUpdateEntity != entt::null && editorScene.Registry().valid(prefabUpdateEntity)
+                && editorScene.Registry().any_of<Genesis::Engine::PrefabInstanceComponent>(prefabUpdateEntity)) {
+                prefabPath = editorScene.Registry().get<Genesis::Engine::PrefabInstanceComponent>(prefabUpdateEntity).prefabPath;
+            }
+
+            ImGui::TextWrapped("Overwrite prefab asset with current instance?");
+            ImGui::TextWrapped("%s", prefabPath.empty() ? "(unknown)" : prefabPath.c_str());
+            ImGui::Checkbox("Reapply to all instances", &prefabUpdateApplyAll);
+
+            if (ImGui::Button("Update") || ImGui::IsKeyPressed(ImGuiKey_Enter)) {
+                if (!prefabPath.empty() && prefabUpdateEntity != entt::null && editorScene.Registry().valid(prefabUpdateEntity)) {
+                    Genesis::Engine::PrefabLoader::SavePrefab(editorScene, prefabUpdateEntity, prefabPath);
+                    if (prefabUpdateApplyAll) {
+                        ApplyPrefabToAllInstances(prefabPath);
+                    }
+                }
+                showUpdatePrefabModal = false;
+                prefabUpdateEntity = entt::null;
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Cancel") || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+                showUpdatePrefabModal = false;
+                prefabUpdateEntity = entt::null;
                 ImGui::CloseCurrentPopup();
             }
             ImGui::EndPopup();

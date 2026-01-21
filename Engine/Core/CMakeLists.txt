@@ -116,6 +116,7 @@ add_library(EngineCore STATIC
     src/SceneLoader.cpp
     src/ScriptRegistry.cpp
     src/PrefabLoader.cpp
+    src/AssetDatabase.cpp
     src/AnimationSystem.cpp
     src/UISystem.cpp
     ${imgui_SOURCE_DIR}/imgui.cpp
