@@ -300,6 +300,18 @@ static bool IsImageExtension(const std::string& extLower) {
     return extLower == ".png" || extLower == ".jpg" || extLower == ".jpeg" || extLower == ".bmp" || extLower == ".tga";
 }
 
+static std::string NormalizeAssetPath(const std::filesystem::path& path, const std::filesystem::path& projectRoot) {
+    std::error_code ec;
+    std::filesystem::path abs = std::filesystem::weakly_canonical(path, ec);
+    if (ec) abs = path;
+    std::filesystem::path rel = std::filesystem::relative(abs, projectRoot, ec);
+    if (!ec) {
+        std::string relStr = rel.generic_string();
+        if (!relStr.empty() && relStr.rfind("..", 0) != 0) return relStr;
+    }
+    return abs.generic_string();
+}
+
 static glm::mat4 ComposeTransformGLM(const Genesis::Engine::Transform& t) {
     glm::mat4 transMat = glm::translate(glm::mat4(1.0f), glm::vec3(t.x, t.y, t.z));
     glm::mat4 rotX = glm::rotate(glm::mat4(1.0f), t.rx, glm::vec3(1, 0, 0));
@@ -932,6 +944,12 @@ int main(int argc, char** argv) {
     char scenePathBuffer[512] = "";
     char prefabPathBuffer[512] = "";
 
+    // Asset selection (Content Browser)
+    std::string selectedAssetPath;
+    bool autoReimportAssets = true;
+    double assetScanTimer = 0.0;
+    const double assetScanInterval = 2.0;
+
     // Unsaved changes workflow
     enum class PendingSceneAction {
         None,
@@ -1505,6 +1523,50 @@ int main(int argc, char** argv) {
             autosaveTimer = 0.0;
         }
 
+        assetScanTimer += dt;
+        if (autoReimportAssets && assetScanTimer >= assetScanInterval) {
+            assetScanTimer = 0.0;
+            std::filesystem::path assetsRoot = projectRoot / "Assets";
+            if (std::filesystem::exists(assetsRoot)) {
+                for (const auto& entry : std::filesystem::recursive_directory_iterator(assetsRoot)) {
+                    if (!entry.is_regular_file()) continue;
+                    if (Genesis::Engine::AssetDatabase::IsMetaFile(entry.path())) continue;
+
+                    Genesis::Engine::AssetMeta meta;
+                    bool hasMeta = Genesis::Engine::AssetDatabase::LoadMeta(entry.path(), meta);
+                    if (!hasMeta) {
+                        Genesis::Engine::AssetDatabase::EnsureMeta(entry.path(), projectRoot);
+                        continue;
+                    }
+
+                    uint64_t currentTs = 0;
+                    if (!Genesis::Engine::AssetDatabase::GetSourceTimestamp(entry.path(), currentTs)) continue;
+                    if (currentTs > meta.sourceTimestamp) {
+                        Genesis::Engine::AssetDatabase::Reimport(entry.path(), projectRoot, &meta);
+
+                        std::string ext = ToLowerCopy(entry.path().extension().string());
+                        if (ext == ".gltf" || ext == ".glb" || ext == ".obj" || ext == ".fbx") {
+                            auto& reg = editorScene.Registry();
+                            auto view = reg.view<Genesis::Engine::ModelComponent>();
+                            std::error_code ec;
+                            auto reimportPath = std::filesystem::weakly_canonical(entry.path(), ec);
+                            for (auto entity : view) {
+                                auto& mc = view.get<Genesis::Engine::ModelComponent>(entity);
+                                if (!mc.sourcePath.empty()) {
+                                    std::filesystem::path modelPath(mc.sourcePath);
+                                    auto modelAbs = std::filesystem::weakly_canonical(modelPath, ec);
+                                    if (!ec && modelAbs == reimportPath) {
+                                        if (!mc.model) mc.model = std::make_shared<Genesis::Engine::Model>();
+                                        mc.model->Load(mc.sourcePath);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         // Smooth camera animation toward view-cube target.
         // Removed: ImGuizmo handles interpolation internally for clicks, and dragging should be immediate.
         /*
@@ -1630,6 +1692,7 @@ int main(int argc, char** argv) {
 
             ImGui::DockBuilderDockWindow("Viewport", dock_main_id);
             ImGui::DockBuilderDockWindow("Inspector", dock_id_right);
+            ImGui::DockBuilderDockWindow("Asset Inspector", dock_id_right);
             ImGui::DockBuilderDockWindow("Scene Hierarchy", dock_id_left);
             ImGui::DockBuilderDockWindow("Content Browser", dock_id_left_bottom);
             ImGui::DockBuilderDockWindow("Console", dock_id_bottom);
@@ -1751,6 +1814,7 @@ int main(int argc, char** argv) {
             if (ImGui::BeginMenu("Window")) {
                 ImGui::MenuItem("Viewport");
                 ImGui::MenuItem("Inspector");
+                ImGui::MenuItem("Asset Inspector");
                 ImGui::MenuItem("Scene Hierarchy");
                 ImGui::MenuItem("Content Browser");
                 ImGui::EndMenu();
@@ -3518,6 +3582,132 @@ int main(int argc, char** argv) {
             ImGui::End();
         }
 
+        // Asset Inspector
+        if (!zenMode) {
+            ImGui::Begin("Asset Inspector");
+            static std::unordered_map<std::string, Genesis::Engine::AssetMeta> assetMetaCache;
+            static std::unordered_map<std::string, std::vector<std::string>> assetDependentsCache;
+            static double assetGraphTimer = 0.0;
+            const double assetGraphInterval = 2.0;
+
+            auto BuildAssetGraph = [&]() {
+                assetMetaCache.clear();
+                assetDependentsCache.clear();
+                std::filesystem::path assetsRoot = projectRoot / "Assets";
+                if (!std::filesystem::exists(assetsRoot)) return;
+
+                for (const auto& entry : std::filesystem::recursive_directory_iterator(assetsRoot)) {
+                    if (!entry.is_regular_file()) continue;
+                    if (Genesis::Engine::AssetDatabase::IsMetaFile(entry.path())) continue;
+
+                    Genesis::Engine::AssetMeta meta = Genesis::Engine::AssetDatabase::EnsureMeta(entry.path(), projectRoot);
+                    std::string key = NormalizeAssetPath(entry.path(), projectRoot);
+                    assetMetaCache[key] = meta;
+
+                    for (const auto& dep : meta.dependencies) {
+                        if (!dep.empty()) {
+                            assetDependentsCache[dep].push_back(key);
+                        }
+                    }
+                }
+
+                for (auto& entry : assetDependentsCache) {
+                    auto& list = entry.second;
+                    std::sort(list.begin(), list.end());
+                    list.erase(std::unique(list.begin(), list.end()), list.end());
+                }
+            };
+
+            assetGraphTimer += dt;
+            if (assetGraphTimer >= assetGraphInterval) {
+                assetGraphTimer = 0.0;
+                BuildAssetGraph();
+            }
+
+            if (!selectedAssetPath.empty()) {
+                std::filesystem::path assetPath(selectedAssetPath);
+                if (!std::filesystem::exists(assetPath)) {
+                    ImGui::TextDisabled("Asset not found.");
+                } else {
+                    ImGui::TextWrapped("%s", assetPath.filename().string().c_str());
+                    ImGui::Separator();
+
+                    if (!Genesis::Engine::AssetDatabase::IsMetaFile(assetPath) && !std::filesystem::is_directory(assetPath)) {
+                        Genesis::Engine::AssetMeta meta;
+                        if (!Genesis::Engine::AssetDatabase::LoadMeta(assetPath, meta)) {
+                            meta = Genesis::Engine::AssetDatabase::EnsureMeta(assetPath, projectRoot);
+                        }
+
+                        ImGui::Text("Importer: %s", meta.importer.empty() ? "unknown" : meta.importer.c_str());
+                        ImGui::Text("GUID: %s", meta.guid.empty() ? "(none)" : meta.guid.c_str());
+                        ImGui::Text("Timestamp: %llu", static_cast<unsigned long long>(meta.sourceTimestamp));
+
+                        ImGui::Checkbox("Auto Reimport", &autoReimportAssets);
+
+                        if (ImGui::Button("Reimport")) {
+                            Genesis::Engine::AssetDatabase::Reimport(assetPath, projectRoot, &meta);
+                        }
+                        ImGui::SameLine();
+                        if (ImGui::Button("Reimport Dependencies")) {
+                            Genesis::Engine::AssetDatabase::Reimport(assetPath, projectRoot, &meta);
+                            for (const auto& dep : meta.dependencies) {
+                                if (!dep.empty()) {
+                                    std::filesystem::path depPath = dep;
+                                    Genesis::Engine::AssetDatabase::Reimport(depPath, projectRoot);
+                                }
+                            }
+                        }
+
+                        ImGui::Separator();
+                        std::string key = NormalizeAssetPath(assetPath, projectRoot);
+
+                        ImGui::Text("Dependencies (%d)", (int)meta.dependencies.size());
+                        ImGui::BeginChild("##deps", ImVec2(0, 120), true);
+                        std::unordered_set<std::string> visited;
+                        std::function<void(const std::string&, int)> DrawDeps = [&](const std::string& node, int depth) {
+                            if (depth > 6) return;
+                            if (visited.count(node) > 0) return;
+                            visited.insert(node);
+                            auto it = assetMetaCache.find(node);
+                            if (it == assetMetaCache.end()) return;
+                            for (const auto& dep : it->second.dependencies) {
+                                if (ImGui::TreeNodeEx(dep.c_str(), ImGuiTreeNodeFlags_SpanFullWidth)) {
+                                    DrawDeps(dep, depth + 1);
+                                    ImGui::TreePop();
+                                }
+                            }
+                        };
+                        if (ImGui::TreeNodeEx("Root Dependencies", ImGuiTreeNodeFlags_DefaultOpen)) {
+                            for (const auto& dep : meta.dependencies) {
+                                if (ImGui::TreeNodeEx(dep.c_str(), ImGuiTreeNodeFlags_SpanFullWidth)) {
+                                    DrawDeps(dep, 1);
+                                    ImGui::TreePop();
+                                }
+                            }
+                            ImGui::TreePop();
+                        }
+                        ImGui::EndChild();
+
+                        auto depIt = assetDependentsCache.find(key);
+                        int dependentsCount = (depIt == assetDependentsCache.end()) ? 0 : (int)depIt->second.size();
+                        ImGui::Text("Dependents (%d)", dependentsCount);
+                        ImGui::BeginChild("##dependents", ImVec2(0, 100), true);
+                        if (depIt != assetDependentsCache.end()) {
+                            for (const auto& dep : depIt->second) {
+                                ImGui::TextWrapped("%s", dep.c_str());
+                            }
+                        }
+                        ImGui::EndChild();
+                    } else {
+                        ImGui::TextDisabled("Select a file to view meta.");
+                    }
+                }
+            } else {
+                ImGui::TextDisabled("Select an asset to inspect.");
+            }
+            ImGui::End();
+        }
+
         // Content Browser
         if (!zenMode) {
             ImGui::Begin("Content Browser");
@@ -3634,6 +3824,21 @@ int main(int argc, char** argv) {
                     ImGui::ImageButton(filename.c_str(), texId, ImVec2(thumbnailSize, thumbnailSize));
                     ImGui::PopStyleColor();
 
+                    if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
+                        selectedAssetPath = path;
+                    }
+
+                    if (!selectedAssetPath.empty()) {
+                        std::error_code selEc;
+                        bool isSelected = std::filesystem::equivalent(entry.path(), std::filesystem::path(selectedAssetPath), selEc);
+                        if (!selEc && isSelected) {
+                            ImDrawList* dl = ImGui::GetWindowDrawList();
+                            ImVec2 min = ImGui::GetItemRectMin();
+                            ImVec2 max = ImGui::GetItemRectMax();
+                            dl->AddRect(min, max, IM_COL32(120, 180, 255, 200), 4.0f, 0, 2.0f);
+                        }
+                    }
+
                     if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
                         if (entry.is_directory()) {
                             contentDir = entry.path();
@@ -3694,6 +3899,11 @@ int main(int argc, char** argv) {
                     ImGui::PopID();
                 }
                 ImGui::Columns(1);
+                if (ImGui::IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem)
+                    && ImGui::IsMouseClicked(ImGuiMouseButton_Left)
+                    && !ImGui::IsAnyItemHovered()) {
+                    selectedAssetPath.clear();
+                }
             }
             ImGui::End();
         }

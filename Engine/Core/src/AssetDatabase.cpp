@@ -268,4 +268,12 @@ bool AssetDatabase::Reimport(const std::filesystem::path& assetPath, const std::
     return true;
 }
 
+bool AssetDatabase::GetSourceTimestamp(const std::filesystem::path& assetPath, uint64_t& outTimestamp) {
+    std::error_code ec;
+    auto ftime = std::filesystem::last_write_time(assetPath, ec);
+    if (ec) return false;
+    outTimestamp = FileTimeToUnix(ftime);
+    return true;
+}
+
 } // namespace Genesis::Engine

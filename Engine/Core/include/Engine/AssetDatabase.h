@@ -22,6 +22,7 @@ public:
     static AssetMeta EnsureMeta(const std::filesystem::path& assetPath, const std::filesystem::path& projectRoot);
     static bool Reimport(const std::filesystem::path& assetPath, const std::filesystem::path& projectRoot, AssetMeta* outMeta = nullptr);
     static bool IsMetaFile(const std::filesystem::path& path);
+    static bool GetSourceTimestamp(const std::filesystem::path& assetPath, uint64_t& outTimestamp);
 };
 
 } // namespace Genesis::Engine
