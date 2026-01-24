@@ -17,6 +17,11 @@ struct AssetMeta {
         uint64_t timestamp = 0;
     };
     std::vector<DependencyStamp> dependencyTimestamps;
+    struct ImportSetting {
+        std::string key;
+        std::string value;
+    };
+    std::vector<ImportSetting> importSettings;
 };
 
 class AssetDatabase {
@@ -29,6 +34,9 @@ public:
     static bool IsMetaFile(const std::filesystem::path& path);
     static bool GetSourceTimestamp(const std::filesystem::path& assetPath, uint64_t& outTimestamp);
     static bool DependenciesChanged(const AssetMeta& meta, const std::filesystem::path& projectRoot);
+    static void SetImportSetting(AssetMeta& meta, const std::string& key, const std::string& value);
+    static bool GetImportSetting(const AssetMeta& meta, const std::string& key, std::string& outValue);
+    static void RemoveImportSetting(AssetMeta& meta, const std::string& key);
 };
 
 } // namespace Genesis::Engine

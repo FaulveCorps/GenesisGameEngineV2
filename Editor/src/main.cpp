@@ -3682,6 +3682,110 @@ int main(int argc, char** argv) {
                         }
 
                         ImGui::Separator();
+                        ImGui::TextUnformatted("Import Settings");
+                        bool settingsChanged = false;
+
+                        auto GetSettingValue = [&](const char* key, const char* fallback) {
+                            std::string value;
+                            if (Genesis::Engine::AssetDatabase::GetImportSetting(meta, key, value)) return value;
+                            return std::string(fallback);
+                        };
+                        auto GetSettingBool = [&](const char* key, bool fallback) {
+                            std::string value;
+                            if (!Genesis::Engine::AssetDatabase::GetImportSetting(meta, key, value)) return fallback;
+                            return (value == "1" || value == "true" || value == "yes");
+                        };
+
+                        if (meta.importer == "texture") {
+                            bool srgb = GetSettingBool("srgb", true);
+                            if (ImGui::Checkbox("sRGB", &srgb)) {
+                                Genesis::Engine::AssetDatabase::SetImportSetting(meta, "srgb", srgb ? "1" : "0");
+                                settingsChanged = true;
+                            }
+
+                            bool mipmaps = GetSettingBool("mipmaps", true);
+                            if (ImGui::Checkbox("Generate Mipmaps", &mipmaps)) {
+                                Genesis::Engine::AssetDatabase::SetImportSetting(meta, "mipmaps", mipmaps ? "1" : "0");
+                                settingsChanged = true;
+                            }
+
+                            bool normalMap = GetSettingBool("normal_map", false);
+                            if (ImGui::Checkbox("Normal Map", &normalMap)) {
+                                Genesis::Engine::AssetDatabase::SetImportSetting(meta, "normal_map", normalMap ? "1" : "0");
+                                settingsChanged = true;
+                            }
+
+                            const char* wrapOptions[] = { "repeat", "clamp", "mirror" };
+                            std::string wrapVal = GetSettingValue("wrap", "repeat");
+                            int wrapIndex = 0;
+                            for (int i = 0; i < IM_ARRAYSIZE(wrapOptions); ++i) {
+                                if (wrapVal == wrapOptions[i]) { wrapIndex = i; break; }
+                            }
+                            if (ImGui::Combo("Wrap", &wrapIndex, wrapOptions, IM_ARRAYSIZE(wrapOptions))) {
+                                Genesis::Engine::AssetDatabase::SetImportSetting(meta, "wrap", wrapOptions[wrapIndex]);
+                                settingsChanged = true;
+                            }
+
+                            const char* filterOptions[] = { "linear", "nearest", "anisotropic" };
+                            std::string filterVal = GetSettingValue("filter", "linear");
+                            int filterIndex = 0;
+                            for (int i = 0; i < IM_ARRAYSIZE(filterOptions); ++i) {
+                                if (filterVal == filterOptions[i]) { filterIndex = i; break; }
+                            }
+                            if (ImGui::Combo("Filter", &filterIndex, filterOptions, IM_ARRAYSIZE(filterOptions))) {
+                                Genesis::Engine::AssetDatabase::SetImportSetting(meta, "filter", filterOptions[filterIndex]);
+                                settingsChanged = true;
+                            }
+                        }
+
+                        std::vector<Genesis::Engine::AssetMeta::ImportSetting> settingsSorted = meta.importSettings;
+                        std::sort(settingsSorted.begin(), settingsSorted.end(), [](const auto& a, const auto& b) {
+                            if (a.key == b.key) return a.value < b.value;
+                            return a.key < b.key;
+                        });
+
+                        ImGui::BeginChild("##import_settings_list", ImVec2(0, 110), true);
+                        if (settingsSorted.empty()) {
+                            ImGui::TextDisabled("(no settings)");
+                        } else {
+                            for (const auto& setting : settingsSorted) {
+                                ImGui::Text("%s = %s", setting.key.c_str(), setting.value.c_str());
+                            }
+                        }
+                        ImGui::EndChild();
+
+                        static char settingKeyBuf[64] = "";
+                        static char settingValueBuf[128] = "";
+                        static char removeKeyBuf[64] = "";
+
+                        ImGui::PushItemWidth(180.0f);
+                        ImGui::InputText("Key", settingKeyBuf, sizeof(settingKeyBuf));
+                        ImGui::SameLine();
+                        ImGui::InputText("Value", settingValueBuf, sizeof(settingValueBuf));
+                        ImGui::PopItemWidth();
+                        if (ImGui::Button("Add/Update")) {
+                            if (settingKeyBuf[0] != 0) {
+                                Genesis::Engine::AssetDatabase::SetImportSetting(meta, settingKeyBuf, settingValueBuf);
+                                settingsChanged = true;
+                            }
+                        }
+
+                        ImGui::PushItemWidth(180.0f);
+                        ImGui::InputText("Remove Key", removeKeyBuf, sizeof(removeKeyBuf));
+                        ImGui::PopItemWidth();
+                        ImGui::SameLine();
+                        if (ImGui::Button("Remove")) {
+                            if (removeKeyBuf[0] != 0) {
+                                Genesis::Engine::AssetDatabase::RemoveImportSetting(meta, removeKeyBuf);
+                                settingsChanged = true;
+                            }
+                        }
+
+                        if (settingsChanged) {
+                            Genesis::Engine::AssetDatabase::SaveMeta(assetPath, meta);
+                        }
+
+                        ImGui::Separator();
                         std::string key = NormalizeAssetPath(assetPath, projectRoot);
 
                         ImGui::Text("Dependencies (%d)", (int)meta.dependencies.size());

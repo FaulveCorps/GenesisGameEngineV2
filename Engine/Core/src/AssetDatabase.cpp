@@ -66,6 +66,16 @@ static void AddDependency(std::vector<std::string>& deps, const std::string& pat
     if (std::find(deps.begin(), deps.end(), path) == deps.end()) deps.push_back(path);
 }
 
+static void UpsertSetting(std::vector<AssetMeta::ImportSetting>& settings, const std::string& key, const std::string& value) {
+    for (auto& setting : settings) {
+        if (setting.key == key) {
+            setting.value = value;
+            return;
+        }
+    }
+    settings.push_back(AssetMeta::ImportSetting{ key, value });
+}
+
 static std::vector<std::string> ExtractQuotedUris(const std::string& content) {
     std::vector<std::string> out;
     size_t pos = 0;
@@ -215,6 +225,7 @@ bool AssetDatabase::LoadMeta(const std::filesystem::path& assetPath, AssetMeta& 
     std::string line;
     outMeta.dependencies.clear();
     outMeta.dependencyTimestamps.clear();
+    outMeta.importSettings.clear();
     while (std::getline(file, line)) {
         if (line.empty() || line[0] == '#') continue;
         auto eq = line.find('=');
@@ -238,6 +249,16 @@ bool AssetDatabase::LoadMeta(const std::filesystem::path& assetPath, AssetMeta& 
                 outMeta.dependencyTimestamps.push_back(std::move(stamp));
             }
         }
+        else if (key == "setting") {
+            auto sep = value.find('|');
+            if (sep != std::string::npos) {
+                std::string settingKey = value.substr(0, sep);
+                std::string settingValue = value.substr(sep + 1);
+                if (!settingKey.empty()) {
+                    UpsertSetting(outMeta.importSettings, settingKey, settingValue);
+                }
+            }
+        }
     }
 
     return true;
@@ -256,6 +277,16 @@ bool AssetDatabase::SaveMeta(const std::filesystem::path& assetPath, const Asset
     }
     for (const auto& dep : meta.dependencyTimestamps) {
         file << "dependency_ts=" << dep.path << "|" << dep.timestamp << "\n";
+    }
+    if (!meta.importSettings.empty()) {
+        std::vector<AssetMeta::ImportSetting> settings = meta.importSettings;
+        std::sort(settings.begin(), settings.end(), [](const auto& a, const auto& b) {
+            if (a.key == b.key) return a.value < b.value;
+            return a.key < b.key;
+        });
+        for (const auto& setting : settings) {
+            file << "setting=" << setting.key << "|" << setting.value << "\n";
+        }
     }
     return true;
 }
@@ -333,6 +364,30 @@ bool AssetDatabase::DependenciesChanged(const AssetMeta& meta, const std::filesy
     }
 
     return false;
+}
+
+void AssetDatabase::SetImportSetting(AssetMeta& meta, const std::string& key, const std::string& value) {
+    if (key.empty()) return;
+    UpsertSetting(meta.importSettings, key, value);
+}
+
+bool AssetDatabase::GetImportSetting(const AssetMeta& meta, const std::string& key, std::string& outValue) {
+    if (key.empty()) return false;
+    for (const auto& setting : meta.importSettings) {
+        if (setting.key == key) {
+            outValue = setting.value;
+            return true;
+        }
+    }
+    return false;
+}
+
+void AssetDatabase::RemoveImportSetting(AssetMeta& meta, const std::string& key) {
+    if (key.empty()) return;
+    meta.importSettings.erase(
+        std::remove_if(meta.importSettings.begin(), meta.importSettings.end(),
+                       [&](const AssetMeta::ImportSetting& s) { return s.key == key; }),
+        meta.importSettings.end());
 }
 
 } // namespace Genesis::Engine
