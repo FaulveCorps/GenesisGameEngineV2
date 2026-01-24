@@ -285,6 +285,9 @@ bool AssetDatabase::Reimport(const std::filesystem::path& assetPath, const std::
         meta.dependencies.push_back(NormalizePath(dep, projectRoot));
     }
 
+    std::sort(meta.dependencies.begin(), meta.dependencies.end());
+    meta.dependencies.erase(std::unique(meta.dependencies.begin(), meta.dependencies.end()), meta.dependencies.end());
+
     for (const auto& dep : meta.dependencies) {
         uint64_t depTimestamp = 0;
         GetSourceTimestamp(ResolveDependencyPath(dep, projectRoot), depTimestamp);

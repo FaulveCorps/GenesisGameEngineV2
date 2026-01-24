@@ -30,6 +30,7 @@ add_executable(UnitTests
     test_renderer_mesh.cpp
     test_gltf_material_import.cpp
     test_asset_database_dependencies.cpp
+    test_asset_database_dependency_order.cpp
     test_audio.cpp
     test_audio_playback.cpp
     test_physics.cpp
