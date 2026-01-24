@@ -677,6 +677,7 @@ static std::string NormalizePathForSettings(const std::filesystem::path& path, c
     return abs.string();
 }
 
+// Audio Icon Fix Attempt
 int main(int argc, char** argv) {
     std::cout << "GenesisEditor starting..." << std::endl;
 
@@ -2291,20 +2292,41 @@ int main(int argc, char** argv) {
             };
             auto DrawAudioIcon = [&](ImVec2 center, float size, const ImVec4& base) {
                 ImVec4 color = BoostColor(base, 0.08f);
-                const float bodyW = size * 0.28f;
-                const float bodyH = size * 0.36f;
-                ImVec2 bodyMin(center.x - size * 0.38f, center.y - bodyH * 0.5f);
-                ImVec2 bodyMax(bodyMin.x + bodyW, bodyMin.y + bodyH);
-                dl->AddRectFilled(bodyMin, bodyMax, Shade(color, 0.95f), size * 0.08f);
-                dl->AddRect(bodyMin, bodyMax, Shade(color, 1.25f), size * 0.08f, 0, 1.0f);
 
-                ImVec2 triA(bodyMax.x, center.y - bodyH * 0.7f);
-                ImVec2 triB(bodyMax.x, center.y + bodyH * 0.7f);
-                ImVec2 triC(center.x + size * 0.38f, center.y);
-                dl->AddTriangleFilled(triA, triB, triC, Shade(color, 1.1f));
+                // 1. Rectangle Tail
+                float rectHalfH = size * 0.15f;
+                float rectW = size * 0.2f;
+                float rectLeft = center.x - size * 0.35f;
+                float rectRight = rectLeft + rectW;
 
-                dl->AddLine(ImVec2(center.x + size * 0.18f, center.y - size * 0.18f), ImVec2(center.x + size * 0.34f, center.y - size * 0.32f), Shade(color, 1.3f), 1.2f);
-                dl->AddLine(ImVec2(center.x + size * 0.18f, center.y + size * 0.18f), ImVec2(center.x + size * 0.34f, center.y + size * 0.32f), Shade(color, 1.3f), 1.2f);
+                ImVec2 bodyMin(rectLeft, center.y - rectHalfH);
+                ImVec2 bodyMax(rectRight, center.y + rectHalfH);
+
+                dl->AddRectFilled(bodyMin, bodyMax, Shade(color, 1.0f));
+
+                // 2. Cone
+                // Tip at (rectRight, center.y)
+                // Base at (rectRight + coneLen, +/- coneHalfH)
+                float coneLen = size * 0.3f;
+                float coneHalfH = size * 0.35f;
+                float coneRight = rectRight + coneLen;
+
+                ImVec2 p1(rectRight, center.y); // Tip
+                ImVec2 p2(coneRight, center.y - coneHalfH); // Top Base
+                ImVec2 p3(coneRight, center.y + coneHalfH); // Bot Base
+
+                dl->AddTriangleFilled(p1, p2, p3, Shade(color, 1.0f));
+
+                // 3. Sound Waves (Arcs)
+                ImVec2 arcCenter = p1; // Source of sound
+                float arcIn = size * 0.45f;
+                float arcOut = size * 0.65f;
+
+                dl->PathArcTo(arcCenter, arcIn, -0.5f, 0.5f);
+                dl->PathStroke(Shade(color, 1.2f), 0, size * 0.1f);
+
+                dl->PathArcTo(arcCenter, arcOut, -0.6f, 0.6f);
+                dl->PathStroke(Shade(color, 1.2f), 0, size * 0.1f);
             };
             auto DrawParticleIcon = [&](ImVec2 center, float size, const ImVec4& base) {
                 ImVec4 color = BoostColor(base, 0.08f);

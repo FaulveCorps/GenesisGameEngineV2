@@ -21,6 +21,8 @@ add_executable(UnitTests
     test_2d_sprite_smoke.cpp
     test_2d_sprite_gl_smoke.cpp
     test_2d_sprite_gl_readback.cpp
+    test_render_postprocess_shadow_compile.cpp
+    test_render_benchmark.cpp
     test_samplegame_autocycle.cpp
     test_shader_subsystem.cpp
     test_pbr_material.cpp

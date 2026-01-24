@@ -30,10 +30,10 @@ Following the stabilization phase (Jan 2), the project has shifted focus to **Mo
 ### 1. Rendering Capabilities
 | Feature | Commercial (Unreal 5 / Unity HDRP) | Genesis Engine (Current) | Gap Analysis |
 | :--- | :--- | :--- | :--- |
-| **Lighting** | Global Illumination (Lumen), Raytracing | Basic PBR (Direct Lighting) | **Critical**. Lacks GI, Shadows are basic. |
+| **Lighting** | Global Illumination (Lumen), Raytracing | PBR (Direct Lighting) + directional shadow map (OpenGL) | **Critical**. Lacks GI; shadows are single-map and need CSM/PCF. |
 | **Geometry** | Virtualized (Nanite), LODs | Standard Mesh (VBO/IBO) | **High**. No LOD system or streaming. |
 | **Materials** | Node-based Shader Graphs | Code-based PBR Shaders | **High**. Harder for artists to use. |
-| **Post-Process** | Full Stack (Bloom, LUT, DoF) | None | **Medium**. Makes output look "raw". |
+| **Post-Process** | Full Stack (Bloom, LUT, DoF) | Bloom + tone mapping + gamma (OpenGL) | **Medium**. Needs LUTs/DoF/SSR/SSAO and validation across backends. |
 
 **Verdict**: Genesis has laid the *mathematical foundation* (PBR) but lacks the *ecosystem* (GI, Post-FX, Tools) that makes commercial engines look "next-gen".
 
@@ -49,7 +49,7 @@ Following the stabilization phase (Jan 2), the project has shifted focus to **Mo
 ### 3. Tooling & Workflow
 | Feature | Commercial | Genesis Engine | Gap Analysis |
 | :--- | :--- | :--- | :--- |
-| **Editor** | WYSIWYG, Asset Browser, Profilers | **None** (Code-only) | **Critical**. The biggest barrier to adoption. |
+| **Editor** | WYSIWYG, Asset Browser, Profilers | ImGui editor (docking, hierarchy, inspector, content browser, gizmos) | **High**. Lacks material/animation/VFX tooling and profilers. |
 | **Physics** | PhysX/Havok (Robust) | Bullet/Box2D (Basic) | **Medium**. Sufficient for indie games. |
 | **Audio** | Wwise/FMOD (Middleware) | miniaudio (Basic) | **Medium**. Lacks spatialization/mixing tools. |
 
@@ -60,8 +60,8 @@ Following the stabilization phase (Jan 2), the project has shifted focus to **Mo
 To compete with commercial engines *without* building a massive editor, Genesis must double down on its strengths: **Performance, Moddability, and Programmer-First Workflow**.
 
 ### Immediate Priorities (Q1 2026)
-1.  **Visual Polish**: Implement a Post-Processing Stack (Bloom, Tone Mapping, Gamma Correction) to make PBR look correct.
-2.  **Shadows**: Implement Cascaded Shadow Maps (CSM) or PCF shadows. PBR without shadows looks flat.
+1.  **Visual Polish**: Verify and harden post-processing across backends (Bloom + tone mapping + gamma are in OpenGL).
+2.  **Shadows**: Upgrade to CSM + PCF/PCSS (current OpenGL shadow map is single cascade).
 3.  **Animation**: Implement Skeletal Animation support (glTF skinning).
 
 ### Strategic Differentiators
