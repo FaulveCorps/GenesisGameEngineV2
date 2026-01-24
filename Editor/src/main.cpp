@@ -1542,7 +1542,8 @@ int main(int argc, char** argv) {
 
                     uint64_t currentTs = 0;
                     if (!Genesis::Engine::AssetDatabase::GetSourceTimestamp(entry.path(), currentTs)) continue;
-                    if (currentTs > meta.sourceTimestamp) {
+                    const bool depsChanged = Genesis::Engine::AssetDatabase::DependenciesChanged(meta, projectRoot);
+                    if (currentTs > meta.sourceTimestamp || depsChanged) {
                         Genesis::Engine::AssetDatabase::Reimport(entry.path(), projectRoot, &meta);
 
                         std::string ext = ToLowerCopy(entry.path().extension().string());

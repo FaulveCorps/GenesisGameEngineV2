@@ -2,6 +2,7 @@
 #include <fstream>
 #include <sstream>
 #include <unordered_set>
+#include <unordered_map>
 #include <algorithm>
 #include <random>
 #include <chrono>
@@ -23,6 +24,14 @@ static std::string NormalizePath(const std::filesystem::path& path, const std::f
         if (!relStr.empty() && relStr.rfind("..", 0) != 0) return relStr;
     }
     return abs.generic_string();
+}
+
+static std::filesystem::path ResolveDependencyPath(const std::string& dep, const std::filesystem::path& projectRoot) {
+    std::filesystem::path p(dep);
+    if (p.is_relative()) {
+        return projectRoot / p;
+    }
+    return p;
 }
 
 static uint64_t FileTimeToUnix(const std::filesystem::file_time_type& ftime) {
@@ -205,6 +214,7 @@ bool AssetDatabase::LoadMeta(const std::filesystem::path& assetPath, AssetMeta& 
 
     std::string line;
     outMeta.dependencies.clear();
+    outMeta.dependencyTimestamps.clear();
     while (std::getline(file, line)) {
         if (line.empty() || line[0] == '#') continue;
         auto eq = line.find('=');
@@ -216,6 +226,18 @@ bool AssetDatabase::LoadMeta(const std::filesystem::path& assetPath, AssetMeta& 
         else if (key == "importer") outMeta.importer = value;
         else if (key == "source_timestamp") outMeta.sourceTimestamp = std::stoull(value);
         else if (key == "dependency") outMeta.dependencies.push_back(value);
+        else if (key == "dependency_ts") {
+            auto sep = value.rfind('|');
+            if (sep != std::string::npos) {
+                AssetMeta::DependencyStamp stamp;
+                stamp.path = value.substr(0, sep);
+                std::string tsStr = value.substr(sep + 1);
+                if (!tsStr.empty()) {
+                    stamp.timestamp = std::stoull(tsStr);
+                }
+                outMeta.dependencyTimestamps.push_back(std::move(stamp));
+            }
+        }
     }
 
     return true;
@@ -231,6 +253,9 @@ bool AssetDatabase::SaveMeta(const std::filesystem::path& assetPath, const Asset
     file << "source_timestamp=" << meta.sourceTimestamp << "\n";
     for (const auto& dep : meta.dependencies) {
         file << "dependency=" << dep << "\n";
+    }
+    for (const auto& dep : meta.dependencyTimestamps) {
+        file << "dependency_ts=" << dep.path << "|" << dep.timestamp << "\n";
     }
     return true;
 }
@@ -253,10 +278,17 @@ bool AssetDatabase::Reimport(const std::filesystem::path& assetPath, const std::
 
     meta.importer = InferImporter(assetPath);
     meta.dependencies.clear();
+    meta.dependencyTimestamps.clear();
 
     std::vector<std::string> deps = CollectDependencies(assetPath);
     for (const auto& dep : deps) {
         meta.dependencies.push_back(NormalizePath(dep, projectRoot));
+    }
+
+    for (const auto& dep : meta.dependencies) {
+        uint64_t depTimestamp = 0;
+        GetSourceTimestamp(ResolveDependencyPath(dep, projectRoot), depTimestamp);
+        meta.dependencyTimestamps.push_back(AssetMeta::DependencyStamp{ dep, depTimestamp });
     }
 
     std::error_code ec;
@@ -274,6 +306,30 @@ bool AssetDatabase::GetSourceTimestamp(const std::filesystem::path& assetPath, u
     if (ec) return false;
     outTimestamp = FileTimeToUnix(ftime);
     return true;
+}
+
+bool AssetDatabase::DependenciesChanged(const AssetMeta& meta, const std::filesystem::path& projectRoot) {
+    if (meta.dependencies.empty()) return false;
+
+    std::unordered_map<std::string, uint64_t> stamps;
+    stamps.reserve(meta.dependencyTimestamps.size());
+    for (const auto& stamp : meta.dependencyTimestamps) {
+        stamps[stamp.path] = stamp.timestamp;
+    }
+
+    for (const auto& dep : meta.dependencies) {
+        uint64_t current = 0;
+        if (!GetSourceTimestamp(ResolveDependencyPath(dep, projectRoot), current)) {
+            return true;
+        }
+
+        auto it = stamps.find(dep);
+        if (it == stamps.end() || it->second != current) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 } // namespace Genesis::Engine
