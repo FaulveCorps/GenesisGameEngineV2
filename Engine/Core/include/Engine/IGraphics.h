@@ -19,6 +19,18 @@ struct MeshDesc {
     std::vector<uint32_t> indices;
 };
 
+enum class TextureWrap {
+    Repeat,
+    Clamp,
+    Mirror
+};
+
+enum class TextureFilter {
+    Nearest,
+    Linear,
+    Anisotropic
+};
+
 class Texture;
 struct Material;
 
@@ -59,8 +71,18 @@ public:
         bool IsValid() const { return id != 0; }
     };
 
+    struct TextureCreateDesc {
+        uint32_t width = 0;
+        uint32_t height = 0;
+        const uint8_t* pixels = nullptr;
+        bool srgb = false;
+        bool mipmaps = false;
+        TextureWrap wrap = TextureWrap::Repeat;
+        TextureFilter filter = TextureFilter::Nearest;
+    };
+
     // Optional texture lifecycle hooks (renderer can implement to manage GPU-side resources)
-    virtual TextureHandle CreateTexture(uint32_t /*width*/, uint32_t /*height*/, const uint8_t* /*pixels*/) { return TextureHandle{}; }
+    virtual TextureHandle CreateTexture(const TextureCreateDesc& /*desc*/) { return TextureHandle{}; }
     virtual void DestroyTexture(const TextureHandle& /*h*/) { }
 
     // Immediate-mode 2D texture draw (coordinates in pixels, UV in 0..1, color ARGB)

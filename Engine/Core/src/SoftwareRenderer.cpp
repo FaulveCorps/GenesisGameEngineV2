@@ -47,18 +47,18 @@ MeshHandle SoftwareRenderer::CreateMesh(const MeshDesc& desc) {
     return h;
 }
 
-IGraphicsAPI::TextureHandle SoftwareRenderer::CreateTexture(uint32_t width, uint32_t height, const uint8_t* pixels) {
+IGraphicsAPI::TextureHandle SoftwareRenderer::CreateTexture(const TextureCreateDesc& desc) {
     IGraphicsAPI::TextureHandle h;
     h.id = s_nextTextureId++;
     SWTexture t;
-    t.w = width; t.h = height;
-    if (pixels && width > 0 && height > 0) {
-        size_t sz = (size_t)width * height * 4;
+    t.w = desc.width; t.h = desc.height;
+    if (desc.pixels && desc.width > 0 && desc.height > 0) {
+        size_t sz = (size_t)desc.width * desc.height * 4;
         t.pixels.resize(sz);
-        std::memcpy(t.pixels.data(), pixels, sz);
+        std::memcpy(t.pixels.data(), desc.pixels, sz);
     }
     m_textures.emplace(h.id, std::move(t));
-    std::cout << "SoftwareRenderer: CreateTexture id=" << h.id << " (" << width << "x" << height << ")" << std::endl;
+    std::cout << "SoftwareRenderer: CreateTexture id=" << h.id << " (" << desc.width << "x" << desc.height << ")" << std::endl;
     return h;
 }
 

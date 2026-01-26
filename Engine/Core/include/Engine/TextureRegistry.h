@@ -21,6 +21,7 @@ public:
 
     void DestroyAllOnRenderer(IGraphicsAPI* renderer);
     void UploadAllToRenderer(IGraphicsAPI* renderer);
+    std::vector<Texture*> GetAllTextures();
 
 private:
     TextureRegistry() = default;

@@ -41,7 +41,7 @@ public:
     void SetViewProjection(const float* view, const float* projection) override;
 
     // Renderer-managed texture lifecycle
-    TextureHandle CreateTexture(uint32_t width, uint32_t height, const uint8_t* pixels) override;
+    TextureHandle CreateTexture(const TextureCreateDesc& desc) override;
     void DestroyTexture(const TextureHandle& h) override;
 
     // 2D immediate texture draw

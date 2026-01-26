@@ -135,4 +135,9 @@ void TextureRegistry::UploadAllToRenderer(IGraphicsAPI* renderer) {
     }
 }
 
+std::vector<Texture*> TextureRegistry::GetAllTextures() {
+    std::lock_guard<std::mutex> lk(m_mutex);
+    return m_textures;
+}
+
 } // namespace Genesis::Engine

@@ -1482,6 +1482,66 @@ int main(int argc, char** argv) {
         return false;
     };
 
+    auto ReloadTextureAsset = [&](const std::filesystem::path& path) {
+        std::error_code ec;
+        auto canon = std::filesystem::weakly_canonical(path, ec);
+        std::string normalized = ec ? path.string() : canon.string();
+        auto textures = Genesis::Engine::TextureRegistry::Instance().GetAllTextures();
+        for (auto* tex : textures) {
+            if (!tex) continue;
+            const auto& source = tex->SourcePath();
+            if (source.empty()) continue;
+            if (source == normalized) {
+                tex->ReloadFromFile();
+            }
+        }
+    };
+
+    auto ReloadModelAsset = [&](const std::filesystem::path& path) {
+        std::error_code ec;
+        auto canon = std::filesystem::weakly_canonical(path, ec);
+        if (ec) return;
+
+        auto& reg = editorScene.Registry();
+        auto view = reg.view<Genesis::Engine::ModelComponent>();
+        for (auto entity : view) {
+            auto& mc = view.get<Genesis::Engine::ModelComponent>(entity);
+            if (mc.sourcePath.empty()) continue;
+            std::filesystem::path modelPath(mc.sourcePath);
+            auto modelAbs = std::filesystem::weakly_canonical(modelPath, ec);
+            if (!ec && modelAbs == canon) {
+                if (!mc.model) mc.model = std::make_shared<Genesis::Engine::Model>();
+                mc.model->Load(mc.sourcePath);
+            }
+        }
+    };
+
+    auto ReimportAllTextures = [&]() {
+        std::filesystem::path assetsRoot = projectRoot / "Assets";
+        if (!std::filesystem::exists(assetsRoot)) return;
+        for (const auto& entry : std::filesystem::recursive_directory_iterator(assetsRoot)) {
+            if (!entry.is_regular_file()) continue;
+            if (Genesis::Engine::AssetDatabase::IsMetaFile(entry.path())) continue;
+            std::string ext = ToLowerCopy(entry.path().extension().string());
+            if (!IsImageExtension(ext)) continue;
+            Genesis::Engine::AssetDatabase::Reimport(entry.path(), projectRoot);
+            ReloadTextureAsset(entry.path());
+        }
+    };
+
+    auto ReimportAllModels = [&]() {
+        std::filesystem::path assetsRoot = projectRoot / "Assets";
+        if (!std::filesystem::exists(assetsRoot)) return;
+        for (const auto& entry : std::filesystem::recursive_directory_iterator(assetsRoot)) {
+            if (!entry.is_regular_file()) continue;
+            if (Genesis::Engine::AssetDatabase::IsMetaFile(entry.path())) continue;
+            std::string ext = ToLowerCopy(entry.path().extension().string());
+            if (ext != ".gltf" && ext != ".glb" && ext != ".obj" && ext != ".fbx") continue;
+            Genesis::Engine::AssetDatabase::Reimport(entry.path(), projectRoot);
+            ReloadModelAsset(entry.path());
+        }
+    };
+
     while (running) {
         // Pump SDL events (and intercept OS quit/close requests so we can prompt for unsaved changes).
         SDL_Event event;
@@ -1548,21 +1608,9 @@ int main(int argc, char** argv) {
 
                         std::string ext = ToLowerCopy(entry.path().extension().string());
                         if (ext == ".gltf" || ext == ".glb" || ext == ".obj" || ext == ".fbx") {
-                            auto& reg = editorScene.Registry();
-                            auto view = reg.view<Genesis::Engine::ModelComponent>();
-                            std::error_code ec;
-                            auto reimportPath = std::filesystem::weakly_canonical(entry.path(), ec);
-                            for (auto entity : view) {
-                                auto& mc = view.get<Genesis::Engine::ModelComponent>(entity);
-                                if (!mc.sourcePath.empty()) {
-                                    std::filesystem::path modelPath(mc.sourcePath);
-                                    auto modelAbs = std::filesystem::weakly_canonical(modelPath, ec);
-                                    if (!ec && modelAbs == reimportPath) {
-                                        if (!mc.model) mc.model = std::make_shared<Genesis::Engine::Model>();
-                                        mc.model->Load(mc.sourcePath);
-                                    }
-                                }
-                            }
+                            ReloadModelAsset(entry.path());
+                        } else if (IsImageExtension(ext)) {
+                            ReloadTextureAsset(entry.path());
                         }
                     }
                 }
@@ -3647,6 +3695,16 @@ int main(int argc, char** argv) {
                 BuildAssetGraph();
             }
 
+            if (ImGui::Button("Reimport All Textures")) {
+                ReimportAllTextures();
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Reimport All Models")) {
+                ReimportAllModels();
+            }
+            ImGui::SameLine();
+            ImGui::Checkbox("Auto Reimport", &autoReimportAssets);
+
             if (!selectedAssetPath.empty()) {
                 std::filesystem::path assetPath(selectedAssetPath);
                 if (!std::filesystem::exists(assetPath)) {
@@ -3665,18 +3723,28 @@ int main(int argc, char** argv) {
                         ImGui::Text("GUID: %s", meta.guid.empty() ? "(none)" : meta.guid.c_str());
                         ImGui::Text("Timestamp: %llu", static_cast<unsigned long long>(meta.sourceTimestamp));
 
-                        ImGui::Checkbox("Auto Reimport", &autoReimportAssets);
+                        auto ReloadAssetIfSupported = [&](const std::filesystem::path& path) {
+                            std::string extLower = ToLowerCopy(path.extension().string());
+                            if (IsImageExtension(extLower)) {
+                                ReloadTextureAsset(path);
+                            } else if (extLower == ".gltf" || extLower == ".glb" || extLower == ".obj" || extLower == ".fbx") {
+                                ReloadModelAsset(path);
+                            }
+                        };
 
                         if (ImGui::Button("Reimport")) {
                             Genesis::Engine::AssetDatabase::Reimport(assetPath, projectRoot, &meta);
+                            ReloadAssetIfSupported(assetPath);
                         }
                         ImGui::SameLine();
                         if (ImGui::Button("Reimport Dependencies")) {
                             Genesis::Engine::AssetDatabase::Reimport(assetPath, projectRoot, &meta);
+                            ReloadAssetIfSupported(assetPath);
                             for (const auto& dep : meta.dependencies) {
                                 if (!dep.empty()) {
                                     std::filesystem::path depPath = dep;
                                     Genesis::Engine::AssetDatabase::Reimport(depPath, projectRoot);
+                                    ReloadAssetIfSupported(depPath);
                                 }
                             }
                         }
@@ -3697,21 +3765,60 @@ int main(int argc, char** argv) {
                         };
 
                         if (meta.importer == "texture") {
-                            bool srgb = GetSettingBool("srgb", true);
+                            auto ApplyPreset = [&](const char* name, bool srgb, bool normalMap, const char* wrap, const char* filter, bool mipmaps) {
+                                Genesis::Engine::AssetDatabase::SetImportSetting(meta, "srgb", srgb ? "1" : "0");
+                                Genesis::Engine::AssetDatabase::SetImportSetting(meta, "normal_map", normalMap ? "1" : "0");
+                                Genesis::Engine::AssetDatabase::SetImportSetting(meta, "wrap", wrap);
+                                Genesis::Engine::AssetDatabase::SetImportSetting(meta, "filter", filter);
+                                Genesis::Engine::AssetDatabase::SetImportSetting(meta, "mipmaps", mipmaps ? "1" : "0");
+                                settingsChanged = true;
+                            };
+
+                            ImGui::TextUnformatted("Presets");
+                            if (ImGui::Button("Albedo")) {
+                                ApplyPreset("Albedo", true, false, "repeat", "linear", true);
+                            }
+                            ImGui::SameLine();
+                            if (ImGui::Button("Normal")) {
+                                ApplyPreset("Normal", false, true, "repeat", "linear", true);
+                            }
+                            ImGui::SameLine();
+                            if (ImGui::Button("Mask/ORM")) {
+                                ApplyPreset("Mask/ORM", false, false, "repeat", "linear", true);
+                            }
+                            ImGui::SameLine();
+                            if (ImGui::Button("UI")) {
+                                ApplyPreset("UI", true, false, "clamp", "linear", false);
+                            }
+
+                            bool normalMap = GetSettingBool("normal_map", false);
+                            bool srgb = normalMap ? false : GetSettingBool("srgb", true);
+                            if (normalMap) {
+                                Genesis::Engine::AssetDatabase::SetImportSetting(meta, "srgb", "0");
+                            }
+
+                            if (ImGui::Checkbox("Normal Map", &normalMap)) {
+                                Genesis::Engine::AssetDatabase::SetImportSetting(meta, "normal_map", normalMap ? "1" : "0");
+                                if (normalMap) {
+                                    Genesis::Engine::AssetDatabase::SetImportSetting(meta, "srgb", "0");
+                                }
+                                settingsChanged = true;
+                            }
+
+                            if (normalMap) {
+                                ImGui::BeginDisabled();
+                            }
                             if (ImGui::Checkbox("sRGB", &srgb)) {
                                 Genesis::Engine::AssetDatabase::SetImportSetting(meta, "srgb", srgb ? "1" : "0");
                                 settingsChanged = true;
+                            }
+                            if (normalMap) {
+                                ImGui::EndDisabled();
                             }
 
                             bool mipmaps = GetSettingBool("mipmaps", true);
                             if (ImGui::Checkbox("Generate Mipmaps", &mipmaps)) {
                                 Genesis::Engine::AssetDatabase::SetImportSetting(meta, "mipmaps", mipmaps ? "1" : "0");
-                                settingsChanged = true;
-                            }
-
-                            bool normalMap = GetSettingBool("normal_map", false);
-                            if (ImGui::Checkbox("Normal Map", &normalMap)) {
-                                Genesis::Engine::AssetDatabase::SetImportSetting(meta, "normal_map", normalMap ? "1" : "0");
                                 settingsChanged = true;
                             }
 
@@ -3734,6 +3841,45 @@ int main(int argc, char** argv) {
                             }
                             if (ImGui::Combo("Filter", &filterIndex, filterOptions, IM_ARRAYSIZE(filterOptions))) {
                                 Genesis::Engine::AssetDatabase::SetImportSetting(meta, "filter", filterOptions[filterIndex]);
+                                settingsChanged = true;
+                            }
+                        } else if (meta.importer == "model") {
+                            bool genNormals = GetSettingBool("gen_normals", true);
+                            if (ImGui::Checkbox("Generate Normals", &genNormals)) {
+                                Genesis::Engine::AssetDatabase::SetImportSetting(meta, "gen_normals", genNormals ? "1" : "0");
+                                settingsChanged = true;
+                            }
+
+                            bool flipUvs = GetSettingBool("flip_uvs", false);
+                            if (ImGui::Checkbox("Flip UVs", &flipUvs)) {
+                                Genesis::Engine::AssetDatabase::SetImportSetting(meta, "flip_uvs", flipUvs ? "1" : "0");
+                                settingsChanged = true;
+                            }
+
+                            bool optimizeMeshes = GetSettingBool("optimize_meshes", true);
+                            if (ImGui::Checkbox("Optimize Meshes", &optimizeMeshes)) {
+                                Genesis::Engine::AssetDatabase::SetImportSetting(meta, "optimize_meshes", optimizeMeshes ? "1" : "0");
+                                settingsChanged = true;
+                            }
+
+                            bool pretransformVerts = GetSettingBool("pretransform_vertices", false);
+                            if (ImGui::Checkbox("Pretransform Vertices", &pretransformVerts)) {
+                                Genesis::Engine::AssetDatabase::SetImportSetting(meta, "pretransform_vertices", pretransformVerts ? "1" : "0");
+                                settingsChanged = true;
+                            }
+
+                            float scaleFactor = 1.0f;
+                            {
+                                std::string scaleValue = GetSettingValue("scale_factor", "1.0");
+                                char* end = nullptr;
+                                float parsed = std::strtof(scaleValue.c_str(), &end);
+                                if (end != scaleValue.c_str() && std::isfinite(parsed) && parsed > 0.0f) {
+                                    scaleFactor = parsed;
+                                }
+                            }
+                            if (ImGui::DragFloat("Scale Factor", &scaleFactor, 0.01f, 0.001f, 1000.0f, "%.3f")) {
+                                if (scaleFactor < 0.001f) scaleFactor = 0.001f;
+                                Genesis::Engine::AssetDatabase::SetImportSetting(meta, "scale_factor", std::to_string(scaleFactor));
                                 settingsChanged = true;
                             }
                         }
@@ -3783,6 +3929,12 @@ int main(int argc, char** argv) {
 
                         if (settingsChanged) {
                             Genesis::Engine::AssetDatabase::SaveMeta(assetPath, meta);
+                            std::string extLower = ToLowerCopy(assetPath.extension().string());
+                            if (IsImageExtension(extLower)) {
+                                ReloadTextureAsset(assetPath);
+                            } else if (extLower == ".gltf" || extLower == ".glb" || extLower == ".obj" || extLower == ".fbx") {
+                                ReloadModelAsset(assetPath);
+                            }
                         }
 
                         ImGui::Separator();
@@ -4000,21 +4152,9 @@ int main(int argc, char** argv) {
                                 Genesis::Engine::AssetDatabase::Reimport(entry.path(), projectRoot);
                                 std::string ext = ToLowerCopy(entry.path().extension().string());
                                 if (ext == ".gltf" || ext == ".glb" || ext == ".obj" || ext == ".fbx") {
-                                    auto& reg = editorScene.Registry();
-                                    auto view = reg.view<Genesis::Engine::ModelComponent>();
-                                    std::error_code ec;
-                                    auto reimportPath = std::filesystem::weakly_canonical(entry.path(), ec);
-                                    for (auto entity : view) {
-                                        auto& mc = view.get<Genesis::Engine::ModelComponent>(entity);
-                                        if (!mc.sourcePath.empty()) {
-                                            std::filesystem::path modelPath(mc.sourcePath);
-                                            auto modelAbs = std::filesystem::weakly_canonical(modelPath, ec);
-                                            if (!ec && modelAbs == reimportPath) {
-                                                if (!mc.model) mc.model = std::make_shared<Genesis::Engine::Model>();
-                                                mc.model->Load(mc.sourcePath);
-                                            }
-                                        }
-                                    }
+                                    ReloadModelAsset(entry.path());
+                                } else if (IsImageExtension(ext)) {
+                                    ReloadTextureAsset(entry.path());
                                 }
                             }
                         }
@@ -4503,7 +4643,7 @@ int main(int argc, char** argv) {
         profiler.EndFrame();
     }
 
-    if (auto cur = Genesis::Engine::RendererManager::GetRenderer()) cur->Shutdown();
+    Genesis::Engine::RendererManager::ShutdownRenderer();
     window.Shutdown();
     Genesis::Engine::Shutdown();
     return 0;

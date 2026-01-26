@@ -4,6 +4,8 @@
 #include <unordered_set>
 #include <unordered_map>
 #include <algorithm>
+#include <cctype>
+#include <cstdint>
 #include <random>
 #include <chrono>
 
@@ -91,6 +93,67 @@ static std::vector<std::string> ExtractQuotedUris(const std::string& content) {
         pos = secondQuote + 1;
     }
     return out;
+}
+
+static bool TryResolveGltfUri(const std::string& uri, const std::filesystem::path& baseDir, std::filesystem::path& outPath) {
+    if (uri.empty()) return false;
+    if (uri.rfind("data:", 0) == 0) return false;
+
+    if (uri.rfind("file://", 0) == 0) {
+        std::string pathPart = uri.substr(7);
+        if (!pathPart.empty() && pathPart[0] == '/' && pathPart.size() >= 3 && std::isalpha(static_cast<unsigned char>(pathPart[1])) && pathPart[2] == ':') {
+            pathPart.erase(0, 1);
+        }
+        outPath = std::filesystem::path(pathPart);
+        return true;
+    }
+
+    if (uri.find("://") != std::string::npos) return false;
+
+    outPath = baseDir / uri;
+    return true;
+}
+
+static bool ReadU32LE(std::ifstream& file, uint32_t& out) {
+    uint8_t buf[4] = {};
+    if (!file.read(reinterpret_cast<char*>(buf), sizeof(buf))) return false;
+    out = (uint32_t)buf[0] | ((uint32_t)buf[1] << 8) | ((uint32_t)buf[2] << 16) | ((uint32_t)buf[3] << 24);
+    return true;
+}
+
+static void CollectDependenciesForGlb(const std::filesystem::path& glbPath, std::vector<std::string>& deps) {
+    std::ifstream file(glbPath, std::ios::binary);
+    if (!file.is_open()) return;
+
+    uint32_t magic = 0;
+    uint32_t version = 0;
+    uint32_t length = 0;
+    if (!ReadU32LE(file, magic) || !ReadU32LE(file, version) || !ReadU32LE(file, length)) return;
+    if (magic != 0x46546C67) return; // 'glTF'
+
+    const uint32_t kChunkTypeJson = 0x4E4F534A; // 'JSON'
+    std::filesystem::path baseDir = glbPath.parent_path();
+
+    while (file && file.tellg() >= 0) {
+        uint32_t chunkLength = 0;
+        uint32_t chunkType = 0;
+        if (!ReadU32LE(file, chunkLength) || !ReadU32LE(file, chunkType)) break;
+        if (chunkLength == 0) break;
+
+        if (chunkType == kChunkTypeJson) {
+            std::string json(chunkLength, '\0');
+            if (!file.read(json.data(), chunkLength)) break;
+            auto uris = ExtractQuotedUris(json);
+            for (const auto& uri : uris) {
+                std::filesystem::path depPath;
+                if (TryResolveGltfUri(uri, baseDir, depPath)) {
+                    AddDependency(deps, depPath.generic_string());
+                }
+            }
+        } else {
+            file.seekg(chunkLength, std::ios::cur);
+        }
+    }
 }
 
 static void CollectDependenciesForObj(const std::filesystem::path& objPath, std::vector<std::string>& deps) {
@@ -185,11 +248,14 @@ static std::vector<std::string> CollectDependencies(const std::filesystem::path&
             auto uris = ExtractQuotedUris(buffer.str());
             std::filesystem::path baseDir = assetPath.parent_path();
             for (const auto& uri : uris) {
-                if (!uri.empty()) {
-                    AddDependency(deps, (baseDir / uri).generic_string());
+                std::filesystem::path depPath;
+                if (TryResolveGltfUri(uri, baseDir, depPath)) {
+                    AddDependency(deps, depPath.generic_string());
                 }
             }
         }
+    } else if (ext == ".glb") {
+        CollectDependenciesForGlb(assetPath, deps);
     } else if (ext == ".scene" || ext == ".prefab") {
         CollectDependenciesForSceneFile(assetPath, deps);
     }
@@ -208,6 +274,26 @@ static std::string InferImporter(const std::filesystem::path& assetPath) {
     if (ext == ".ttf" || ext == ".otf") return "font";
     if (ext == ".lua" || ext == ".cs" || ext == ".js") return "script";
     return "unknown";
+}
+
+static bool LooksLikeNormalMap(const std::string& nameLower) {
+    return nameLower.find("normal") != std::string::npos
+        || nameLower.find("norm") != std::string::npos
+        || nameLower.find("nrm") != std::string::npos
+        || nameLower.find("_n.") != std::string::npos;
+}
+
+static bool LooksLikeDataMap(const std::string& nameLower) {
+    return nameLower.find("rough") != std::string::npos
+        || nameLower.find("metal") != std::string::npos
+        || nameLower.find("orm") != std::string::npos
+        || nameLower.find("ao") != std::string::npos
+        || nameLower.find("occlusion") != std::string::npos
+        || nameLower.find("mask") != std::string::npos
+        || nameLower.find("spec") != std::string::npos
+        || nameLower.find("gloss") != std::string::npos
+        || nameLower.find("height") != std::string::npos
+        || nameLower.find("disp") != std::string::npos;
 }
 
 std::filesystem::path AssetDatabase::GetMetaPath(const std::filesystem::path& assetPath) {
@@ -310,6 +396,49 @@ bool AssetDatabase::Reimport(const std::filesystem::path& assetPath, const std::
     meta.importer = InferImporter(assetPath);
     meta.dependencies.clear();
     meta.dependencyTimestamps.clear();
+
+    if (meta.importer == "texture") {
+        const std::string filenameLower = ToLowerCopy(assetPath.filename().string());
+        const bool looksNormal = LooksLikeNormalMap(filenameLower);
+        const bool looksData = LooksLikeDataMap(filenameLower);
+
+        std::string value;
+        if (!GetImportSetting(meta, "srgb", value)) {
+            const bool defaultSrgb = !(looksNormal || looksData);
+            SetImportSetting(meta, "srgb", defaultSrgb ? "1" : "0");
+        }
+        if (!GetImportSetting(meta, "mipmaps", value)) {
+            SetImportSetting(meta, "mipmaps", "1");
+        }
+        if (!GetImportSetting(meta, "normal_map", value)) {
+            SetImportSetting(meta, "normal_map", looksNormal ? "1" : "0");
+        }
+        if (!GetImportSetting(meta, "wrap", value)) {
+            SetImportSetting(meta, "wrap", "repeat");
+        }
+        if (!GetImportSetting(meta, "filter", value)) {
+            SetImportSetting(meta, "filter", "linear");
+        }
+    }
+
+    if (meta.importer == "model") {
+        std::string value;
+        if (!GetImportSetting(meta, "gen_normals", value)) {
+            SetImportSetting(meta, "gen_normals", "1");
+        }
+        if (!GetImportSetting(meta, "flip_uvs", value)) {
+            SetImportSetting(meta, "flip_uvs", "0");
+        }
+        if (!GetImportSetting(meta, "optimize_meshes", value)) {
+            SetImportSetting(meta, "optimize_meshes", "1");
+        }
+        if (!GetImportSetting(meta, "pretransform_vertices", value)) {
+            SetImportSetting(meta, "pretransform_vertices", "0");
+        }
+        if (!GetImportSetting(meta, "scale_factor", value)) {
+            SetImportSetting(meta, "scale_factor", "1.0");
+        }
+    }
 
     std::vector<std::string> deps = CollectDependencies(assetPath);
     for (const auto& dep : deps) {

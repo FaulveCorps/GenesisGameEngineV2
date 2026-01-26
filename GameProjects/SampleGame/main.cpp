@@ -805,7 +805,7 @@ int main(int argc, char** argv) {
     if (softwareSDLRenderer) { SDL_DestroyRenderer(softwareSDLRenderer); softwareSDLRenderer = nullptr; }
     if (softwareWindow) { SDL_DestroyWindow(softwareWindow); softwareWindow = nullptr; }
 
-    if (auto cur = Genesis::Engine::RendererManager::GetRenderer()) cur->Shutdown();
+    Genesis::Engine::RendererManager::ShutdownRenderer();
     window.Shutdown();
     Genesis::Engine::Shutdown();
     return 0;

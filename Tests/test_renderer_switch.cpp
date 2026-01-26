@@ -62,7 +62,7 @@ TEST_CASE("Renderer runtime switch basic") {
     REQUIRE(anySwitched == true);
 
     // Cleanup
-    if (auto cur3 = Genesis::Engine::RendererManager::GetRenderer()) cur3->Shutdown();
+    Genesis::Engine::RendererManager::ShutdownRenderer();
     SDL_GL_DestroyContext(ctx);
     SDL_DestroyWindow(win);
     SDL_Quit();

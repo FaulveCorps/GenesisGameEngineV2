@@ -1,16 +1,71 @@
 #include "engine/Model.h"
+#include "engine/AssetDatabase.h"
 #include "engine/Stats.h"
 #include <assimp/Importer.hpp>
 #include <assimp/postprocess.h>
+#include <assimp/config.h>
 #include <SDL.h>
+#include <algorithm>
+#include <cmath>
+#include <cstdlib>
 #include <iostream>
 
 
 namespace Genesis::Engine {
 
 bool Model::Load(const std::string& path) {
-    m_scene = m_importer.ReadFile(path,
-        aiProcess_Triangulate | aiProcess_GenNormals | aiProcess_JoinIdenticalVertices);
+    auto ParseBool = [](const std::string& value, bool fallback) {
+        if (value.empty()) return fallback;
+        std::string lower = value;
+        std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char c) { return (char)std::tolower(c); });
+        if (lower == "1" || lower == "true" || lower == "yes") return true;
+        if (lower == "0" || lower == "false" || lower == "no") return false;
+        return fallback;
+    };
+
+    bool genNormals = true;
+    bool flipUvs = false;
+    bool optimizeMeshes = true;
+    bool pretransformVerts = false;
+    float scaleFactor = 1.0f;
+
+    AssetMeta meta;
+    if (!AssetDatabase::LoadMeta(path, meta)) {
+        meta = AssetDatabase::EnsureMeta(path, std::filesystem::current_path());
+    }
+
+    std::string value;
+    if (AssetDatabase::GetImportSetting(meta, "gen_normals", value)) {
+        genNormals = ParseBool(value, genNormals);
+    }
+    if (AssetDatabase::GetImportSetting(meta, "flip_uvs", value)) {
+        flipUvs = ParseBool(value, flipUvs);
+    }
+    if (AssetDatabase::GetImportSetting(meta, "optimize_meshes", value)) {
+        optimizeMeshes = ParseBool(value, optimizeMeshes);
+    }
+    if (AssetDatabase::GetImportSetting(meta, "pretransform_vertices", value)) {
+        pretransformVerts = ParseBool(value, pretransformVerts);
+    }
+    if (AssetDatabase::GetImportSetting(meta, "scale_factor", value)) {
+        char* end = nullptr;
+        float parsed = std::strtof(value.c_str(), &end);
+        if (end != value.c_str() && std::isfinite(parsed) && parsed > 0.0f) {
+            scaleFactor = parsed;
+        }
+    }
+
+    unsigned int flags = aiProcess_Triangulate | aiProcess_JoinIdenticalVertices;
+    if (genNormals) flags |= aiProcess_GenNormals;
+    if (flipUvs) flags |= aiProcess_FlipUVs;
+    if (optimizeMeshes) flags |= aiProcess_OptimizeMeshes | aiProcess_OptimizeGraph;
+    if (pretransformVerts) flags |= aiProcess_PreTransformVertices;
+    if (scaleFactor != 1.0f) {
+        m_importer.SetPropertyFloat(AI_CONFIG_GLOBAL_SCALE_FACTOR_KEY, scaleFactor);
+        flags |= aiProcess_GlobalScale;
+    }
+
+    m_scene = m_importer.ReadFile(path, flags);
 
     if (!m_scene || m_scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !m_scene->mRootNode) {
         std::cerr << "Assimp failed to load model: " << path << std::endl;
@@ -73,7 +128,7 @@ bool Model::Load(const std::string& path) {
             if (!mat.normalTexture.empty()) {
                 std::string fullPath = modelDir + "/" + mat.normalTexture;
                 for (auto& c : fullPath) if (c == '\\') c = '/';
-                mat.normalTextureObj = Texture::CreateFromFile(fullPath);
+                mat.normalTextureObj = Texture::CreateFromFileAsNormalMap(fullPath);
                  if (!mat.normalTextureObj) {
                     std::cerr << "Model::Load -> failed to load normal texture: " << fullPath << std::endl;
                 } else {

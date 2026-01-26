@@ -9,10 +9,20 @@
 namespace Genesis::Engine {
 class IGraphicsAPI;
 
+struct TextureSettings {
+    bool srgb = true;
+    bool mipmaps = true;
+    bool normalMap = false;
+    TextureWrap wrap = TextureWrap::Repeat;
+    TextureFilter filter = TextureFilter::Linear;
+};
+
 class Texture {
 public:
     static std::shared_ptr<Texture> CreateFromMemory(uint32_t width, uint32_t height, const std::vector<uint8_t>& pixels);
     static std::shared_ptr<Texture> CreateFromFile(const std::string& path);
+    static std::shared_ptr<Texture> CreateFromFileAsNormalMap(const std::string& path);
+    bool ReloadFromFile();
     ~Texture();
 
     void UploadToRenderer(IGraphicsAPI* renderer);
@@ -32,6 +42,7 @@ public:
 
     // CPU-side pixel data in RGBA order
     const std::vector<uint8_t>& Pixels() const { return pixels_; }
+    const std::string& SourcePath() const { return sourcePath_; }
 
 private:
     Texture() = default;
@@ -39,6 +50,9 @@ private:
     uint32_t width_ = 0;
     uint32_t height_ = 0;
     std::vector<uint8_t> pixels_;
+
+    TextureSettings settings_{};
+    std::string sourcePath_;
 
     // Legacy GL texture id (0 == not created)
     unsigned int textureID_ = 0;

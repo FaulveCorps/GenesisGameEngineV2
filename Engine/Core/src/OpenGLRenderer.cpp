@@ -62,12 +62,14 @@ using PFNGLDELETETEXTURESPROC = void (APIENTRY*)(int, const unsigned int*);
 using PFNGLTEXIMAGE2DPROC = void (APIENTRY*)(unsigned int, int, int, int, int, int, unsigned int, unsigned int, const void*);
 using PFNGLTEXPARAMETERIPROC = void (APIENTRY*)(unsigned int, int, int);
 using PFNGLTEXPARAMETERFVPROC = void (APIENTRY*)(unsigned int, unsigned int, const float*);
+using PFNGLTEXPARAMETERFPROC = void (APIENTRY*)(unsigned int, int, float);
 using PFNGLREADBUFFERPROC = void (APIENTRY*)(unsigned int);
 using PFNGLREADPIXELSPROC = void (APIENTRY*)(int, int, int, int, unsigned int, unsigned int, void*);
 using PFNGLDRAWARRAYSPROC = void (APIENTRY*)(unsigned int, int, int);
 using PFNGLDISABLEPROC = void (APIENTRY*)(unsigned int);
 using PFNGLBUFFERSUBDATAPROC = void (APIENTRY*)(unsigned int, ptrdiff_t, ptrdiff_t, const void*);
 using PFNGLUNIFORM2FPROC = void (APIENTRY*)(int, float, float);
+using PFNGLGENERATEMIPMAPPROC = void (APIENTRY*)(unsigned int);
 
 static PFNGLVIEWPORTPROC pglViewport = nullptr;
 static PFNGLCLEARCOLORPROC pglClearColor = nullptr;
@@ -113,12 +115,14 @@ static PFNGLDELETETEXTURESPROC pglDeleteTextures = nullptr;
 static PFNGLTEXIMAGE2DPROC pglTexImage2D = nullptr;
 static PFNGLTEXPARAMETERIPROC pglTexParameteri = nullptr;
 static PFNGLTEXPARAMETERFVPROC pglTexParameterfv = nullptr;
+static PFNGLTEXPARAMETERFPROC pglTexParameterf = nullptr;
 static PFNGLREADBUFFERPROC pglReadBuffer = nullptr;
 static PFNGLREADPIXELSPROC pglReadPixels = nullptr;
 static PFNGLDRAWARRAYSPROC pglDrawArrays = nullptr;
 static PFNGLDISABLEPROC pglDisable = nullptr;
 static PFNGLBUFFERSUBDATAPROC pglBufferSubData = nullptr;
 static PFNGLUNIFORM2FPROC pglUniform2f = nullptr;
+static PFNGLGENERATEMIPMAPPROC pglGenerateMipmap = nullptr;
 
 static bool ResolveGL(void** fnPtr, const char* name) {
     if (*fnPtr) return true;
@@ -225,6 +229,13 @@ static std::string ReadFile(const std::string& path) {
 #define GL_TEXTURE_WRAP_S    0x2802
 #define GL_TEXTURE_WRAP_T    0x2803
 #define GL_CLAMP_TO_BORDER   0x812D
+#define GL_CLAMP_TO_EDGE     0x812F
+#define GL_MIRRORED_REPEAT   0x8370
+#define GL_REPEAT            0x2901
+#define GL_NEAREST_MIPMAP_NEAREST 0x2700
+#define GL_LINEAR_MIPMAP_LINEAR 0x2703
+#define GL_SRGB8_ALPHA8      0x8C43
+#define GL_TEXTURE_MAX_ANISOTROPY_EXT 0x84FE
 #define GL_TEXTURE_BORDER_COLOR 0x1004
 #define GL_FRAMEBUFFER       0x8D40
 #define GL_READ_FRAMEBUFFER  0x8CA8
@@ -313,6 +324,7 @@ bool OpenGLRenderer::Init(SDL_Window* window, SDL_GLContext glContext) {
     glOk &= RequireGL((void**)&pglTexImage2D, "glTexImage2D");
     glOk &= RequireGL((void**)&pglTexParameteri, "glTexParameteri");
     glOk &= RequireGL((void**)&pglTexParameterfv, "glTexParameterfv");
+    ResolveGL((void**)&pglTexParameterf, "glTexParameterf");
     glOk &= RequireGL((void**)&pglReadBuffer, "glReadBuffer");
     // Optional: depth sampling for editor overlays
     ResolveGL((void**)&pglReadPixels, "glReadPixels");
@@ -321,6 +333,7 @@ bool OpenGLRenderer::Init(SDL_Window* window, SDL_GLContext glContext) {
     // Optional (we have fallbacks)
     ResolveGL((void**)&pglBufferSubData, "glBufferSubData");
     ResolveGL((void**)&pglUniform2f, "glUniform2f");
+    ResolveGL((void**)&pglGenerateMipmap, "glGenerateMipmap");
 
     if (!glOk) {
         std::cerr << "OpenGLRenderer: init failed due to missing GL symbols" << std::endl;
@@ -956,7 +969,7 @@ void OpenGLRenderer::Shutdown() {
     m_context = nullptr;
 }
 
-IGraphicsAPI::TextureHandle OpenGLRenderer::CreateTexture(uint32_t width, uint32_t height, const uint8_t* pixels) {
+IGraphicsAPI::TextureHandle OpenGLRenderer::CreateTexture(const TextureCreateDesc& desc) {
     IGraphicsAPI::TextureHandle h;
     if (!m_window || !m_context) return h;
     if (SDL_GL_GetCurrentContext() != m_context) {
@@ -966,11 +979,37 @@ IGraphicsAPI::TextureHandle OpenGLRenderer::CreateTexture(uint32_t width, uint32
     unsigned int id = 0;
     pglGenTextures(1, &id);
     pglBindTexture(GL_TEXTURE_2D, id);
-    pglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    pglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
-    if (pixels && width > 0 && height > 0) {
-        pglTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, (int)width, (int)height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+    int wrapMode = GL_REPEAT;
+    if (desc.wrap == TextureWrap::Clamp) wrapMode = GL_CLAMP_TO_EDGE;
+    else if (desc.wrap == TextureWrap::Mirror) wrapMode = GL_MIRRORED_REPEAT;
+    pglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, wrapMode);
+    pglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, wrapMode);
+
+    bool canMipmap = desc.mipmaps && pglGenerateMipmap;
+    int minFilter = GL_NEAREST;
+    int magFilter = GL_NEAREST;
+    if (desc.filter == TextureFilter::Linear || desc.filter == TextureFilter::Anisotropic) {
+        magFilter = GL_LINEAR;
+        minFilter = canMipmap ? GL_LINEAR_MIPMAP_LINEAR : GL_LINEAR;
+    } else {
+        magFilter = GL_NEAREST;
+        minFilter = canMipmap ? GL_NEAREST_MIPMAP_NEAREST : GL_NEAREST;
+    }
+    pglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, minFilter);
+    pglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, magFilter);
+
+    int internalFormat = desc.srgb ? GL_SRGB8_ALPHA8 : GL_RGBA;
+    if (desc.pixels && desc.width > 0 && desc.height > 0) {
+        pglTexImage2D(GL_TEXTURE_2D, 0, internalFormat, (int)desc.width, (int)desc.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, desc.pixels);
+    }
+
+    if (canMipmap) {
+        pglGenerateMipmap(GL_TEXTURE_2D);
+    }
+
+    if (desc.filter == TextureFilter::Anisotropic && pglTexParameterf) {
+        pglTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, 8.0f);
     }
 
     h.id = id;

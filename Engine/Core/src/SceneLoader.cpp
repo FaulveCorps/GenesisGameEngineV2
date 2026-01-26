@@ -88,7 +88,7 @@ bool SceneLoader::LoadScene(Scene& scene, const std::string& filePath) {
                    mat.baseColorTextureObj = Texture::CreateFromFile(mat.baseColorTexture);
                 }
                 if (!mat.normalTexture.empty()) {
-                   mat.normalTextureObj = Texture::CreateFromFile(mat.normalTexture);
+                         mat.normalTextureObj = Texture::CreateFromFileAsNormalMap(mat.normalTexture);
                 }
 
                 mc.materialOverrides[index] = mat;

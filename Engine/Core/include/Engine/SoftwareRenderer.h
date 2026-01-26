@@ -31,7 +31,7 @@ public:
     void DrawMesh(const MeshHandle& h) override;
 
     // Renderer-managed textures
-    TextureHandle CreateTexture(uint32_t width, uint32_t height, const uint8_t* pixels) override;
+    TextureHandle CreateTexture(const TextureCreateDesc& desc) override;
     void DestroyTexture(const TextureHandle& h) override;
 
     // 2D immediate-mode draw

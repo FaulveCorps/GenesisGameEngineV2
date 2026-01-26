@@ -55,7 +55,7 @@ TEST_CASE("2D sprite readback (opengl)") {
     auto addrReadPixels = (void*)SDL_GL_GetProcAddress("glReadPixels");
     if (!addrReadPixels) {
         SUCCEED("glReadPixels not available - skipping GL readback test");
-        if (auto cur = Genesis::Engine::RendererManager::GetRenderer()) cur->Shutdown();
+        Genesis::Engine::RendererManager::ShutdownRenderer();
         SDL_GL_DestroyContext(ctx);
         SDL_DestroyWindow(win);
         SDL_Quit();
@@ -76,7 +76,7 @@ TEST_CASE("2D sprite readback (opengl)") {
     // Center pixel should not be black
     REQUIRE((pix[0] >= 10 || pix[1] >= 10 || pix[2] >= 10));
 
-    if (auto cur = Genesis::Engine::RendererManager::GetRenderer()) cur->Shutdown();
+    Genesis::Engine::RendererManager::ShutdownRenderer();
     SDL_GL_DestroyContext(ctx);
     SDL_DestroyWindow(win);
     SDL_Quit();

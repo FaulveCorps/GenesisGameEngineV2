@@ -16,6 +16,9 @@ public:
     // Replace the current renderer with an already-initialized renderer
     static void SetRenderer(std::unique_ptr<IGraphicsAPI> renderer);
 
+    // Shutdown the current renderer and clear it from the manager
+    static void ShutdownRenderer();
+
     // Try to switch to a renderer by name (uses GraphicsFactory internally) - returns true if switched
     static bool SwitchRendererByName(const std::string& name, SDL_Window* window, SDL_GLContext ctx);
 

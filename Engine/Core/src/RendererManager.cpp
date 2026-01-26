@@ -20,6 +20,23 @@ void RendererManager::SetRenderer(std::unique_ptr<IGraphicsAPI> renderer) {
     s_renderer = std::move(renderer);
 }
 
+void RendererManager::ShutdownRenderer() {
+    IGraphicsAPI* cur = GetRenderer();
+    if (!cur) return;
+
+    MeshRegistry::Instance().DestroyAllOnRenderer(cur);
+    ShaderRegistry::Instance().DestroyAllOnRenderer(cur);
+    TextureRegistry::Instance().DestroyAllOnRenderer(cur);
+
+    try {
+        cur->Shutdown();
+    } catch (...) {
+        std::cerr << "RendererManager: exception while shutting down renderer" << std::endl;
+    }
+
+    s_renderer.reset();
+}
+
 std::vector<std::string> RendererManager::CandidateRenderers() {
     // Order of preference when cycling (start with software for deterministic tests)
     std::vector<std::string> order = { "software", "wgpu", "vulkan", "d3d12", "directx" };

@@ -240,7 +240,7 @@ static bool ParsePrefabFile(const std::string& filePath, std::vector<PrefabEntit
                     mat.baseColorTextureObj = Texture::CreateFromFile(mat.baseColorTexture);
                 }
                 if (!mat.normalTexture.empty()) {
-                    mat.normalTextureObj = Texture::CreateFromFile(mat.normalTexture);
+                    mat.normalTextureObj = Texture::CreateFromFileAsNormalMap(mat.normalTexture);
                 }
 
                 current->model.materialOverrides[index] = mat;
