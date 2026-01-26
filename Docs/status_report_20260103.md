@@ -23,6 +23,11 @@ Following the stabilization phase (Jan 2), the project has shifted focus to **Mo
 - **Runtime Fixes**: Resolved missing DLL dependencies for `SampleGame` execution.
 - **Git Hygiene**: Cleaned up repository history (removed large `.dmp` files) and updated `.gitignore`.
 
+### 4. Verification (2026-01-26)
+- **Post-Processing Confirmed (OpenGL)**: Bloom, tone mapping, and gamma correction are implemented in the OpenGL post-process pipeline.
+- **Shadow Mapping Confirmed (OpenGL)**: Directional shadow map is implemented (single-map), with room for CSM/PCF/PCSS upgrades.
+- **Backend Parity**: Vulkan/DirectX post-processing and shadows still require validation and parity work.
+
 ---
 
 ## Competitive Analysis: Genesis vs. Commercial Engines

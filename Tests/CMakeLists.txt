@@ -36,6 +36,7 @@ add_executable(UnitTests
     test_asset_database_glb_dependencies.cpp
     test_asset_database_import_settings.cpp
     test_asset_database_model_import_settings.cpp
+    test_asset_database_prefab_link_dependencies.cpp
     test_asset_database_shader_dependencies.cpp
     test_asset_database_texture_heuristics.cpp
     test_audio.cpp

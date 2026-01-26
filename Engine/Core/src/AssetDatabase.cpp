@@ -290,6 +290,10 @@ static void CollectDependenciesForSceneFile(const std::filesystem::path& scenePa
             std::string path;
             ss >> path;
             if (!path.empty() && path != "NONE") AddDependency(deps, (baseDir / path).generic_string());
+        } else if (token == "PREFAB_LINK") {
+            std::string path;
+            ss >> path;
+            if (!path.empty() && path != "NONE") AddDependency(deps, (baseDir / path).generic_string());
         }
     }
 }
