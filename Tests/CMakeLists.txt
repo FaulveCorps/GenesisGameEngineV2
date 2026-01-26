@@ -31,10 +31,12 @@ add_executable(UnitTests
     test_gltf_material_import.cpp
     test_asset_database_dependencies.cpp
     test_asset_database_dependency_order.cpp
+    test_asset_database_gltf_uri_decode.cpp
     test_asset_database_gltf_uri_filter.cpp
     test_asset_database_glb_dependencies.cpp
     test_asset_database_import_settings.cpp
     test_asset_database_model_import_settings.cpp
+    test_asset_database_shader_dependencies.cpp
     test_asset_database_texture_heuristics.cpp
     test_audio.cpp
     test_audio_playback.cpp

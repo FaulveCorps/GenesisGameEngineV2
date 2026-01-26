@@ -95,12 +95,72 @@ static std::vector<std::string> ExtractQuotedUris(const std::string& content) {
     return out;
 }
 
+static std::string TrimLeftCopy(const std::string& s) {
+    size_t start = s.find_first_not_of(" \t\r\n");
+    if (start == std::string::npos) return std::string();
+    return s.substr(start);
+}
+
+static void CollectDependenciesForShaderFile(const std::filesystem::path& shaderPath, std::vector<std::string>& deps) {
+    std::ifstream file(shaderPath);
+    if (!file.is_open()) return;
+
+    std::filesystem::path baseDir = shaderPath.parent_path();
+    std::string line;
+    while (std::getline(file, line)) {
+        std::string trimmed = TrimLeftCopy(line);
+        if (trimmed.rfind("#include", 0) != 0) continue;
+
+        size_t quote = trimmed.find('"');
+        size_t end = std::string::npos;
+        if (quote != std::string::npos) {
+            end = trimmed.find('"', quote + 1);
+        } else {
+            quote = trimmed.find('<');
+            if (quote != std::string::npos) {
+                end = trimmed.find('>', quote + 1);
+            }
+        }
+        if (quote == std::string::npos || end == std::string::npos || end <= quote + 1) continue;
+
+        std::string includePath = trimmed.substr(quote + 1, end - quote - 1);
+        if (includePath.empty()) continue;
+        AddDependency(deps, (baseDir / includePath).generic_string());
+    }
+}
+
 static bool TryResolveGltfUri(const std::string& uri, const std::filesystem::path& baseDir, std::filesystem::path& outPath) {
     if (uri.empty()) return false;
     if (uri.rfind("data:", 0) == 0) return false;
 
-    if (uri.rfind("file://", 0) == 0) {
-        std::string pathPart = uri.substr(7);
+    auto HexToInt = [](char c) -> int {
+        if (c >= '0' && c <= '9') return c - '0';
+        if (c >= 'a' && c <= 'f') return 10 + (c - 'a');
+        if (c >= 'A' && c <= 'F') return 10 + (c - 'A');
+        return -1;
+    };
+    auto DecodeUri = [&](const std::string& value) {
+        std::string out;
+        out.reserve(value.size());
+        for (size_t i = 0; i < value.size(); ++i) {
+            if (value[i] == '%' && i + 2 < value.size()) {
+                int hi = HexToInt(value[i + 1]);
+                int lo = HexToInt(value[i + 2]);
+                if (hi >= 0 && lo >= 0) {
+                    out.push_back(static_cast<char>((hi << 4) | lo));
+                    i += 2;
+                    continue;
+                }
+            }
+            out.push_back(value[i]);
+        }
+        return out;
+    };
+
+    std::string decoded = DecodeUri(uri);
+
+    if (decoded.rfind("file://", 0) == 0) {
+        std::string pathPart = decoded.substr(7);
         if (!pathPart.empty() && pathPart[0] == '/' && pathPart.size() >= 3 && std::isalpha(static_cast<unsigned char>(pathPart[1])) && pathPart[2] == ':') {
             pathPart.erase(0, 1);
         }
@@ -108,9 +168,9 @@ static bool TryResolveGltfUri(const std::string& uri, const std::filesystem::pat
         return true;
     }
 
-    if (uri.find("://") != std::string::npos) return false;
+    if (decoded.find("://") != std::string::npos) return false;
 
-    outPath = baseDir / uri;
+    outPath = baseDir / decoded;
     return true;
 }
 
@@ -256,6 +316,8 @@ static std::vector<std::string> CollectDependencies(const std::filesystem::path&
         }
     } else if (ext == ".glb") {
         CollectDependenciesForGlb(assetPath, deps);
+    } else if (ext == ".vert" || ext == ".frag" || ext == ".glsl" || ext == ".hlsl" || ext == ".spv") {
+        CollectDependenciesForShaderFile(assetPath, deps);
     } else if (ext == ".scene" || ext == ".prefab") {
         CollectDependenciesForSceneFile(assetPath, deps);
     }

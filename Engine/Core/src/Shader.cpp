@@ -1,4 +1,5 @@
 #include "engine/Shader.h"
+#include "engine/AssetDatabase.h"
 #include "engine/ShaderRegistry.h"
 #include "engine/IGraphics.h"
 #include <SDL.h>
@@ -7,6 +8,7 @@
 #include <filesystem>
 #include <fstream>
 #include <sstream>
+#include <algorithm>
 
 namespace Genesis::Engine {
 
@@ -133,7 +135,44 @@ static std::string LoadFileContent(const std::string& path) {
     return buffer.str();
 }
 
+static long long GetFileTimestampSafe(const std::filesystem::path& path) {
+    try {
+        return std::filesystem::last_write_time(path).time_since_epoch().count();
+    } catch (...) {
+        return 0;
+    }
+}
+
+static long long GetDependencyTimestamp(const std::string& shaderPath) {
+    AssetMeta meta;
+    if (!AssetDatabase::LoadMeta(shaderPath, meta)) return 0;
+
+    long long maxStamp = 0;
+    std::filesystem::path root = std::filesystem::current_path();
+    for (const auto& dep : meta.dependencies) {
+        if (dep.empty()) continue;
+        std::filesystem::path depPath(dep);
+        if (depPath.is_relative()) depPath = root / depPath;
+        maxStamp = std::max(maxStamp, GetFileTimestampSafe(depPath));
+    }
+    return maxStamp;
+}
+
+static long long ComputeShaderTimestamp(const std::string& vertexPath, const std::string& fragmentPath) {
+    long long t1 = GetFileTimestampSafe(vertexPath);
+    long long t2 = GetFileTimestampSafe(fragmentPath);
+    long long tmax = std::max(t1, t2);
+    tmax = std::max(tmax, GetDependencyTimestamp(vertexPath));
+    tmax = std::max(tmax, GetDependencyTimestamp(fragmentPath));
+    return tmax;
+}
+
 std::shared_ptr<Shader> Shader::CreateFromFile(const std::string& vertexPath, const std::string& fragmentPath) {
+    // Ensure meta exists so dependencies are tracked for hot reload.
+    std::filesystem::path root = std::filesystem::current_path();
+    AssetDatabase::EnsureMeta(vertexPath, root);
+    AssetDatabase::EnsureMeta(fragmentPath, root);
+
     std::string vs = LoadFileContent(vertexPath);
     std::string fs = LoadFileContent(fragmentPath);
 
@@ -141,14 +180,8 @@ std::shared_ptr<Shader> Shader::CreateFromFile(const std::string& vertexPath, co
     s->vertexPath_ = vertexPath;
     s->fragmentPath_ = fragmentPath;
 
-    // Initial timestamp
-    try {
-        auto t1 = std::filesystem::last_write_time(vertexPath).time_since_epoch().count();
-        auto t2 = std::filesystem::last_write_time(fragmentPath).time_since_epoch().count();
-        s->lastWriteTime_ = (t1 > t2) ? t1 : t2;
-    } catch (...) {
-        s->lastWriteTime_ = 0;
-    }
+    // Initial timestamp (includes dependency files when meta is present)
+    s->lastWriteTime_ = ComputeShaderTimestamp(vertexPath, fragmentPath);
 
     // Attempt immediate compile
     s->UploadToRenderer(nullptr);
@@ -158,30 +191,23 @@ std::shared_ptr<Shader> Shader::CreateFromFile(const std::string& vertexPath, co
 void Shader::ReloadIfChanged() {
     if (vertexPath_.empty() || fragmentPath_.empty()) return;
 
-    try {
-        auto t1 = std::filesystem::last_write_time(vertexPath_).time_since_epoch().count();
-        auto t2 = std::filesystem::last_write_time(fragmentPath_).time_since_epoch().count();
-        long long currentMax = (t1 > t2) ? t1 : t2;
+    long long currentMax = ComputeShaderTimestamp(vertexPath_, fragmentPath_);
+    if (currentMax > lastWriteTime_) {
+        std::cout << "Hot-Reloading Shader: " << vertexPath_ << " / " << fragmentPath_ << std::endl;
+        lastWriteTime_ = currentMax;
 
-        if (currentMax > lastWriteTime_) {
-            std::cout << "Hot-Reloading Shader: " << vertexPath_ << " / " << fragmentPath_ << std::endl;
-            lastWriteTime_ = currentMax;
+        std::string vs = LoadFileContent(vertexPath_);
+        std::string fs = LoadFileContent(fragmentPath_);
 
-            std::string vs = LoadFileContent(vertexPath_);
-            std::string fs = LoadFileContent(fragmentPath_);
+        if (!vs.empty() && !fs.empty()) {
+            vertexSrcGL_ = vs;
+            fragmentSrcGL_ = fs;
 
-            if (!vs.empty() && !fs.empty()) {
-                vertexSrcGL_ = vs;
-                fragmentSrcGL_ = fs;
-
-                // Destroy old program
-                DestroyOnRenderer(nullptr);
-                // Recreate
-                UploadToRenderer(nullptr);
-            }
+            // Destroy old program
+            DestroyOnRenderer(nullptr);
+            // Recreate
+            UploadToRenderer(nullptr);
         }
-    } catch (...) {
-        // File access error, ignore
     }
 }
 
