@@ -136,4 +136,93 @@ NavPathResult NavigationSystem::FindPath(const Scene& scene, const NavGridCompon
     return result;
 }
 
+void NavigationSystem::UpdateAgents(Scene& scene, double dt) {
+    auto& reg = scene.Registry();
+
+    NavGridComponent* navGrid = nullptr;
+    auto navView = reg.view<NavGridComponent>();
+    for (auto entity : navView) {
+        navGrid = &navView.get<NavGridComponent>(entity);
+        break;
+    }
+    if (!navGrid || navGrid->width <= 0 || navGrid->height <= 0 || navGrid->cellSize <= 0.0f) return;
+
+    GridGraph grid = BuildGrid(scene, *navGrid);
+
+    auto view = reg.view<NavAgentComponent, Transform>();
+    for (auto entity : view) {
+        auto& agent = view.get<NavAgentComponent>(entity);
+        auto& transform = view.get<Transform>(entity);
+
+        if (!agent.hasTarget) continue;
+
+        auto* state = reg.try_get<NavAgentState>(entity);
+        if (!state) {
+            state = &reg.emplace<NavAgentState>(entity);
+        }
+
+        state->repathTimer -= static_cast<float>(dt);
+        bool needsRepath = state->path.empty() || state->pathIndex >= state->path.size() || state->repathTimer <= 0.0f;
+
+        if (needsRepath) {
+            GridCoord start;
+            GridCoord goal;
+            if (!WorldToGrid(*navGrid, transform.x, transform.z, start)
+                || !WorldToGrid(*navGrid, agent.targetX, agent.targetZ, goal)) {
+                state->path.clear();
+                state->pathIndex = 0;
+                state->repathTimer = std::max(0.1f, agent.repathInterval);
+                continue;
+            }
+
+            auto pathResult = FindPath(grid, start, goal);
+            state->path.clear();
+            state->pathIndex = 0;
+            state->repathTimer = std::max(0.1f, agent.repathInterval);
+
+            if (!pathResult.success) {
+                continue;
+            }
+
+            state->path.reserve(pathResult.path.size());
+            for (const auto& c : pathResult.path) {
+                state->path.push_back({c.x, c.y});
+            }
+        }
+
+        if (state->path.empty() || state->pathIndex >= state->path.size()) {
+            float dx = agent.targetX - transform.x;
+            float dz = agent.targetZ - transform.z;
+            float dist = std::sqrt(dx * dx + dz * dz);
+            if (dist <= std::max(0.0f, agent.stopDistance)) {
+                agent.hasTarget = false;
+            }
+            continue;
+        }
+
+        const auto& next = state->path[state->pathIndex];
+        GridCoord nextCoord{next.x, next.y};
+        float targetX = 0.0f;
+        float targetZ = 0.0f;
+        GridToWorld(*navGrid, nextCoord, targetX, targetZ);
+
+        float dx = targetX - transform.x;
+        float dz = targetZ - transform.z;
+        float dist = std::sqrt(dx * dx + dz * dz);
+        float stop = std::max(0.0f, agent.stopDistance);
+
+        if (dist <= stop) {
+            state->pathIndex++;
+            continue;
+        }
+
+        float maxStep = agent.speed * static_cast<float>(dt);
+        if (maxStep <= 0.0f || dist <= 1e-5f) continue;
+        float step = std::min(dist, maxStep);
+
+        transform.x += (dx / dist) * step;
+        transform.z += (dz / dist) * step;
+    }
+}
+
 } // namespace Genesis::Engine

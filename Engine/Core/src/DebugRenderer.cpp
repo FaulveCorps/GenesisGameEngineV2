@@ -118,9 +118,11 @@ void DebugRenderer::Render(Scene& scene, IGraphicsAPI* renderer) {
     }
 
     // Navigation grid debug
+    const NavGridComponent* navGrid = nullptr;
     auto navView = registry.view<NavGridComponent>();
     for (auto entity : navView) {
         const auto& nav = navView.get<NavGridComponent>(entity);
+        navGrid = &nav;
         if (!nav.drawDebug || nav.width <= 0 || nav.height <= 0 || nav.cellSize <= 0.0f) continue;
 
         std::vector<uint8_t> blocked;
@@ -165,6 +167,51 @@ void DebugRenderer::Render(Scene& scene, IGraphicsAPI* renderer) {
                     addLineColor(p2, p3, 1.0f, 0.2f, 0.2f);
                     addLineColor(p3, p0, 1.0f, 0.2f, 0.2f);
                 }
+            }
+        }
+
+        if (nav.debugPath) {
+            auto path = NavigationSystem::FindPath(scene, nav, nav.debugStartX, nav.debugStartZ, nav.debugEndX, nav.debugEndZ);
+            if (path.success && path.gridPath.size() > 1) {
+                float prevX = 0.0f;
+                float prevZ = 0.0f;
+                NavigationSystem::GridToWorld(nav, {path.gridPath[0].x, path.gridPath[0].y}, prevX, prevZ);
+                for (size_t i = 1; i < path.gridPath.size(); ++i) {
+                    float nextX = 0.0f;
+                    float nextZ = 0.0f;
+                    NavigationSystem::GridToWorld(nav, {path.gridPath[i].x, path.gridPath[i].y}, nextX, nextZ);
+                    vertices.push_back(prevX); vertices.push_back(y + 0.05f); vertices.push_back(prevZ);
+                    vertices.push_back(nextX); vertices.push_back(y + 0.05f); vertices.push_back(nextZ);
+                    colors.push_back(1.0f); colors.push_back(0.2f); colors.push_back(1.0f);
+                    colors.push_back(1.0f); colors.push_back(0.2f); colors.push_back(1.0f);
+                    prevX = nextX;
+                    prevZ = nextZ;
+                }
+            }
+        }
+    }
+
+    if (navGrid) {
+        auto agentView = registry.view<NavAgentComponent, NavAgentState, Transform>();
+        for (auto entity : agentView) {
+            const auto& agent = agentView.get<NavAgentComponent>(entity);
+            const auto& state = agentView.get<NavAgentState>(entity);
+            if (!agent.drawPath || state.path.size() < 2) continue;
+
+            float prevX = 0.0f;
+            float prevZ = 0.0f;
+            NavigationSystem::GridToWorld(*navGrid, {state.path[0].x, state.path[0].y}, prevX, prevZ);
+
+            for (size_t i = 1; i < state.path.size(); ++i) {
+                float nextX = 0.0f;
+                float nextZ = 0.0f;
+                NavigationSystem::GridToWorld(*navGrid, {state.path[i].x, state.path[i].y}, nextX, nextZ);
+                vertices.push_back(prevX); vertices.push_back(navGrid->y + 0.02f); vertices.push_back(prevZ);
+                vertices.push_back(nextX); vertices.push_back(navGrid->y + 0.02f); vertices.push_back(nextZ);
+                colors.push_back(1.0f); colors.push_back(0.9f); colors.push_back(0.2f);
+                colors.push_back(1.0f); colors.push_back(0.9f); colors.push_back(0.2f);
+                prevX = nextX;
+                prevZ = nextZ;
             }
         }
     }

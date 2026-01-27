@@ -43,6 +43,9 @@ struct PrefabEntityData {
     bool hasNavGrid = false;
     NavGridComponent navGrid;
 
+    bool hasNavAgent = false;
+    NavAgentComponent navAgent;
+
     bool hasParticle = false;
     ParticleSystemComponent particle;
 
@@ -145,6 +148,12 @@ static void ApplyPrefabData(entt::registry& reg, entt::entity entity, const Pref
         reg.emplace_or_replace<NavGridComponent>(entity, data.navGrid);
     } else if (reg.any_of<NavGridComponent>(entity)) {
         reg.remove<NavGridComponent>(entity);
+    }
+
+    if (data.hasNavAgent) {
+        reg.emplace_or_replace<NavAgentComponent>(entity, data.navAgent);
+    } else if (reg.any_of<NavAgentComponent>(entity)) {
+        reg.remove<NavAgentComponent>(entity);
     }
 
     if (data.hasParticle) {
@@ -342,9 +351,32 @@ static bool ParsePrefabFile(const std::string& filePath, std::vector<PrefabEntit
             if (ss >> autoBake >> draw) {
                 nav.autoBakeColliders = (autoBake != 0);
                 nav.drawDebug = (draw != 0);
+                int dbgPath = nav.debugPath ? 1 : 0;
+                float startX = nav.debugStartX;
+                float startZ = nav.debugStartZ;
+                float endX = nav.debugEndX;
+                float endZ = nav.debugEndZ;
+                if (ss >> dbgPath >> startX >> startZ >> endX >> endZ) {
+                    nav.debugPath = (dbgPath != 0);
+                    nav.debugStartX = startX;
+                    nav.debugStartZ = startZ;
+                    nav.debugEndX = endX;
+                    nav.debugEndZ = endZ;
+                }
             }
             current->hasNavGrid = true;
             current->navGrid = nav;
+        } else if (token == "NAVAGENT" && current) {
+            NavAgentComponent agent;
+            int hasTarget = 0;
+            int drawPath = 1;
+            ss >> agent.speed >> agent.targetX >> agent.targetZ >> hasTarget >> agent.stopDistance >> agent.repathInterval;
+            if (ss >> drawPath) {
+                agent.drawPath = (drawPath != 0);
+            }
+            agent.hasTarget = (hasTarget != 0);
+            current->hasNavAgent = true;
+            current->navAgent = agent;
         } else if (token == "PARTICLE" && current) {
             ParticleSystemComponent p;
             int looping = 0, play = 0;
@@ -515,7 +547,16 @@ bool PrefabLoader::SavePrefab(const Scene& scene, entt::entity root, const std::
                 const auto& nav = reg.get<NavGridComponent>(entity);
                 file << "NAVGRID " << nav.width << " " << nav.height << " " << nav.cellSize << " "
                      << nav.originX << " " << nav.originZ << " " << nav.y << " "
-                     << (nav.autoBakeColliders ? 1 : 0) << " " << (nav.drawDebug ? 1 : 0) << "\n";
+                     << (nav.autoBakeColliders ? 1 : 0) << " " << (nav.drawDebug ? 1 : 0) << " "
+                     << (nav.debugPath ? 1 : 0) << " " << nav.debugStartX << " " << nav.debugStartZ << " "
+                     << nav.debugEndX << " " << nav.debugEndZ << "\n";
+            }
+
+            if (reg.any_of<NavAgentComponent>(entity)) {
+                const auto& agent = reg.get<NavAgentComponent>(entity);
+                file << "NAVAGENT " << agent.speed << " " << agent.targetX << " " << agent.targetZ << " "
+                     << (agent.hasTarget ? 1 : 0) << " " << agent.stopDistance << " " << agent.repathInterval << " "
+                     << (agent.drawPath ? 1 : 0) << "\n";
             }
 
             if (reg.any_of<ParticleSystemComponent>(entity)) {

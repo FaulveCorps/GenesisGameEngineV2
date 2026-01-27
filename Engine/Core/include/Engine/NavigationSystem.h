@@ -23,6 +23,8 @@ public:
     static GridGraph BuildGrid(const Scene& scene, const NavGridComponent& grid, std::vector<uint8_t>* blockedOut = nullptr);
     static NavPathResult FindPath(const Scene& scene, const NavGridComponent& grid,
                                   float startX, float startZ, float goalX, float goalZ);
+
+    static void UpdateAgents(Scene& scene, double dt);
 };
 
 } // namespace Genesis::Engine

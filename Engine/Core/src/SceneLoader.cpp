@@ -190,7 +190,30 @@ bool SceneLoader::LoadScene(Scene& scene, const std::string& filePath) {
                 nav.autoBakeColliders = (autoBake != 0);
                 nav.drawDebug = (draw != 0);
             }
+            int dbgPath = nav.debugPath ? 1 : 0;
+            float startX = nav.debugStartX;
+            float startZ = nav.debugStartZ;
+            float endX = nav.debugEndX;
+            float endZ = nav.debugEndZ;
+            if (ss >> dbgPath >> startX >> startZ >> endX >> endZ) {
+                nav.debugPath = (dbgPath != 0);
+                nav.debugStartX = startX;
+                nav.debugStartZ = startZ;
+                nav.debugEndX = endX;
+                nav.debugEndZ = endZ;
+            }
             scene.Registry().emplace_or_replace<NavGridComponent>(currentEntity, nav);
+        }
+        else if (token == "NAVAGENT" && currentEntity != entt::null) {
+            NavAgentComponent agent;
+            int hasTarget = 0;
+            int drawPath = 1;
+            ss >> agent.speed >> agent.targetX >> agent.targetZ >> hasTarget >> agent.stopDistance >> agent.repathInterval;
+            if (ss >> drawPath) {
+                agent.drawPath = (drawPath != 0);
+            }
+            agent.hasTarget = (hasTarget != 0);
+            scene.Registry().emplace_or_replace<NavAgentComponent>(currentEntity, agent);
         }
         else if (token == "PARTICLE" && currentEntity != entt::null) {
             ParticleSystemComponent p;
@@ -460,7 +483,16 @@ bool SceneLoader::SaveScene(const Scene& scene, const std::string& filePath) {
                 const auto& nav = reg.get<NavGridComponent>(entity);
                 file << "NAVGRID " << nav.width << " " << nav.height << " " << nav.cellSize << " "
                      << nav.originX << " " << nav.originZ << " " << nav.y << " "
-                     << (nav.autoBakeColliders ? 1 : 0) << " " << (nav.drawDebug ? 1 : 0) << "\n";
+                     << (nav.autoBakeColliders ? 1 : 0) << " " << (nav.drawDebug ? 1 : 0) << " "
+                     << (nav.debugPath ? 1 : 0) << " " << nav.debugStartX << " " << nav.debugStartZ << " "
+                     << nav.debugEndX << " " << nav.debugEndZ << "\n";
+            }
+
+            if (reg.any_of<NavAgentComponent>(entity)) {
+                const auto& agent = reg.get<NavAgentComponent>(entity);
+                file << "NAVAGENT " << agent.speed << " " << agent.targetX << " " << agent.targetZ << " "
+                     << (agent.hasTarget ? 1 : 0) << " " << agent.stopDistance << " " << agent.repathInterval << " "
+                     << (agent.drawPath ? 1 : 0) << "\n";
             }
 
             if (reg.any_of<ParticleSystemComponent>(entity)) {

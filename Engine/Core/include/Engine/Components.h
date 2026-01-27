@@ -3,6 +3,7 @@
 #include <memory>
 #include <string>
 #include <map>
+#include <vector>
 #include <cstdint>
 #include <entt/entt.hpp>
 #include "engine/Model.h"
@@ -166,6 +167,33 @@ struct NavGridComponent {
     float y = 0.0f;
     bool autoBakeColliders = true;
     bool drawDebug = true;
+    bool debugPath = false;
+    float debugStartX = 0.0f;
+    float debugStartZ = 0.0f;
+    float debugEndX = 1.0f;
+    float debugEndZ = 1.0f;
+};
+
+struct NavAgentComponent {
+    float speed = 2.0f;
+    float targetX = 0.0f;
+    float targetZ = 0.0f;
+    bool hasTarget = false;
+    float stopDistance = 0.1f;
+    float repathInterval = 0.5f;
+    bool drawPath = true;
+};
+
+struct NavPathPoint {
+    int x = 0;
+    int y = 0;
+};
+
+// Runtime-only state for navigation agents (not serialized)
+struct NavAgentState {
+    std::vector<NavPathPoint> path;
+    size_t pathIndex = 0;
+    float repathTimer = 0.0f;
 };
 
 } // namespace Genesis::Engine

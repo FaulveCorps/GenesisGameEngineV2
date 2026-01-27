@@ -3797,6 +3797,22 @@ int main(int argc, char** argv) {
                         if (ImGui::DragFloat("Y", &nav.y, 0.1f, -1000.0f, 1000.0f)) if (editorState == EditorState::Edit) sceneDirty = true;
                         if (ImGui::Checkbox("Auto Bake Colliders", &nav.autoBakeColliders)) if (editorState == EditorState::Edit) sceneDirty = true;
                         if (ImGui::Checkbox("Draw Debug", &nav.drawDebug)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        ImGui::Separator();
+                        ImGui::Checkbox("Draw Debug Path", &nav.debugPath);
+                        if (ImGui::DragFloat2("Start (X,Z)", &nav.debugStartX, 0.1f)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        if (ImGui::DragFloat2("End (X,Z)", &nav.debugEndX, 0.1f)) if (editorState == EditorState::Edit) sceneDirty = true;
+                    }
+                }
+
+                if (activeScene->Registry().all_of<Genesis::Engine::NavAgentComponent>(selectedEntity)) {
+                    if (ImGui::CollapsingHeader("Navigation Agent", ImGuiTreeNodeFlags_DefaultOpen)) {
+                        auto& agent = activeScene->Registry().get<Genesis::Engine::NavAgentComponent>(selectedEntity);
+                        if (ImGui::DragFloat("Speed", &agent.speed, 0.1f, 0.0f, 100.0f)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        if (ImGui::Checkbox("Has Target", &agent.hasTarget)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        if (ImGui::DragFloat2("Target (X,Z)", &agent.targetX, 0.1f)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        if (ImGui::DragFloat("Stop Distance", &agent.stopDistance, 0.01f, 0.0f, 10.0f)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        if (ImGui::DragFloat("Repath Interval", &agent.repathInterval, 0.05f, 0.05f, 5.0f)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        if (ImGui::Checkbox("Draw Path", &agent.drawPath)) if (editorState == EditorState::Edit) sceneDirty = true;
                     }
                 }
 
@@ -3886,6 +3902,12 @@ int main(int argc, char** argv) {
                     if (ImGui::MenuItem("Navigation Grid")) {
                         if (!activeScene->Registry().all_of<Genesis::Engine::NavGridComponent>(selectedEntity)) {
                             activeScene->Registry().emplace<Genesis::Engine::NavGridComponent>(selectedEntity);
+                            if (editorState == EditorState::Edit) sceneDirty = true;
+                        }
+                    }
+                    if (ImGui::MenuItem("Navigation Agent")) {
+                        if (!activeScene->Registry().all_of<Genesis::Engine::NavAgentComponent>(selectedEntity)) {
+                            activeScene->Registry().emplace<Genesis::Engine::NavAgentComponent>(selectedEntity);
                             if (editorState == EditorState::Edit) sceneDirty = true;
                         }
                     }

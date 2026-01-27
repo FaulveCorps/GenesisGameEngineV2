@@ -7,6 +7,7 @@
 #include "engine/Animation.h"
 #include "engine/UI.h"
 #include "engine/DebugRenderer.h"
+#include "engine/NavigationSystem.h"
 #include "engine/Engine.h"
 #include "engine/ScriptRegistry.h"
 #include <iostream>
@@ -100,6 +101,7 @@ void Scene::OnUpdateRuntime(double dt) {
 
     AnimationSystem::Update(*this, dt);
     UISystem::Update(*this, dt);
+    NavigationSystem::UpdateAgents(*this, dt);
 
     if (auto audio = GetAudioSubsystem()) {
         audio->Update(dt);
@@ -328,6 +330,12 @@ void Scene::CopyFrom(const Scene& other) {
         }
         if (auto* sc = other.m_registry.try_get<SphereColliderComponent>(entity)) {
             m_registry.emplace<SphereColliderComponent>(dst, *sc);
+        }
+        if (auto* ng = other.m_registry.try_get<NavGridComponent>(entity)) {
+            m_registry.emplace<NavGridComponent>(dst, *ng);
+        }
+        if (auto* na = other.m_registry.try_get<NavAgentComponent>(entity)) {
+            m_registry.emplace<NavAgentComponent>(dst, *na);
         }
         if (auto* scp = other.m_registry.try_get<ScriptComponent>(entity)) {
             ScriptComponent copy = *scp;
