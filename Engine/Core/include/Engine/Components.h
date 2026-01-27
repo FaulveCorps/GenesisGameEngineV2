@@ -3,6 +3,7 @@
 #include <memory>
 #include <string>
 #include <map>
+#include <cstdint>
 #include <entt/entt.hpp>
 #include "engine/Model.h"
 #include "engine/Material.h"
@@ -37,6 +38,11 @@ struct Transform {
 // Optional human-readable entity name (Editor / tooling).
 struct NameComponent {
     std::string name;
+};
+
+// Stable, persistent identifier for deterministic scene serialization.
+struct StableIdComponent {
+    uint64_t id = 0;
 };
 
 // Hierarchy relationship (Editor + Runtime)

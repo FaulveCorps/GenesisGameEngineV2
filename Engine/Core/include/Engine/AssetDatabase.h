@@ -37,6 +37,8 @@ public:
     static void SetImportSetting(AssetMeta& meta, const std::string& key, const std::string& value);
     static bool GetImportSetting(const AssetMeta& meta, const std::string& key, std::string& outValue);
     static void RemoveImportSetting(AssetMeta& meta, const std::string& key);
+    static bool CollectDependencies(const std::filesystem::path& assetPath, const std::filesystem::path& projectRoot, std::vector<std::string>& outDependencies);
+    static std::vector<std::filesystem::path> BuildReimportOrder(const std::vector<std::filesystem::path>& roots, const std::filesystem::path& projectRoot);
 };
 
 } // namespace Genesis::Engine

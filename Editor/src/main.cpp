@@ -929,6 +929,21 @@ int main(int argc, char** argv) {
     char commandSearchBuffer[128] = "";
     int selectedCommandIndex = 0;
 
+    // Post-process settings (Editor viewport)
+    bool postBloom = true;
+    float postBloomThreshold = 1.0f;
+    float postExposure = 1.0f;
+    float postGamma = 2.2f;
+    bool postVignette = false;
+    float postVignetteIntensity = 0.35f;
+    float postVignetteRadius = 0.75f;
+    float postVignetteSoftness = 0.25f;
+    bool postLutEnabled = false;
+    float postLutIntensity = 1.0f;
+    std::shared_ptr<Genesis::Engine::Texture> postLutTexture;
+    char postLutPathBuf[512] = "";
+    std::string postLutStatus;
+
     // Scene / File State
     std::string currentScenePath;
     bool sceneDirty = false;
@@ -1743,6 +1758,7 @@ int main(int argc, char** argv) {
             ImGui::DockBuilderDockWindow("Viewport", dock_main_id);
             ImGui::DockBuilderDockWindow("Inspector", dock_id_right);
             ImGui::DockBuilderDockWindow("Asset Inspector", dock_id_right);
+            ImGui::DockBuilderDockWindow("Post Process", dock_id_right);
             ImGui::DockBuilderDockWindow("Scene Hierarchy", dock_id_left);
             ImGui::DockBuilderDockWindow("Content Browser", dock_id_left_bottom);
             ImGui::DockBuilderDockWindow("Console", dock_id_bottom);
@@ -3653,6 +3669,61 @@ int main(int argc, char** argv) {
             ImGui::End();
         }
 
+        // Post Process
+        if (!zenMode) {
+            ImGui::Begin("Post Process");
+            ImGui::TextUnformatted("Viewport Post-Processing");
+            ImGui::Separator();
+
+            ImGui::Checkbox("Bloom", &postBloom);
+            ImGui::SliderFloat("Bloom Threshold", &postBloomThreshold, 0.1f, 5.0f, "%.2f");
+            ImGui::SliderFloat("Exposure", &postExposure, 0.1f, 5.0f, "%.2f");
+            ImGui::SliderFloat("Gamma", &postGamma, 1.0f, 3.0f, "%.2f");
+
+            ImGui::Separator();
+            ImGui::Checkbox("Vignette", &postVignette);
+            if (postVignette) {
+                ImGui::SliderFloat("Intensity", &postVignetteIntensity, 0.0f, 1.0f, "%.2f");
+                ImGui::SliderFloat("Radius", &postVignetteRadius, 0.1f, 1.0f, "%.2f");
+                ImGui::SliderFloat("Softness", &postVignetteSoftness, 0.0f, 1.0f, "%.2f");
+            }
+
+            ImGui::Separator();
+            ImGui::Checkbox("LUT", &postLutEnabled);
+            ImGui::SliderFloat("LUT Intensity", &postLutIntensity, 0.0f, 1.0f, "%.2f");
+            ImGui::InputTextWithHint("##lutPath", "LUT texture path (e.g., Assets/Textures/LUT.png)", postLutPathBuf, sizeof(postLutPathBuf));
+            if (ImGui::Button("Load LUT")) {
+                if (postLutPathBuf[0] != 0) {
+                    postLutTexture = Genesis::Engine::Texture::CreateFromFile(postLutPathBuf);
+                    if (postLutTexture) {
+                        postLutStatus = std::string("Loaded: ") + postLutPathBuf;
+                        postLutEnabled = true;
+                    } else {
+                        postLutStatus = std::string("Failed to load: ") + postLutPathBuf;
+                    }
+                }
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Clear LUT")) {
+                postLutTexture.reset();
+                postLutEnabled = false;
+                postLutStatus = "LUT cleared";
+            }
+            if (!postLutStatus.empty()) {
+                ImGui::TextWrapped("%s", postLutStatus.c_str());
+            }
+
+            if (auto renderer = Genesis::Engine::RendererManager::GetRenderer()) {
+                renderer->SetPostProcessParams(postExposure, postGamma);
+                renderer->SetPostProcessBloom(postBloom);
+                renderer->SetPostProcessBloomThreshold(postBloomThreshold);
+                renderer->SetPostProcessVignette(postVignette, postVignetteIntensity, postVignetteRadius, postVignetteSoftness);
+                renderer->SetPostProcessLUT(postLutTexture.get(), postLutEnabled, postLutIntensity);
+            }
+
+            ImGui::End();
+        }
+
         // Asset Inspector
         if (!zenMode) {
             ImGui::Begin("Asset Inspector");
@@ -3738,14 +3809,18 @@ int main(int argc, char** argv) {
                         }
                         ImGui::SameLine();
                         if (ImGui::Button("Reimport Dependencies")) {
-                            Genesis::Engine::AssetDatabase::Reimport(assetPath, projectRoot, &meta);
-                            ReloadAssetIfSupported(assetPath);
-                            for (const auto& dep : meta.dependencies) {
-                                if (!dep.empty()) {
-                                    std::filesystem::path depPath = dep;
-                                    Genesis::Engine::AssetDatabase::Reimport(depPath, projectRoot);
-                                    ReloadAssetIfSupported(depPath);
+                            std::vector<std::filesystem::path> roots = { assetPath };
+                            auto order = Genesis::Engine::AssetDatabase::BuildReimportOrder(roots, projectRoot);
+                            for (const auto& path : order) {
+                                std::error_code ec;
+                                bool isRoot = std::filesystem::equivalent(path, assetPath, ec);
+                                if (ec) isRoot = (path == assetPath);
+                                if (isRoot) {
+                                    Genesis::Engine::AssetDatabase::Reimport(path, projectRoot, &meta);
+                                } else {
+                                    Genesis::Engine::AssetDatabase::Reimport(path, projectRoot);
                                 }
+                                ReloadAssetIfSupported(path);
                             }
                         }
 

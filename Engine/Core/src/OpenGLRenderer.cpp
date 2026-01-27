@@ -759,6 +759,9 @@ void OpenGLRenderer::EndFrame() {
         int locLightInt = pglGetUniformLocation(m_deferredLightingShader->GetID(), "uLightIntensity");
         if (locLightInt >= 0) pglUniform1f(locLightInt, m_lightIntensity);
 
+        int locBloomThreshold = pglGetUniformLocation(m_deferredLightingShader->GetID(), "uBloomThreshold");
+        if (locBloomThreshold >= 0) pglUniform1f(locBloomThreshold, m_bloomThreshold);
+
         int locNrPointLights = pglGetUniformLocation(m_deferredLightingShader->GetID(), "nrPointLights");
         if (locNrPointLights >= 0) pglUniform1i(locNrPointLights, (int)m_pointLights.size());
 
@@ -782,6 +785,13 @@ void OpenGLRenderer::EndFrame() {
         
         int locLSM = pglGetUniformLocation(m_deferredLightingShader->GetID(), "lightSpaceMatrix");
         if (locLSM >= 0) pglUniformMatrix4fv(locLSM, 1, GL_FALSE, m_lightSpaceMatrix);
+
+        if (pglUniform2f) {
+            int locShadowTexel = pglGetUniformLocation(m_deferredLightingShader->GetID(), "uShadowMapTexelSize");
+            if (locShadowTexel >= 0) {
+                pglUniform2f(locShadowTexel, 1.0f / (float)SHADOW_WIDTH, 1.0f / (float)SHADOW_HEIGHT);
+            }
+        }
 
         // Draw Quad
         pglBindVertexArray(m_screenQuadVAO);
@@ -863,6 +873,29 @@ void OpenGLRenderer::EndFrame() {
 
             int locGamma = pglGetUniformLocation(m_postProcessShader->GetID(), "uGamma");
             if (locGamma >= 0) pglUniform1f(locGamma, m_gamma);
+
+            int locVigEnabled = pglGetUniformLocation(m_postProcessShader->GetID(), "uVignetteEnabled");
+            if (locVigEnabled >= 0) pglUniform1i(locVigEnabled, m_vignetteEnabled ? 1 : 0);
+            int locVigIntensity = pglGetUniformLocation(m_postProcessShader->GetID(), "uVignetteIntensity");
+            if (locVigIntensity >= 0) pglUniform1f(locVigIntensity, m_vignetteIntensity);
+            int locVigRadius = pglGetUniformLocation(m_postProcessShader->GetID(), "uVignetteRadius");
+            if (locVigRadius >= 0) pglUniform1f(locVigRadius, m_vignetteRadius);
+            int locVigSoft = pglGetUniformLocation(m_postProcessShader->GetID(), "uVignetteSoftness");
+            if (locVigSoft >= 0) pglUniform1f(locVigSoft, m_vignetteSoftness);
+
+            int locLutEnabled = pglGetUniformLocation(m_postProcessShader->GetID(), "uLUTEnabled");
+            if (locLutEnabled >= 0) pglUniform1i(locLutEnabled, (m_lutEnabled && m_lutTexture) ? 1 : 0);
+            int locLutIntensity = pglGetUniformLocation(m_postProcessShader->GetID(), "uLUTIntensity");
+            if (locLutIntensity >= 0) pglUniform1f(locLutIntensity, m_lutIntensity);
+            int locLutSize = pglGetUniformLocation(m_postProcessShader->GetID(), "uLUTSize");
+            if (locLutSize >= 0) pglUniform1f(locLutSize, m_lutSize);
+
+            if (m_lutEnabled && m_lutTexture) {
+                pglActiveTexture(GL_TEXTURE2);
+                pglBindTexture(GL_TEXTURE_2D, m_lutTexture->GetID());
+                int locLut = pglGetUniformLocation(m_postProcessShader->GetID(), "uLUT");
+                if (locLut >= 0) pglUniform1i(locLut, 2);
+            }
 
             pglBindVertexArray(m_screenQuadVAO);
             pglDisable(GL_DEPTH_TEST);
@@ -1174,16 +1207,62 @@ void OpenGLRenderer::ExecuteDraw(const DrawCommand& cmd, Shader* overrideShader)
     // Bind Mesh
     pglBindVertexArray(m.vao);
     
-    // Bind Material Textures if not override shader
-    if (!overrideShader && cmd.material) {
+    // Bind Material Textures
+    if (cmd.material) {
+        int locHasBase = pglGetUniformLocation(shader->GetID(), "uHasBaseColorTexture");
+        if (locHasBase >= 0) {
+            pglUniform1i(locHasBase, cmd.material->baseColorTextureObj ? 1 : 0);
+        }
         // Bind Albedo
         if (cmd.material->baseColorTextureObj) {
              pglActiveTexture(GL_TEXTURE0);
              pglBindTexture(GL_TEXTURE_2D, cmd.material->baseColorTextureObj->GetID());
              int loc = pglGetUniformLocation(shader->GetID(), "uAlbedoMap");
              if (loc >= 0) pglUniform1i(loc, 0);
+             int locBase = pglGetUniformLocation(shader->GetID(), "uBaseColorTexture");
+             if (locBase >= 0) pglUniform1i(locBase, 0);
         }
         // ... other textures
+    }
+
+    if (cmd.material) {
+        int locBase = pglGetUniformLocation(shader->GetID(), "uBaseColor");
+        if (locBase >= 0) {
+            pglUniform4f(locBase,
+                         cmd.material->baseColor[0],
+                         cmd.material->baseColor[1],
+                         cmd.material->baseColor[2],
+                         cmd.material->baseColor[3]);
+        }
+        int locMetal = pglGetUniformLocation(shader->GetID(), "uMetallic");
+        if (locMetal >= 0) pglUniform1f(locMetal, cmd.material->metallic);
+        int locRough = pglGetUniformLocation(shader->GetID(), "uRoughness");
+        if (locRough >= 0) pglUniform1f(locRough, cmd.material->roughness);
+    }
+
+    // Light + shadow uniforms (used by PBR shader when active)
+    int locLightDir = pglGetUniformLocation(shader->GetID(), "uLightDir");
+    if (locLightDir >= 0) pglUniform3f(locLightDir, m_lightDir[0], m_lightDir[1], m_lightDir[2]);
+    int locLightColor = pglGetUniformLocation(shader->GetID(), "uLightColor");
+    if (locLightColor >= 0) pglUniform3f(locLightColor, m_lightColor[0], m_lightColor[1], m_lightColor[2]);
+    int locLightIntensity = pglGetUniformLocation(shader->GetID(), "uLightIntensity");
+    if (locLightIntensity >= 0) pglUniform1f(locLightIntensity, m_lightIntensity);
+    int locBloomThreshold = pglGetUniformLocation(shader->GetID(), "uBloomThreshold");
+    if (locBloomThreshold >= 0) pglUniform1f(locBloomThreshold, m_bloomThreshold);
+    int locLSM = pglGetUniformLocation(shader->GetID(), "lightSpaceMatrix");
+    if (locLSM >= 0) pglUniformMatrix4fv(locLSM, 1, GL_FALSE, m_lightSpaceMatrix);
+
+    if (m_shadowMapTexture && pglActiveTexture) {
+        pglActiveTexture(GL_TEXTURE3);
+        pglBindTexture(GL_TEXTURE_2D, m_shadowMapTexture);
+        int locShadow = pglGetUniformLocation(shader->GetID(), "shadowMap");
+        if (locShadow >= 0) pglUniform1i(locShadow, 3);
+    }
+    if (pglUniform2f) {
+        int locShadowTexel = pglGetUniformLocation(shader->GetID(), "uShadowMapTexelSize");
+        if (locShadowTexel >= 0) {
+            pglUniform2f(locShadowTexel, 1.0f / (float)SHADOW_WIDTH, 1.0f / (float)SHADOW_HEIGHT);
+        }
     }
 
     if (m.indexCount > 0) {
@@ -1212,6 +1291,34 @@ void OpenGLRenderer::ClearPointLights() {
 void OpenGLRenderer::SetPostProcessParams(float exposure, float gamma) {
     m_exposure = exposure;
     m_gamma = gamma;
+}
+
+void OpenGLRenderer::SetPostProcessBloom(bool enabled) {
+    m_bloom = enabled;
+}
+
+void OpenGLRenderer::SetPostProcessBloomThreshold(float threshold) {
+    m_bloomThreshold = threshold;
+}
+
+void OpenGLRenderer::SetPostProcessVignette(bool enabled, float intensity, float radius, float softness) {
+    m_vignetteEnabled = enabled;
+    m_vignetteIntensity = intensity;
+    m_vignetteRadius = radius;
+    m_vignetteSoftness = softness;
+}
+
+void OpenGLRenderer::SetPostProcessLUT(Texture* texture, bool enabled, float intensity) {
+    m_lutTexture = texture;
+    m_lutEnabled = enabled && texture != nullptr;
+    m_lutIntensity = intensity;
+
+    if (m_lutTexture) {
+        m_lutTexture->UploadToRenderer(this);
+        if (m_lutTexture->Height() > 0) {
+            m_lutSize = static_cast<float>(m_lutTexture->Height());
+        }
+    }
 }
 
 void OpenGLRenderer::DrawTexture(Texture* tex, float x, float y, float w, float h, float u0, float v0, float u1, float v1, uint32_t color) {

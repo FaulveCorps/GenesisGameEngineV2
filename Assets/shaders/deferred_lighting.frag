@@ -8,12 +8,14 @@ uniform sampler2D gPosition;
 uniform sampler2D gNormal;
 uniform sampler2D gAlbedoSpec;
 uniform sampler2D shadowMap;
+uniform vec2 uShadowMapTexelSize;
 
 uniform vec3 uLightDir;
 uniform vec3 uLightColor;
 uniform float uLightIntensity;
 uniform vec3 viewPos;
 uniform mat4 lightSpaceMatrix;
+uniform float uBloomThreshold;
 
 struct PointLight {
     vec3 position;
@@ -72,11 +74,20 @@ float ShadowCalculation(vec4 fragPosLightSpace, vec3 normal, vec3 lightDir)
 {
     vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
     projCoords = projCoords * 0.5 + 0.5;
-    if(projCoords.z > 1.0) return 0.0;
-    float closestDepth = texture(shadowMap, projCoords.xy).r; 
+    if (projCoords.z > 1.0) return 0.0;
+
     float currentDepth = projCoords.z;
     float bias = max(0.05 * (1.0 - dot(normal, lightDir)), 0.005);
-    float shadow = currentDepth - bias > closestDepth  ? 1.0 : 0.0;
+    vec2 texelSize = max(uShadowMapTexelSize, vec2(1.0 / 2048.0));
+
+    float shadow = 0.0;
+    for (int x = -1; x <= 1; ++x) {
+        for (int y = -1; y <= 1; ++y) {
+            float pcfDepth = texture(shadowMap, projCoords.xy + vec2(x, y) * texelSize).r;
+            shadow += (currentDepth - bias > pcfDepth) ? 1.0 : 0.0;
+        }
+    }
+    shadow /= 9.0;
     return shadow;
 }
 
@@ -169,7 +180,7 @@ void main()
 
     // Check for brightness for bloom
     float brightness = dot(FragColor.rgb, vec3(0.2126, 0.7152, 0.0722));
-    if(brightness > 1.0)
+    if(brightness > uBloomThreshold)
         BrightColor = vec4(FragColor.rgb, 1.0);
     else
         BrightColor = vec4(0.0, 0.0, 0.0, 1.0);

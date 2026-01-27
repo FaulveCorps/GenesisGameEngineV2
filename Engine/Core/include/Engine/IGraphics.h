@@ -63,6 +63,10 @@ public:
     virtual void ClearPointLights() {}
 
     virtual void SetPostProcessParams(float /*exposure*/, float /*gamma*/) {}
+    virtual void SetPostProcessBloom(bool /*enabled*/) {}
+    virtual void SetPostProcessBloomThreshold(float /*threshold*/) {}
+    virtual void SetPostProcessVignette(bool /*enabled*/, float /*intensity*/, float /*radius*/, float /*softness*/) {}
+    virtual void SetPostProcessLUT(Texture* /*texture*/, bool /*enabled*/, float /*intensity*/) {}
     virtual void SetViewProjection(const float* /*view*/, const float* /*projection*/) {}
 
     // Texture handle for renderer-managed textures

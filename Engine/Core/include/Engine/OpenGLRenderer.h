@@ -38,6 +38,10 @@ public:
     void AddPointLight(const PointLightData& light) override;
     void ClearPointLights() override;
     void SetPostProcessParams(float exposure, float gamma) override;
+    void SetPostProcessBloom(bool enabled) override;
+    void SetPostProcessBloomThreshold(float threshold) override;
+    void SetPostProcessVignette(bool enabled, float intensity, float radius, float softness) override;
+    void SetPostProcessLUT(Texture* texture, bool enabled, float intensity) override;
     void SetViewProjection(const float* view, const float* projection) override;
 
     // Renderer-managed texture lifecycle
@@ -114,6 +118,15 @@ private:
     // Post-processing params
     float m_exposure = 1.0f;
     float m_gamma = 2.2f;
+    float m_bloomThreshold = 1.0f;
+    bool m_vignetteEnabled = false;
+    float m_vignetteIntensity = 0.35f;
+    float m_vignetteRadius = 0.75f;
+    float m_vignetteSoftness = 0.25f;
+    bool m_lutEnabled = false;
+    float m_lutIntensity = 1.0f;
+    float m_lutSize = 16.0f;
+    Texture* m_lutTexture = nullptr;
 
     // Post-processing resources
     unsigned int m_fbo = 0;

@@ -8,6 +8,8 @@
 #include <filesystem>
 #include <iomanip>
 #include <unordered_map>
+#include <unordered_set>
+#include <algorithm>
 
 namespace Genesis::Engine {
 
@@ -22,8 +24,10 @@ bool SceneLoader::LoadScene(Scene& scene, const std::string& filePath) {
 
     std::string line;
     entt::entity currentEntity = entt::null;
-    std::vector<entt::entity> idToEntity;
-    std::vector<std::pair<entt::entity, int>> pendingParents;
+    std::unordered_map<uint64_t, entt::entity> idToEntity;
+    std::vector<std::pair<entt::entity, uint64_t>> pendingParents;
+    std::unordered_set<uint64_t> usedIds;
+    uint64_t maxId = 0;
 
     while (std::getline(file, line)) {
         if (line.empty() || line[0] == '#') continue;
@@ -33,14 +37,22 @@ bool SceneLoader::LoadScene(Scene& scene, const std::string& filePath) {
         ss >> token;
 
         if (token == "ENTITY") {
-            int id = -1;
-            if (!(ss >> id)) {
-                id = static_cast<int>(idToEntity.size());
+            uint64_t id = 0;
+            if (!(ss >> id) || id == 0) {
+                id = maxId + 1;
             }
-            if (id < 0) id = static_cast<int>(idToEntity.size());
-            if (id >= (int)idToEntity.size()) idToEntity.resize(static_cast<size_t>(id + 1), entt::null);
+            if (usedIds.count(id) > 0) {
+                uint64_t newId = maxId + 1;
+                while (usedIds.count(newId) > 0) ++newId;
+                std::cerr << "SceneLoader: Duplicate entity id " << id << "; remapping to " << newId << std::endl;
+                id = newId;
+            }
+            usedIds.insert(id);
+            if (id > maxId) maxId = id;
+
             currentEntity = scene.Registry().create();
-            idToEntity[static_cast<size_t>(id)] = currentEntity;
+            idToEntity[id] = currentEntity;
+            scene.Registry().emplace_or_replace<StableIdComponent>(currentEntity, StableIdComponent{id});
         }
         else if (token == "NAME" && currentEntity != entt::null) {
             // NAME may contain spaces. Read the rest of the line.
@@ -194,17 +206,18 @@ bool SceneLoader::LoadScene(Scene& scene, const std::string& filePath) {
             }
         }
         else if (token == "PARENT" && currentEntity != entt::null) {
-            int parentId = -1;
+            uint64_t parentId = 0;
             ss >> parentId;
-            if (parentId >= 0) {
+            if (parentId != 0) {
                 pendingParents.emplace_back(currentEntity, parentId);
             }
         }
     }
 
     for (const auto& [child, parentId] : pendingParents) {
-        if (parentId >= 0 && parentId < (int)idToEntity.size()) {
-            entt::entity parentEnt = idToEntity[static_cast<size_t>(parentId)];
+        auto it = idToEntity.find(parentId);
+        if (it != idToEntity.end()) {
+            entt::entity parentEnt = it->second;
             if (parentEnt != entt::null && scene.Registry().valid(parentEnt)) {
                 scene.Registry().emplace_or_replace<ParentComponent>(child, ParentComponent{parentEnt});
             }
@@ -233,18 +246,47 @@ bool SceneLoader::SaveScene(const Scene& scene, const std::string& filePath) {
         file << std::fixed << std::setprecision(6);
 
         const auto& reg = scene.Registry();
-        std::unordered_map<entt::entity, int> entityIds;
-        int nextId = 0;
+        struct EntityEntry {
+            entt::entity entity;
+            uint64_t id;
+        };
+
+        std::vector<EntityEntry> ordered;
+        ordered.reserve(reg.size());
+
+        uint64_t maxIdOut = 0;
         reg.each([&](auto entity) {
-            entityIds[entity] = nextId++;
+            if (auto* sid = reg.try_get<StableIdComponent>(entity)) {
+                if (sid->id > maxIdOut) maxIdOut = sid->id;
+            }
         });
 
-        // Note: entt registry iteration order is stable per run, but not guaranteed across runs.
-        // For now, we just serialize in registry order.
         reg.each([&](auto entity) {
-            auto itId = entityIds.find(entity);
-            const int id = (itId != entityIds.end()) ? itId->second : nextId++;
-            file << "ENTITY " << id << "\n";
+            uint64_t id = 0;
+            if (auto* sid = reg.try_get<StableIdComponent>(entity)) {
+                id = sid->id;
+            }
+            if (id == 0) {
+                id = ++maxIdOut;
+                reg.emplace_or_replace<StableIdComponent>(entity, StableIdComponent{id});
+            }
+            ordered.push_back({entity, id});
+        });
+
+        std::sort(ordered.begin(), ordered.end(), [](const EntityEntry& a, const EntityEntry& b) {
+            return a.id < b.id;
+        });
+
+        std::unordered_map<entt::entity, uint64_t> entityIds;
+        entityIds.reserve(ordered.size());
+        for (const auto& entry : ordered) {
+            entityIds[entry.entity] = entry.id;
+        }
+
+        // Serialize in stable id order for deterministic diffs/merges.
+        for (const auto& entry : ordered) {
+            const auto entity = entry.entity;
+            file << "ENTITY " << entry.id << "\n";
             if (reg.any_of<NameComponent>(entity)) {
                 const auto& nc = reg.get<NameComponent>(entity);
                 if (!nc.name.empty()) {
@@ -254,12 +296,12 @@ bool SceneLoader::SaveScene(const Scene& scene, const std::string& filePath) {
 
             if (reg.any_of<ParentComponent>(entity)) {
                 const auto& pc = reg.get<ParentComponent>(entity);
-                int parentId = -1;
+                uint64_t parentId = 0;
                 if (pc.parent != entt::null && reg.valid(pc.parent)) {
                     auto itParent = entityIds.find(pc.parent);
                     if (itParent != entityIds.end()) parentId = itParent->second;
                 }
-                if (parentId >= 0) {
+                if (parentId != 0) {
                     file << "PARENT " << parentId << "\n";
                 }
             }
@@ -367,7 +409,7 @@ bool SceneLoader::SaveScene(const Scene& scene, const std::string& filePath) {
             }
 
             file << "\n";
-        });
+        }
 
         std::cout << "SceneLoader: Saved scene to " << filePath << std::endl;
         return true;

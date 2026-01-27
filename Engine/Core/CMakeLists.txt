@@ -87,6 +87,8 @@ add_library(EngineCore STATIC
     src/Shader.cpp
     src/Scene.cpp
     src/DebugRenderer.cpp
+    src/JobSystem.cpp
+    src/FrameAllocator.cpp
     src/Profiler.cpp
     src/Stats.cpp
     src/ImGuiLayer.cpp

@@ -4,6 +4,7 @@
 #include <unordered_set>
 #include <unordered_map>
 #include <algorithm>
+#include <functional>
 #include <cctype>
 #include <cstdint>
 #include <random>
@@ -298,7 +299,7 @@ static void CollectDependenciesForSceneFile(const std::filesystem::path& scenePa
     }
 }
 
-static std::vector<std::string> CollectDependencies(const std::filesystem::path& assetPath) {
+static std::vector<std::string> CollectDependenciesForAsset(const std::filesystem::path& assetPath) {
     std::vector<std::string> deps;
     std::string ext = ToLowerCopy(assetPath.extension().string());
 
@@ -506,7 +507,7 @@ bool AssetDatabase::Reimport(const std::filesystem::path& assetPath, const std::
         }
     }
 
-    std::vector<std::string> deps = CollectDependencies(assetPath);
+    std::vector<std::string> deps = CollectDependenciesForAsset(assetPath);
     for (const auto& dep : deps) {
         meta.dependencies.push_back(NormalizePath(dep, projectRoot));
     }
@@ -527,6 +528,68 @@ bool AssetDatabase::Reimport(const std::filesystem::path& assetPath, const std::
     if (!SaveMeta(assetPath, meta)) return false;
     if (outMeta) *outMeta = meta;
     return true;
+}
+
+bool AssetDatabase::CollectDependencies(const std::filesystem::path& assetPath, const std::filesystem::path& projectRoot, std::vector<std::string>& outDependencies) {
+    outDependencies.clear();
+    if (!std::filesystem::exists(assetPath)) return false;
+
+    std::vector<std::string> deps = CollectDependenciesForAsset(assetPath);
+    for (const auto& dep : deps) {
+        outDependencies.push_back(NormalizePath(dep, projectRoot));
+    }
+
+    std::sort(outDependencies.begin(), outDependencies.end());
+    outDependencies.erase(std::unique(outDependencies.begin(), outDependencies.end()), outDependencies.end());
+    return true;
+}
+
+std::vector<std::filesystem::path> AssetDatabase::BuildReimportOrder(const std::vector<std::filesystem::path>& roots, const std::filesystem::path& projectRoot) {
+    std::vector<std::filesystem::path> order;
+    if (roots.empty()) return order;
+
+    std::unordered_set<std::string> visited;
+    std::unordered_set<std::string> inStack;
+    std::vector<std::string> rootKeys;
+    rootKeys.reserve(roots.size());
+
+    for (const auto& root : roots) {
+        if (root.empty()) continue;
+        rootKeys.push_back(NormalizePath(root, projectRoot));
+    }
+
+    std::sort(rootKeys.begin(), rootKeys.end());
+    rootKeys.erase(std::unique(rootKeys.begin(), rootKeys.end()), rootKeys.end());
+
+    std::function<void(const std::string&)> dfs = [&](const std::string& key) {
+        if (visited.count(key) > 0) return;
+        if (inStack.count(key) > 0) {
+            std::cerr << "AssetDatabase: dependency cycle detected at " << key << std::endl;
+            return;
+        }
+        inStack.insert(key);
+
+        std::filesystem::path assetPath = ResolveDependencyPath(key, projectRoot);
+        if (std::filesystem::exists(assetPath)) {
+            std::vector<std::string> deps;
+            if (AssetDatabase::CollectDependencies(assetPath, projectRoot, deps)) {
+                std::sort(deps.begin(), deps.end());
+                for (const auto& dep : deps) {
+                    dfs(dep);
+                }
+            }
+        }
+
+        inStack.erase(key);
+        visited.insert(key);
+        order.push_back(ResolveDependencyPath(key, projectRoot));
+    };
+
+    for (const auto& key : rootKeys) {
+        dfs(key);
+    }
+
+    return order;
 }
 
 bool AssetDatabase::GetSourceTimestamp(const std::filesystem::path& assetPath, uint64_t& outTimestamp) {

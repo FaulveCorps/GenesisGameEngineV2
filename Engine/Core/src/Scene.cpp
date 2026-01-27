@@ -212,6 +212,9 @@ void Scene::CopyFrom(const Scene& other) {
         if (auto* nc = other.m_registry.try_get<NameComponent>(entity)) {
             m_registry.emplace<NameComponent>(dst, *nc);
         }
+        if (auto* sid = other.m_registry.try_get<StableIdComponent>(entity)) {
+            m_registry.emplace<StableIdComponent>(dst, *sid);
+        }
         if (auto* tc = other.m_registry.try_get<Transform>(entity)) {
             m_registry.emplace<Transform>(dst, *tc);
         }
