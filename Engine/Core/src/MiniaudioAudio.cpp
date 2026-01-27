@@ -4,6 +4,7 @@
 #include <vector>
 #include <mutex>
 #include <iostream>
+#include <algorithm>
 
 #ifdef HAVE_MINIAUDIO
 #include "miniaudio.h"
@@ -21,6 +22,7 @@ public:
             std::cerr << "MiniaudioAudio: failed to init ma_engine (" << r << ")" << std::endl;
             return false;
         }
+        ma_engine_set_volume(&m_engine, m_masterVolume);
         return true;
 #else
         std::cerr << "MiniaudioAudio: miniaudio not available at compile time" << std::endl;
@@ -57,6 +59,12 @@ public:
     std::string Name() const override { return "miniaudio"; }
 
     bool PlayOneShot(const std::string& assetPath, float volume = 1.0f) override {
+        AudioPlayParams params;
+        params.volume = volume;
+        return PlayOneShot(assetPath, params);
+    }
+
+    bool PlayOneShot(const std::string& assetPath, const AudioPlayParams& params) override {
 #ifdef HAVE_MINIAUDIO
         if (assetPath.empty()) return false;
         ma_sound* sound = (ma_sound*)ma_malloc(sizeof(ma_sound), NULL);
@@ -70,7 +78,21 @@ public:
             ma_free(sound, NULL);
             return false;
         }
-        ma_sound_set_volume(sound, volume);
+        const float safeVolume = std::max(0.0f, params.volume);
+        const float safePitch = std::max(0.01f, params.pitch);
+        const float minDist = std::max(0.0f, params.minDistance);
+        const float maxDist = std::max(minDist, params.maxDistance);
+
+        ma_sound_set_volume(sound, safeVolume);
+        ma_sound_set_pitch(sound, safePitch);
+        ma_sound_set_looping(sound, params.loop ? MA_TRUE : MA_FALSE);
+        ma_sound_set_spatialization_enabled(sound, params.spatial ? MA_TRUE : MA_FALSE);
+        if (params.spatial) {
+            ma_sound_set_positioning(sound, ma_positioning_absolute);
+            ma_sound_set_position(sound, params.position[0], params.position[1], params.position[2]);
+            ma_sound_set_min_distance(sound, minDist);
+            ma_sound_set_max_distance(sound, maxDist);
+        }
         r = ma_sound_start(sound);
         if (r != MA_SUCCESS) {
             std::cerr << "MiniaudioAudio: failed to start sound '" << assetPath << "' (" << r << ")" << std::endl;
@@ -82,7 +104,7 @@ public:
         m_active.push_back(sound);
         return true;
 #else
-        (void)assetPath; (void)volume;
+        (void)assetPath; (void)params;
         return false;
 #endif
     }
@@ -99,6 +121,28 @@ public:
         }
         m_active.clear();
 #endif
+    }
+
+    void SetListener(const AudioListener& listener) override {
+#ifdef HAVE_MINIAUDIO
+        std::lock_guard<std::mutex> lock(m_lock);
+        ma_engine_listener_set_position(&m_engine, 0, listener.position[0], listener.position[1], listener.position[2]);
+        ma_engine_listener_set_direction(&m_engine, 0, listener.forward[0], listener.forward[1], listener.forward[2]);
+        ma_engine_listener_set_world_up(&m_engine, 0, listener.up[0], listener.up[1], listener.up[2]);
+#else
+        (void)listener;
+#endif
+    }
+
+    void SetMasterVolume(float volume) override {
+        IAudio::SetMasterVolume(volume);
+#ifdef HAVE_MINIAUDIO
+        ma_engine_set_volume(&m_engine, m_masterVolume);
+#endif
+    }
+
+    float GetMasterVolume() const override {
+        return IAudio::GetMasterVolume();
     }
 
 private:

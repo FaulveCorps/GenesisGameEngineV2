@@ -17,6 +17,7 @@ uniform vec3 uLightDir = vec3(0.5, 0.5, 0.8);
 uniform vec3 uLightColor = vec3(1.0, 1.0, 1.0);
 uniform float uLightIntensity = 1.0;
 uniform float uBloomThreshold;
+uniform float uShadowPcfRadius;
 
 uniform sampler2D shadowMap;
 uniform vec2 uShadowMapTexelSize;
@@ -30,7 +31,8 @@ float ShadowCalculation(vec4 fragPosLightSpace, vec3 normal, vec3 lightDir)
 
     float currentDepth = projCoords.z;
     float bias = max(0.05 * (1.0 - dot(normal, lightDir)), 0.005);
-    vec2 texelSize = max(uShadowMapTexelSize, vec2(1.0 / 2048.0));
+    float radius = max(uShadowPcfRadius, 0.5);
+    vec2 texelSize = max(uShadowMapTexelSize, vec2(1.0 / 2048.0)) * radius;
 
     float shadow = 0.0;
     for (int x = -1; x <= 1; ++x) {

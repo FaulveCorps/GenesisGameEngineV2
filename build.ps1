@@ -1,5 +1,5 @@
 # Genesis Game Engine - Fast Build Script
-# Usage: .\build.ps1 [debug|release|clean|install|test] [--ninja|--vs] [--verbose]
+# Usage: .\build.ps1 [debug|release|clean|install|test] [--ninja|--vs] [--verbose] [--install-dir <path>] [--install-config Debug|Release] [--package]
 
 param(
     [Parameter(Position=0)]
@@ -9,7 +9,13 @@ param(
     [Parameter(Position=1)]
     [ValidateSet('--ninja', '--vs')]
     [string]$Generator = '--ninja',
-    
+
+    [string]$InstallDir = 'dist',
+
+    [ValidateSet('Debug', 'Release')]
+    [string]$InstallConfig = 'Release',
+
+    [switch]$Package,
     [switch]$VerboseOutput,
     [switch]$Help
 )
@@ -39,7 +45,7 @@ TARGETS:
     release     Build release configuration with optimizations
     all         Build both debug and release
     clean       Remove all build artifacts
-    install     Build and install to output directory
+    install     Build and install to output directory (see --install-dir)
     test        Build and run unit tests
 
 GENERATORS:
@@ -48,6 +54,9 @@ GENERATORS:
 
 OPTIONS:
     --verbose   Show detailed build output
+    --install-dir     Install prefix directory (default: dist)
+    --install-config  Install config (Debug or Release; default: Release)
+    --package         Create a ZIP package via CPack
     --help      Show this help message
 
 EXAMPLES:
@@ -57,6 +66,7 @@ EXAMPLES:
     .\build.ps1 all                # Build both configurations
     .\build.ps1 test               # Run unit tests
     .\build.ps1 clean --ninja      # Clean Ninja build artifacts
+    .\build.ps1 install --ninja --install-dir dist --package
 
 TIMING:
     Ninja (debug):     ~30-45 seconds (first build)
@@ -183,6 +193,51 @@ function Invoke-Tests {
 }
 
 # ============================================================================
+# INSTALL / PACKAGE
+# ============================================================================
+function Invoke-Install {
+    param(
+        [string]$BuildDir,
+        [string]$Config,
+        [string]$Prefix,
+        [switch]$DoPackage
+    )
+
+    Write-Info "=========================================="
+    Write-Info "INSTALLING $Config"
+    Write-Info "=========================================="
+
+    $resolvedPrefix = if ([System.IO.Path]::IsPathRooted($Prefix)) { $Prefix } else { Join-Path $sourceDir $Prefix }
+    New-Item -ItemType Directory -Force -Path $resolvedPrefix | Out-Null
+
+    $startTime = Get-Date
+    cmake --install $BuildDir --config $Config --prefix $resolvedPrefix
+    $elapsed = (Get-Date) - $startTime
+
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error "Install failed"
+        return $false
+    }
+
+    Write-Success "Install complete in $($elapsed.TotalSeconds)s"
+
+    if ($DoPackage) {
+        Write-Info "Packaging with CPack (ZIP)"
+        Push-Location $BuildDir
+        cpack -G ZIP -C $Config
+        $pkgExit = $LASTEXITCODE
+        Pop-Location
+        if ($pkgExit -ne 0) {
+            Write-Error "Packaging failed"
+            return $false
+        }
+        Write-Success "Package generated in $BuildDir"
+    }
+
+    return $true
+}
+
+# ============================================================================
 # CLEAN
 # ============================================================================
 function Invoke-Clean {
@@ -214,6 +269,8 @@ $debugPreset = if ($Generator -eq '--vs') { 'vs2022' } else { 'ninja-debug' }
 $releasePreset = if ($Generator -eq '--vs') { 'vs2022' } else { 'ninja-release' }
 $debugBuildDir = if ($Generator -eq '--vs') { 'build-vs' } else { 'build-ninja-debug' }
 $releaseBuildDir = if ($Generator -eq '--vs') { 'build-vs' } else { 'build-ninja-release' }
+$installPreset = if ($InstallConfig -eq 'Debug') { $debugPreset } else { $releasePreset }
+$installBuildDir = if ($InstallConfig -eq 'Debug') { $debugBuildDir } else { $releaseBuildDir }
 
 Write-Host ""
 Write-Info "Generator: $(if ($Generator -eq '--vs') { 'Visual Studio 2022' } else { 'Ninja Multi-Config' })"
@@ -255,9 +312,9 @@ switch ($Target) {
     }
     
     'install' {
-        if (-not (Invoke-Configure $releasePreset $releaseBuildDir)) { exit 1 }
-        if (-not (Invoke-Build $releasePreset 'Release')) { exit 1 }
-        Write-Info "Installation would proceed here (CPack)"
+        if (-not (Invoke-Configure $installPreset $installBuildDir)) { exit 1 }
+        if (-not (Invoke-Build $installPreset $InstallConfig)) { exit 1 }
+        if (-not (Invoke-Install $installBuildDir $InstallConfig $InstallDir -DoPackage:$Package)) { exit 1 }
     }
 }
 

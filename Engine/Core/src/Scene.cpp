@@ -103,6 +103,53 @@ void Scene::OnUpdateRuntime(double dt) {
 
     if (auto audio = GetAudioSubsystem()) {
         audio->Update(dt);
+
+        AudioListener listener;
+        bool listenerSet = false;
+        if (m_useSceneCamera) {
+            auto camView = m_registry.view<CameraComponent, Transform>();
+            entt::entity chosen = entt::null;
+            for (auto entity : camView) {
+                const auto& cam = camView.get<CameraComponent>(entity);
+                if (cam.primary) {
+                    chosen = entity;
+                    break;
+                }
+                if (chosen == entt::null) {
+                    chosen = entity;
+                }
+            }
+
+            if (chosen != entt::null) {
+                Matrix4 world = GetWorldMatrix(chosen);
+
+                auto Normalize = [](float& x, float& y, float& z) {
+                    float len = std::sqrt(x * x + y * y + z * z);
+                    if (len > 1e-6f) { x /= len; y /= len; z /= len; }
+                };
+
+                float fwdX = world.m[8], fwdY = world.m[9], fwdZ = world.m[10];
+                float upX = world.m[4], upY = world.m[5], upZ = world.m[6];
+                Normalize(fwdX, fwdY, fwdZ);
+                Normalize(upX, upY, upZ);
+
+                listener.position[0] = world.m[12];
+                listener.position[1] = world.m[13];
+                listener.position[2] = world.m[14];
+                listener.forward[0] = -fwdX;
+                listener.forward[1] = -fwdY;
+                listener.forward[2] = -fwdZ;
+                listener.up[0] = upX;
+                listener.up[1] = upY;
+                listener.up[2] = upZ;
+                listenerSet = true;
+            }
+        }
+
+        if (listenerSet) {
+            audio->SetListener(listener);
+        }
+
         auto audioView = m_registry.view<AudioComponent>();
         for (auto entity : audioView) {
             auto& ac = audioView.get<AudioComponent>(entity);
@@ -111,7 +158,20 @@ void Scene::OnUpdateRuntime(double dt) {
                 state = &m_registry.emplace<AudioPlaybackState>(entity);
             }
             if (ac.playOnAwake && !state->started && !ac.soundPath.empty()) {
-                audio->PlayOneShot(ac.soundPath, ac.volume);
+                AudioPlayParams params;
+                params.volume = ac.volume;
+                params.pitch = ac.pitch;
+                params.loop = ac.loop;
+                params.spatial = ac.spatial;
+                params.minDistance = ac.minDistance;
+                params.maxDistance = ac.maxDistance;
+                if (params.spatial) {
+                    Matrix4 world = GetWorldMatrix(entity);
+                    params.position[0] = world.m[12];
+                    params.position[1] = world.m[13];
+                    params.position[2] = world.m[14];
+                }
+                audio->PlayOneShot(ac.soundPath, params);
                 state->started = true;
             }
         }
@@ -156,6 +216,9 @@ void Scene::OnUpdateRuntime(double dt) {
 }
 
 void Scene::OnUpdateEditor(double dt) {
+    if (auto audio = GetAudioSubsystem()) {
+        audio->Update(dt);
+    }
 }
 
 Matrix4 Scene::GetWorldMatrix(entt::entity entity) const {

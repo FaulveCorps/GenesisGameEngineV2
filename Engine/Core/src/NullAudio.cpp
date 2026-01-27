@@ -12,6 +12,7 @@ public:
     void Update(double /*dt*/) override {}
     std::string Name() const override { return "null"; }
     bool PlayOneShot(const std::string& /*assetPath*/, float /*volume*/ = 1.0f) override { return false; }
+    bool PlayOneShot(const std::string& /*assetPath*/, const AudioPlayParams& /*params*/) override { return false; }
     void StopAll() override {}
 };
 

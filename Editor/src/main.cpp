@@ -10,6 +10,7 @@
 #include "engine/Profiler.h"
 #include "engine/ImGuiLayer.h"
 #include "engine/SceneLoader.h"
+#include "engine/IAudio.h"
 #include "engine/ShaderRegistry.h"
 #include "engine/TextureRegistry.h"
 #include "engine/Texture.h"
@@ -17,6 +18,7 @@
 #include "engine/ScriptRegistry.h"
 #include "engine/PrefabLoader.h"
 #include "engine/AssetDatabase.h"
+#include "engine/SubsystemRegistry.h"
 #include "engine/Animation.h"
 #include "engine/UI.h"
 #include "imgui_impl_sdl3.h"
@@ -534,11 +536,85 @@ struct EditorSessionSettings {
     std::vector<std::string> recentScenes;
 };
 
+struct ProjectSettings {
+    std::string audioBackend = "null";
+    std::string physicsBackend = "null";
+    std::string scriptingBackend = "null";
+    std::string buildTarget = "release"; // debug | release | test | install | all
+    std::string buildGenerator = "ninja"; // ninja | vs
+    std::string installDir = "dist";
+    std::string installConfig = "Release"; // Debug | Release
+    bool packageZip = false;
+};
+
 static std::string TrimCopy(const std::string& s) {
     size_t start = s.find_first_not_of(" \t\r\n");
     if (start == std::string::npos) return std::string();
     size_t end = s.find_last_not_of(" \t\r\n");
     return s.substr(start, end - start + 1);
+}
+
+static std::filesystem::path GetProjectSettingsPath(const std::filesystem::path& projectRoot) {
+    return projectRoot / "project_settings.ini";
+}
+
+static ProjectSettings LoadProjectSettings(const std::filesystem::path& projectRoot) {
+    ProjectSettings settings;
+    std::ifstream in(GetProjectSettingsPath(projectRoot));
+    if (!in.is_open()) return settings;
+
+    std::string line;
+    while (std::getline(in, line)) {
+        line = TrimCopy(line);
+        if (line.empty() || line[0] == '#') continue;
+        auto eq = line.find('=');
+        if (eq == std::string::npos) continue;
+        std::string key = TrimCopy(line.substr(0, eq));
+        std::string value = TrimCopy(line.substr(eq + 1));
+
+        if (key == "audio_backend") {
+            settings.audioBackend = value;
+        } else if (key == "physics_backend") {
+            settings.physicsBackend = value;
+        } else if (key == "scripting_backend") {
+            settings.scriptingBackend = value;
+        } else if (key == "build_target") {
+            settings.buildTarget = value;
+        } else if (key == "build_generator") {
+            settings.buildGenerator = value;
+        } else if (key == "install_dir") {
+            settings.installDir = value;
+        } else if (key == "install_config") {
+            settings.installConfig = value;
+        } else if (key == "package_zip") {
+            settings.packageZip = (value == "1" || value == "true" || value == "yes");
+        }
+    }
+
+    if (settings.audioBackend.empty()) settings.audioBackend = "null";
+    if (settings.physicsBackend.empty()) settings.physicsBackend = "null";
+    if (settings.scriptingBackend.empty()) settings.scriptingBackend = "null";
+    if (settings.buildTarget.empty()) settings.buildTarget = "release";
+    if (settings.buildGenerator.empty()) settings.buildGenerator = "ninja";
+    if (settings.installDir.empty()) settings.installDir = "dist";
+    if (settings.installConfig.empty()) settings.installConfig = "Release";
+
+    return settings;
+}
+
+static void SaveProjectSettings(const std::filesystem::path& projectRoot, const ProjectSettings& settings) {
+    std::ofstream out(GetProjectSettingsPath(projectRoot), std::ios::trunc);
+    if (!out.is_open()) return;
+
+    out << "# Genesis Project Settings\n";
+    out << "audio_backend=" << settings.audioBackend << "\n";
+    out << "physics_backend=" << settings.physicsBackend << "\n";
+    out << "scripting_backend=" << settings.scriptingBackend << "\n";
+    out << "build_target=" << settings.buildTarget << "\n";
+    out << "build_generator=" << settings.buildGenerator << "\n";
+    out << "install_dir=" << settings.installDir << "\n";
+    out << "install_config=" << settings.installConfig << "\n";
+    out << "package_zip=" << (settings.packageZip ? "1" : "0") << "\n";
 }
 
 static std::filesystem::path GetEditorSettingsPath() {
@@ -870,10 +946,42 @@ int main(int argc, char** argv) {
         SaveEditorSettings(editorSettings);
     }
 
+    ProjectSettings projectSettings = LoadProjectSettings(projectRoot);
+
     if (!Genesis::Engine::Init()) {
         std::cerr << "Failed to initialize engine" << std::endl;
         return -1;
     }
+
+    std::string projectSettingsWarning;
+    auto ApplyAudioBackend = [&](const std::string& backend) {
+        if (!Genesis::Engine::CreateAudioSubsystem(backend)) {
+            projectSettingsWarning += "Audio backend failed; using null. ";
+            Genesis::Engine::CreateAudioSubsystem("null");
+            return false;
+        }
+        return true;
+    };
+    auto ApplyPhysicsBackend = [&](const std::string& backend) {
+        if (!Genesis::Engine::CreatePhysicsSubsystem(backend)) {
+            projectSettingsWarning += "Physics backend failed; using null. ";
+            Genesis::Engine::CreatePhysicsSubsystem("null");
+            return false;
+        }
+        return true;
+    };
+    auto ApplyScriptingBackend = [&](const std::string& backend) {
+        if (!Genesis::Engine::CreateScriptingSubsystem(backend)) {
+            projectSettingsWarning += "Scripting backend failed; using null. ";
+            Genesis::Engine::CreateScriptingSubsystem("null");
+            return false;
+        }
+        return true;
+    };
+
+    ApplyAudioBackend(projectSettings.audioBackend);
+    ApplyPhysicsBackend(projectSettings.physicsBackend);
+    ApplyScriptingBackend(projectSettings.scriptingBackend);
 
     // Configure save subsystem to use the project-local saves directory.
     {
@@ -943,6 +1051,11 @@ int main(int argc, char** argv) {
     std::shared_ptr<Genesis::Engine::Texture> postLutTexture;
     char postLutPathBuf[512] = "";
     std::string postLutStatus;
+    float shadowPcfRadius = 1.0f;
+
+    // Audio mixer (master)
+    float audioMasterVolume = 1.0f;
+    bool audioVolumeInitialized = false;
 
     // Scene / File State
     std::string currentScenePath;
@@ -1759,6 +1872,8 @@ int main(int argc, char** argv) {
             ImGui::DockBuilderDockWindow("Inspector", dock_id_right);
             ImGui::DockBuilderDockWindow("Asset Inspector", dock_id_right);
             ImGui::DockBuilderDockWindow("Post Process", dock_id_right);
+            ImGui::DockBuilderDockWindow("Audio Mixer", dock_id_right);
+            ImGui::DockBuilderDockWindow("Project Settings", dock_id_right);
             ImGui::DockBuilderDockWindow("Scene Hierarchy", dock_id_left);
             ImGui::DockBuilderDockWindow("Content Browser", dock_id_left_bottom);
             ImGui::DockBuilderDockWindow("Console", dock_id_bottom);
@@ -1883,6 +1998,8 @@ int main(int argc, char** argv) {
                 ImGui::MenuItem("Asset Inspector");
                 ImGui::MenuItem("Scene Hierarchy");
                 ImGui::MenuItem("Content Browser");
+                ImGui::MenuItem("Audio Mixer");
+                ImGui::MenuItem("Project Settings");
                 ImGui::EndMenu();
             }
             if (ImGui::BeginMenu("Help")) {
@@ -3449,8 +3566,18 @@ int main(int argc, char** argv) {
                         if (ImGui::Checkbox("Loop", &ac.loop)) if (editorState == EditorState::Edit) sceneDirty = true;
                         if (ImGui::Checkbox("Play On Awake", &ac.playOnAwake)) if (editorState == EditorState::Edit) sceneDirty = true;
                         if (ImGui::Checkbox("Spatial", &ac.spatial)) if (editorState == EditorState::Edit) sceneDirty = true;
-                        if (ImGui::DragFloat("Min Distance", &ac.minDistance, 0.1f, 0.0f, 1000.0f)) if (editorState == EditorState::Edit) sceneDirty = true;
-                        if (ImGui::DragFloat("Max Distance", &ac.maxDistance, 0.1f, 0.0f, 10000.0f)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        if (ImGui::DragFloat("Min Distance", &ac.minDistance, 0.1f, 0.0f, 1000.0f)) {
+                            if (ac.minDistance > ac.maxDistance) {
+                                ac.maxDistance = ac.minDistance;
+                            }
+                            if (editorState == EditorState::Edit) sceneDirty = true;
+                        }
+                        if (ImGui::DragFloat("Max Distance", &ac.maxDistance, 0.1f, 0.0f, 10000.0f)) {
+                            if (ac.maxDistance < ac.minDistance) {
+                                ac.minDistance = ac.maxDistance;
+                            }
+                            if (editorState == EditorState::Edit) sceneDirty = true;
+                        }
                     }
                 }
 
@@ -3681,6 +3808,9 @@ int main(int argc, char** argv) {
             ImGui::SliderFloat("Gamma", &postGamma, 1.0f, 3.0f, "%.2f");
 
             ImGui::Separator();
+            ImGui::SliderFloat("Shadow Softness", &shadowPcfRadius, 0.5f, 4.0f, "%.2f");
+
+            ImGui::Separator();
             ImGui::Checkbox("Vignette", &postVignette);
             if (postVignette) {
                 ImGui::SliderFloat("Intensity", &postVignetteIntensity, 0.0f, 1.0f, "%.2f");
@@ -3719,8 +3849,157 @@ int main(int argc, char** argv) {
                 renderer->SetPostProcessBloomThreshold(postBloomThreshold);
                 renderer->SetPostProcessVignette(postVignette, postVignetteIntensity, postVignetteRadius, postVignetteSoftness);
                 renderer->SetPostProcessLUT(postLutTexture.get(), postLutEnabled, postLutIntensity);
+                renderer->SetShadowParams(shadowPcfRadius);
             }
 
+            ImGui::End();
+        }
+
+        // Audio Mixer
+        if (!zenMode) {
+            ImGui::Begin("Audio Mixer");
+            auto audio = Genesis::Engine::GetAudioSubsystem();
+            if (audio) {
+                ImGui::Text("Backend: %s", audio->Name().c_str());
+                if (!audioVolumeInitialized) {
+                    audioMasterVolume = audio->GetMasterVolume();
+                    audioVolumeInitialized = true;
+                }
+
+                if (ImGui::SliderFloat("Master Volume", &audioMasterVolume, 0.0f, 1.0f, "%.2f")) {
+                    audio->SetMasterVolume(audioMasterVolume);
+                }
+            } else {
+                ImGui::TextDisabled("No audio subsystem available");
+            }
+            ImGui::End();
+        }
+
+        // Project Settings
+        if (!zenMode) {
+            ImGui::Begin("Project Settings");
+            ImGui::TextUnformatted("Subsystem Backends");
+            ImGui::Separator();
+
+            auto BuildBackendList = [&](const char* type, const std::string& current) {
+                auto list = Genesis::Engine::SubsystemRegistry::Instance().ListBackends(type);
+                std::sort(list.begin(), list.end());
+                if (std::find(list.begin(), list.end(), current) == list.end()) {
+                    list.insert(list.begin(), current);
+                }
+                if (list.empty()) {
+                    list.push_back("null");
+                }
+                return list;
+            };
+
+            auto DrawBackendCombo = [&](const char* label, const char* type, std::string& selected, auto&& applyFn, const std::string& activeName) {
+                auto list = BuildBackendList(type, selected);
+                if (ImGui::BeginCombo(label, selected.empty() ? "(none)" : selected.c_str())) {
+                    for (const auto& name : list) {
+                        bool isSelected = (name == selected);
+                        if (ImGui::Selectable(name.c_str(), isSelected)) {
+                            if (selected != name) {
+                                projectSettingsWarning.clear();
+                                selected = name;
+                                if (!applyFn(selected)) {
+                                    selected = "null";
+                                }
+                                SaveProjectSettings(projectRoot, projectSettings);
+                            }
+                        }
+                        if (isSelected) ImGui::SetItemDefaultFocus();
+                    }
+                    ImGui::EndCombo();
+                }
+                ImGui::SameLine();
+                ImGui::TextDisabled("Active: %s", activeName.empty() ? "(none)" : activeName.c_str());
+                if (!activeName.empty() && !selected.empty() && activeName != selected) {
+                    ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.4f, 1.0f), "Requested: %s", selected.c_str());
+                }
+            };
+
+            std::string audioActive = "";
+            if (auto a = Genesis::Engine::GetAudioSubsystem()) audioActive = a->Name();
+            DrawBackendCombo("Audio Backend", "Audio", projectSettings.audioBackend, ApplyAudioBackend, audioActive);
+
+            std::string physicsActive = "";
+            if (auto p = Genesis::Engine::GetPhysicsSubsystem()) physicsActive = p->Name();
+            DrawBackendCombo("Physics Backend", "Physics", projectSettings.physicsBackend, ApplyPhysicsBackend, physicsActive);
+
+            std::string scriptingActive = "";
+            if (auto s = Genesis::Engine::GetScriptingSubsystem()) scriptingActive = s->Name();
+            DrawBackendCombo("Scripting Backend", "Scripting", projectSettings.scriptingBackend, ApplyScriptingBackend, scriptingActive);
+
+            ImGui::Spacing();
+            ImGui::Separator();
+            ImGui::TextUnformatted("Build & Export");
+
+            const char* buildTargets[] = { "debug", "release", "test", "install", "all" };
+            int buildTargetIndex = 1;
+            for (int i = 0; i < IM_ARRAYSIZE(buildTargets); ++i) {
+                if (projectSettings.buildTarget == buildTargets[i]) {
+                    buildTargetIndex = i;
+                    break;
+                }
+            }
+            if (ImGui::Combo("Build Target", &buildTargetIndex, buildTargets, IM_ARRAYSIZE(buildTargets))) {
+                projectSettings.buildTarget = buildTargets[buildTargetIndex];
+                SaveProjectSettings(projectRoot, projectSettings);
+            }
+
+            const char* genOptions[] = { "ninja", "vs" };
+            int genIndex = (projectSettings.buildGenerator == "vs") ? 1 : 0;
+            if (ImGui::Combo("Build Generator", &genIndex, genOptions, IM_ARRAYSIZE(genOptions))) {
+                projectSettings.buildGenerator = genOptions[genIndex];
+                SaveProjectSettings(projectRoot, projectSettings);
+            }
+
+            const char* configOptions[] = { "Debug", "Release" };
+            int configIndex = (projectSettings.installConfig == "Debug") ? 0 : 1;
+            if (ImGui::Combo("Install Config", &configIndex, configOptions, IM_ARRAYSIZE(configOptions))) {
+                projectSettings.installConfig = configOptions[configIndex];
+                SaveProjectSettings(projectRoot, projectSettings);
+            }
+
+            static bool buildSettingsInit = false;
+            static char installDirBuf[256] = "";
+            if (!buildSettingsInit) {
+                strncpy_s(installDirBuf, projectSettings.installDir.c_str(), sizeof(installDirBuf) - 1);
+                buildSettingsInit = true;
+            }
+            if (ImGui::InputText("Install Dir", installDirBuf, sizeof(installDirBuf))) {
+                projectSettings.installDir = installDirBuf;
+                SaveProjectSettings(projectRoot, projectSettings);
+            }
+
+            if (ImGui::Checkbox("Package ZIP", &projectSettings.packageZip)) {
+                SaveProjectSettings(projectRoot, projectSettings);
+            }
+
+            std::string generatorFlag = (projectSettings.buildGenerator == "vs") ? "--vs" : "--ninja";
+            std::string buildCommand = ".\\build.ps1 " + projectSettings.buildTarget + " " + generatorFlag;
+            if (projectSettings.buildTarget == "install") {
+                buildCommand += " -InstallDir \"" + projectSettings.installDir + "\"";
+                buildCommand += " -InstallConfig " + projectSettings.installConfig;
+                if (projectSettings.packageZip) {
+                    buildCommand += " -Package";
+                }
+            }
+
+            ImGui::TextUnformatted("Suggested Command:");
+            ImGui::TextWrapped("%s", buildCommand.c_str());
+            if (ImGui::Button("Copy Command")) {
+                ImGui::SetClipboardText(buildCommand.c_str());
+            }
+            if (projectSettings.buildTarget == "install" && projectSettings.installDir.empty()) {
+                ImGui::TextColored(ImVec4(1.0f, 0.6f, 0.4f, 1.0f), "Install directory is empty.");
+            }
+
+            if (!projectSettingsWarning.empty()) {
+                ImGui::Spacing();
+                ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f), "%s", projectSettingsWarning.c_str());
+            }
             ImGui::End();
         }
 
@@ -3794,11 +4073,39 @@ int main(int argc, char** argv) {
                         ImGui::Text("GUID: %s", meta.guid.empty() ? "(none)" : meta.guid.c_str());
                         ImGui::Text("Timestamp: %llu", static_cast<unsigned long long>(meta.sourceTimestamp));
 
+                        std::string extLower = ToLowerCopy(assetPath.extension().string());
+                        if (extLower == ".wav" || extLower == ".mp3" || extLower == ".ogg") {
+                            ImGui::Separator();
+                            ImGui::TextUnformatted("Audio Preview");
+
+                            static float previewVolume = 0.8f;
+                            static bool previewLoop = false;
+
+                            auto audio = Genesis::Engine::GetAudioSubsystem();
+                            if (audio && audio->Name() != "null") {
+                                ImGui::Text("Backend: %s", audio->Name().c_str());
+                                ImGui::SliderFloat("Preview Volume", &previewVolume, 0.0f, 1.0f, "%.2f");
+                                ImGui::Checkbox("Loop Preview", &previewLoop);
+                                if (ImGui::Button("Play")) {
+                                    Genesis::Engine::AudioPlayParams params;
+                                    params.volume = previewVolume;
+                                    params.loop = previewLoop;
+                                    audio->PlayOneShot(assetPath.string(), params);
+                                }
+                                ImGui::SameLine();
+                                if (ImGui::Button("Stop")) {
+                                    audio->StopAll();
+                                }
+                            } else {
+                                ImGui::TextDisabled("Audio backend not available (set in Project Settings).");
+                            }
+                        }
+
                         auto ReloadAssetIfSupported = [&](const std::filesystem::path& path) {
-                            std::string extLower = ToLowerCopy(path.extension().string());
-                            if (IsImageExtension(extLower)) {
+                            std::string ext = ToLowerCopy(path.extension().string());
+                            if (IsImageExtension(ext)) {
                                 ReloadTextureAsset(path);
-                            } else if (extLower == ".gltf" || extLower == ".glb" || extLower == ".obj" || extLower == ".fbx") {
+                            } else if (ext == ".gltf" || ext == ".glb" || ext == ".obj" || ext == ".fbx") {
                                 ReloadModelAsset(path);
                             }
                         };

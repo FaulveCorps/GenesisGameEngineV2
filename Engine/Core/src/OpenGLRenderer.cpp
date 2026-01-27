@@ -762,6 +762,9 @@ void OpenGLRenderer::EndFrame() {
         int locBloomThreshold = pglGetUniformLocation(m_deferredLightingShader->GetID(), "uBloomThreshold");
         if (locBloomThreshold >= 0) pglUniform1f(locBloomThreshold, m_bloomThreshold);
 
+        int locShadowRadius = pglGetUniformLocation(m_deferredLightingShader->GetID(), "uShadowPcfRadius");
+        if (locShadowRadius >= 0) pglUniform1f(locShadowRadius, m_shadowPcfRadius);
+
         int locNrPointLights = pglGetUniformLocation(m_deferredLightingShader->GetID(), "nrPointLights");
         if (locNrPointLights >= 0) pglUniform1i(locNrPointLights, (int)m_pointLights.size());
 
@@ -1249,6 +1252,8 @@ void OpenGLRenderer::ExecuteDraw(const DrawCommand& cmd, Shader* overrideShader)
     if (locLightIntensity >= 0) pglUniform1f(locLightIntensity, m_lightIntensity);
     int locBloomThreshold = pglGetUniformLocation(shader->GetID(), "uBloomThreshold");
     if (locBloomThreshold >= 0) pglUniform1f(locBloomThreshold, m_bloomThreshold);
+    int locShadowRadius = pglGetUniformLocation(shader->GetID(), "uShadowPcfRadius");
+    if (locShadowRadius >= 0) pglUniform1f(locShadowRadius, m_shadowPcfRadius);
     int locLSM = pglGetUniformLocation(shader->GetID(), "lightSpaceMatrix");
     if (locLSM >= 0) pglUniformMatrix4fv(locLSM, 1, GL_FALSE, m_lightSpaceMatrix);
 
@@ -1299,6 +1304,10 @@ void OpenGLRenderer::SetPostProcessBloom(bool enabled) {
 
 void OpenGLRenderer::SetPostProcessBloomThreshold(float threshold) {
     m_bloomThreshold = threshold;
+}
+
+void OpenGLRenderer::SetShadowParams(float pcfRadius) {
+    m_shadowPcfRadius = pcfRadius;
 }
 
 void OpenGLRenderer::SetPostProcessVignette(bool enabled, float intensity, float radius, float softness) {

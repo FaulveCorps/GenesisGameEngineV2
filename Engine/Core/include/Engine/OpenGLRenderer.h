@@ -42,6 +42,7 @@ public:
     void SetPostProcessBloomThreshold(float threshold) override;
     void SetPostProcessVignette(bool enabled, float intensity, float radius, float softness) override;
     void SetPostProcessLUT(Texture* texture, bool enabled, float intensity) override;
+    void SetShadowParams(float pcfRadius) override;
     void SetViewProjection(const float* view, const float* projection) override;
 
     // Renderer-managed texture lifecycle
@@ -127,6 +128,8 @@ private:
     float m_lutIntensity = 1.0f;
     float m_lutSize = 16.0f;
     Texture* m_lutTexture = nullptr;
+
+    float m_shadowPcfRadius = 1.0f;
 
     // Post-processing resources
     unsigned int m_fbo = 0;
