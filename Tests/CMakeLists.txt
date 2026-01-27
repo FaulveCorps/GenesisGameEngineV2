@@ -69,6 +69,7 @@ add_executable(UnitTests
     test_wasm_limits.cpp
     test_animation.cpp
     test_pathfinding.cpp
+    test_navigation_grid.cpp
     test_ui.cpp
     test_scene_smoke.cpp
     ${catch2_SOURCE_DIR}/extras/catch_amalgamated.cpp

@@ -1,5 +1,6 @@
 #include "engine/DebugRenderer.h"
 #include "engine/Components.h"
+#include "engine/NavigationSystem.h"
 #include "engine/MathUtils.h"
 #include <vector>
 #include <cmath>
@@ -113,6 +114,58 @@ void DebugRenderer::Render(Scene& scene, IGraphicsAPI* renderer) {
             Vec3 p1 = { center.x, center.y + std::cos(angle) * r, center.z + std::sin(angle) * r };
             Vec3 p2 = { center.x, center.y + std::cos(nextAngle) * r, center.z + std::sin(nextAngle) * r };
             addSegment(p1, p2);
+        }
+    }
+
+    // Navigation grid debug
+    auto navView = registry.view<NavGridComponent>();
+    for (auto entity : navView) {
+        const auto& nav = navView.get<NavGridComponent>(entity);
+        if (!nav.drawDebug || nav.width <= 0 || nav.height <= 0 || nav.cellSize <= 0.0f) continue;
+
+        std::vector<uint8_t> blocked;
+        NavigationSystem::BuildGrid(scene, nav, &blocked);
+
+        auto addLineColor = [&](const Vec3& a, const Vec3& b, float r, float g, float bcol) {
+            vertices.push_back(a.x); vertices.push_back(a.y); vertices.push_back(a.z);
+            vertices.push_back(b.x); vertices.push_back(b.y); vertices.push_back(b.z);
+            colors.push_back(r); colors.push_back(g); colors.push_back(bcol);
+            colors.push_back(r); colors.push_back(g); colors.push_back(bcol);
+        };
+
+        float x0 = nav.originX;
+        float z0 = nav.originZ;
+        float y = nav.y;
+        float w = nav.width * nav.cellSize;
+        float h = nav.height * nav.cellSize;
+
+        // Grid lines (blue)
+        for (int x = 0; x <= nav.width; ++x) {
+            float xx = x0 + x * nav.cellSize;
+            addLineColor({xx, y, z0}, {xx, y, z0 + h}, 0.2f, 0.6f, 1.0f);
+        }
+        for (int z = 0; z <= nav.height; ++z) {
+            float zz = z0 + z * nav.cellSize;
+            addLineColor({x0, y, zz}, {x0 + w, y, zz}, 0.2f, 0.6f, 1.0f);
+        }
+
+        // Blocked cells (red)
+        if (!blocked.empty()) {
+            for (int gy = 0; gy < nav.height; ++gy) {
+                for (int gx = 0; gx < nav.width; ++gx) {
+                    if (!blocked[static_cast<size_t>(gy * nav.width + gx)]) continue;
+                    float cx = x0 + gx * nav.cellSize;
+                    float cz = z0 + gy * nav.cellSize;
+                    Vec3 p0{cx, y, cz};
+                    Vec3 p1{cx + nav.cellSize, y, cz};
+                    Vec3 p2{cx + nav.cellSize, y, cz + nav.cellSize};
+                    Vec3 p3{cx, y, cz + nav.cellSize};
+                    addLineColor(p0, p1, 1.0f, 0.2f, 0.2f);
+                    addLineColor(p1, p2, 1.0f, 0.2f, 0.2f);
+                    addLineColor(p2, p3, 1.0f, 0.2f, 0.2f);
+                    addLineColor(p3, p0, 1.0f, 0.2f, 0.2f);
+                }
+            }
         }
     }
 

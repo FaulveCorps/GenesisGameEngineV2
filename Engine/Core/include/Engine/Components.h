@@ -157,4 +157,15 @@ struct RigidBodyComponent {
     bool isKinematic = false;
 };
 
+struct NavGridComponent {
+    int width = 10;
+    int height = 10;
+    float cellSize = 1.0f;
+    float originX = 0.0f;
+    float originZ = 0.0f;
+    float y = 0.0f;
+    bool autoBakeColliders = true;
+    bool drawDebug = true;
+};
+
 } // namespace Genesis::Engine

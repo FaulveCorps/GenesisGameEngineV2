@@ -3747,7 +3747,11 @@ int main(int argc, char** argv) {
                                 if (editorState == EditorState::Edit) sceneDirty = true;
                             }
                         }
-                        if (ImGui::ColorEdit4("Color", ui.color)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        if (ImGui::ColorEdit4("Tint / Text Color", ui.color)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        if (ui.type == Genesis::Engine::UIType::Button) {
+                            if (ImGui::Checkbox("Draw Background", &ui.drawBackground)) if (editorState == EditorState::Edit) sceneDirty = true;
+                            if (ImGui::ColorEdit4("Background Color", ui.backgroundColor)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        }
 
                         if (selectedEntity != lastUIEntity) {
                             strncpy_s(uiTextBuf, ui.text.c_str(), sizeof(uiTextBuf) - 1);
@@ -3780,6 +3784,19 @@ int main(int argc, char** argv) {
                             ui.texturePath.clear();
                             if (editorState == EditorState::Edit) sceneDirty = true;
                         }
+                    }
+                }
+
+                if (activeScene->Registry().all_of<Genesis::Engine::NavGridComponent>(selectedEntity)) {
+                    if (ImGui::CollapsingHeader("Navigation Grid", ImGuiTreeNodeFlags_DefaultOpen)) {
+                        auto& nav = activeScene->Registry().get<Genesis::Engine::NavGridComponent>(selectedEntity);
+                        if (ImGui::DragInt("Width", &nav.width, 1.0f, 1, 512)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        if (ImGui::DragInt("Height", &nav.height, 1.0f, 1, 512)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        if (ImGui::DragFloat("Cell Size", &nav.cellSize, 0.1f, 0.1f, 100.0f)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        if (ImGui::DragFloat2("Origin (X,Z)", &nav.originX, 0.1f)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        if (ImGui::DragFloat("Y", &nav.y, 0.1f, -1000.0f, 1000.0f)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        if (ImGui::Checkbox("Auto Bake Colliders", &nav.autoBakeColliders)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        if (ImGui::Checkbox("Draw Debug", &nav.drawDebug)) if (editorState == EditorState::Edit) sceneDirty = true;
                     }
                 }
 
@@ -3863,6 +3880,12 @@ int main(int argc, char** argv) {
                     if (ImGui::MenuItem("UI")) {
                         if (!activeScene->Registry().all_of<Genesis::Engine::UIComponent>(selectedEntity)) {
                             activeScene->Registry().emplace<Genesis::Engine::UIComponent>(selectedEntity);
+                            if (editorState == EditorState::Edit) sceneDirty = true;
+                        }
+                    }
+                    if (ImGui::MenuItem("Navigation Grid")) {
+                        if (!activeScene->Registry().all_of<Genesis::Engine::NavGridComponent>(selectedEntity)) {
+                            activeScene->Registry().emplace<Genesis::Engine::NavGridComponent>(selectedEntity);
                             if (editorState == EditorState::Edit) sceneDirty = true;
                         }
                     }

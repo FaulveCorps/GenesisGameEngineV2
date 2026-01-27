@@ -25,6 +25,8 @@ struct UIComponent {
     float pivotX = 0.0f, pivotY = 0.0f;   // 0..1 (0=top-left, 0.5=center)
     std::shared_ptr<Texture> texture;
     std::string texturePath;
+    float backgroundColor[4] = {0.2f, 0.2f, 0.2f, 1.0f};
+    bool drawBackground = true;
     float color[4] = {1.0f, 1.0f, 1.0f, 1.0f};
     std::string text; // For text/button
     std::function<void()> onClick;

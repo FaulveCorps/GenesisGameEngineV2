@@ -40,6 +40,9 @@ struct PrefabEntityData {
     bool hasUI = false;
     UIComponent ui;
 
+    bool hasNavGrid = false;
+    NavGridComponent navGrid;
+
     bool hasParticle = false;
     ParticleSystemComponent particle;
 
@@ -136,6 +139,12 @@ static void ApplyPrefabData(entt::registry& reg, entt::entity entity, const Pref
         reg.emplace_or_replace<UIComponent>(entity, data.ui);
     } else if (reg.any_of<UIComponent>(entity)) {
         reg.remove<UIComponent>(entity);
+    }
+
+    if (data.hasNavGrid) {
+        reg.emplace_or_replace<NavGridComponent>(entity, data.navGrid);
+    } else if (reg.any_of<NavGridComponent>(entity)) {
+        reg.remove<NavGridComponent>(entity);
     }
 
     if (data.hasParticle) {
@@ -293,6 +302,18 @@ static bool ParsePrefabFile(const std::string& filePath, std::vector<PrefabEntit
                >> useAnchors >> ui.anchorX >> ui.anchorY >> ui.pivotX >> ui.pivotY;
             ui.type = static_cast<UIType>(type);
             ui.useAnchors = (useAnchors != 0);
+            float bgR = ui.backgroundColor[0];
+            float bgG = ui.backgroundColor[1];
+            float bgB = ui.backgroundColor[2];
+            float bgA = ui.backgroundColor[3];
+            int drawBg = ui.drawBackground ? 1 : 0;
+            if (ss >> bgR >> bgG >> bgB >> bgA >> drawBg) {
+                ui.backgroundColor[0] = bgR;
+                ui.backgroundColor[1] = bgG;
+                ui.backgroundColor[2] = bgB;
+                ui.backgroundColor[3] = bgA;
+                ui.drawBackground = (drawBg != 0);
+            }
             current->hasUI = true;
             current->ui = ui;
         } else if (token == "UI_TEXT" && current) {
@@ -313,6 +334,17 @@ static bool ParsePrefabFile(const std::string& filePath, std::vector<PrefabEntit
                 current->ui.texturePath.clear();
                 current->ui.texture.reset();
             }
+        } else if (token == "NAVGRID" && current) {
+            NavGridComponent nav;
+            int autoBake = 1;
+            int draw = 1;
+            ss >> nav.width >> nav.height >> nav.cellSize >> nav.originX >> nav.originZ >> nav.y;
+            if (ss >> autoBake >> draw) {
+                nav.autoBakeColliders = (autoBake != 0);
+                nav.drawDebug = (draw != 0);
+            }
+            current->hasNavGrid = true;
+            current->navGrid = nav;
         } else if (token == "PARTICLE" && current) {
             ParticleSystemComponent p;
             int looping = 0, play = 0;
@@ -468,13 +500,22 @@ bool PrefabLoader::SavePrefab(const Scene& scene, entt::entity root, const std::
                 file << "UI " << (int)ui.type << " "
                      << ui.x << " " << ui.y << " " << ui.width << " " << ui.height << " "
                      << ui.color[0] << " " << ui.color[1] << " " << ui.color[2] << " " << ui.color[3] << " "
-                     << (ui.useAnchors ? 1 : 0) << " " << ui.anchorX << " " << ui.anchorY << " " << ui.pivotX << " " << ui.pivotY << "\n";
+                     << (ui.useAnchors ? 1 : 0) << " " << ui.anchorX << " " << ui.anchorY << " " << ui.pivotX << " " << ui.pivotY << " "
+                     << ui.backgroundColor[0] << " " << ui.backgroundColor[1] << " " << ui.backgroundColor[2] << " " << ui.backgroundColor[3] << " "
+                     << (ui.drawBackground ? 1 : 0) << "\n";
                 if (!ui.text.empty()) {
                     file << "UI_TEXT " << ui.text << "\n";
                 }
                 if (!ui.texturePath.empty()) {
                     file << "UI_TEX " << ui.texturePath << "\n";
                 }
+            }
+
+            if (reg.any_of<NavGridComponent>(entity)) {
+                const auto& nav = reg.get<NavGridComponent>(entity);
+                file << "NAVGRID " << nav.width << " " << nav.height << " " << nav.cellSize << " "
+                     << nav.originX << " " << nav.originZ << " " << nav.y << " "
+                     << (nav.autoBakeColliders ? 1 : 0) << " " << (nav.drawDebug ? 1 : 0) << "\n";
             }
 
             if (reg.any_of<ParticleSystemComponent>(entity)) {

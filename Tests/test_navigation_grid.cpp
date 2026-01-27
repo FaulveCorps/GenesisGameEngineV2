@@ -1,0 +1,52 @@
+#include "catch_amalgamated.hpp"
+#include "engine/NavigationSystem.h"
+#include "engine/Scene.h"
+#include "engine/Components.h"
+
+using namespace Genesis::Engine;
+
+TEST_CASE("Navigation grid: box collider blocks cells", "[navigation]") {
+    Scene scene;
+    auto gridEntity = scene.Registry().create();
+    NavGridComponent nav;
+    nav.width = 5;
+    nav.height = 1;
+    nav.cellSize = 1.0f;
+    nav.originX = 0.0f;
+    nav.originZ = 0.0f;
+    nav.autoBakeColliders = true;
+    scene.Registry().emplace<NavGridComponent>(gridEntity, nav);
+
+    auto boxEntity = scene.Registry().create();
+    BoxColliderComponent box;
+    box.size[0] = 1.0f;
+    box.size[1] = 1.0f;
+    box.size[2] = 1.0f;
+    scene.Registry().emplace<BoxColliderComponent>(boxEntity, box);
+    Transform t;
+    t.x = 1.0f;
+    t.z = 0.0f;
+    scene.Registry().emplace<Transform>(boxEntity, t);
+
+    std::vector<uint8_t> blocked;
+    auto graph = NavigationSystem::BuildGrid(scene, nav, &blocked);
+
+    REQUIRE(graph.IsWalkable({1, 0}) == false);
+    REQUIRE(blocked.size() == static_cast<size_t>(nav.width * nav.height));
+}
+
+TEST_CASE("Navigation grid: find path in world space", "[navigation]") {
+    Scene scene;
+    NavGridComponent nav;
+    nav.width = 4;
+    nav.height = 2;
+    nav.cellSize = 1.0f;
+    nav.originX = 0.0f;
+    nav.originZ = 0.0f;
+    nav.autoBakeColliders = false;
+
+    auto result = NavigationSystem::FindPath(scene, nav, 0.1f, 0.1f, 3.1f, 0.1f);
+    REQUIRE(result.success == true);
+    REQUIRE(!result.gridPath.empty());
+    REQUIRE(result.worldPath.size() == result.gridPath.size() * 3);
+}

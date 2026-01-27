@@ -145,6 +145,18 @@ bool SceneLoader::LoadScene(Scene& scene, const std::string& filePath) {
                >> useAnchors >> ui.anchorX >> ui.anchorY >> ui.pivotX >> ui.pivotY;
             ui.type = static_cast<UIType>(type);
             ui.useAnchors = (useAnchors != 0);
+            float bgR = ui.backgroundColor[0];
+            float bgG = ui.backgroundColor[1];
+            float bgB = ui.backgroundColor[2];
+            float bgA = ui.backgroundColor[3];
+            int drawBg = ui.drawBackground ? 1 : 0;
+            if (ss >> bgR >> bgG >> bgB >> bgA >> drawBg) {
+                ui.backgroundColor[0] = bgR;
+                ui.backgroundColor[1] = bgG;
+                ui.backgroundColor[2] = bgB;
+                ui.backgroundColor[3] = bgA;
+                ui.drawBackground = (drawBg != 0);
+            }
             scene.Registry().emplace_or_replace<UIComponent>(currentEntity, ui);
         }
         else if (token == "UI_TEXT" && currentEntity != entt::null) {
@@ -168,6 +180,17 @@ bool SceneLoader::LoadScene(Scene& scene, const std::string& filePath) {
                     ui->texture.reset();
                 }
             }
+        }
+        else if (token == "NAVGRID" && currentEntity != entt::null) {
+            NavGridComponent nav;
+            int autoBake = 1;
+            int draw = 1;
+            ss >> nav.width >> nav.height >> nav.cellSize >> nav.originX >> nav.originZ >> nav.y;
+            if (ss >> autoBake >> draw) {
+                nav.autoBakeColliders = (autoBake != 0);
+                nav.drawDebug = (draw != 0);
+            }
+            scene.Registry().emplace_or_replace<NavGridComponent>(currentEntity, nav);
         }
         else if (token == "PARTICLE" && currentEntity != entt::null) {
             ParticleSystemComponent p;
@@ -422,13 +445,22 @@ bool SceneLoader::SaveScene(const Scene& scene, const std::string& filePath) {
                 file << "UI " << (int)ui.type << " "
                      << ui.x << " " << ui.y << " " << ui.width << " " << ui.height << " "
                      << ui.color[0] << " " << ui.color[1] << " " << ui.color[2] << " " << ui.color[3] << " "
-                     << (ui.useAnchors ? 1 : 0) << " " << ui.anchorX << " " << ui.anchorY << " " << ui.pivotX << " " << ui.pivotY << "\n";
+                     << (ui.useAnchors ? 1 : 0) << " " << ui.anchorX << " " << ui.anchorY << " " << ui.pivotX << " " << ui.pivotY << " "
+                     << ui.backgroundColor[0] << " " << ui.backgroundColor[1] << " " << ui.backgroundColor[2] << " " << ui.backgroundColor[3] << " "
+                     << (ui.drawBackground ? 1 : 0) << "\n";
                 if (!ui.text.empty()) {
                     file << "UI_TEXT " << ui.text << "\n";
                 }
                 if (!ui.texturePath.empty()) {
                     file << "UI_TEX " << ui.texturePath << "\n";
                 }
+            }
+
+            if (reg.any_of<NavGridComponent>(entity)) {
+                const auto& nav = reg.get<NavGridComponent>(entity);
+                file << "NAVGRID " << nav.width << " " << nav.height << " " << nav.cellSize << " "
+                     << nav.originX << " " << nav.originZ << " " << nav.y << " "
+                     << (nav.autoBakeColliders ? 1 : 0) << " " << (nav.drawDebug ? 1 : 0) << "\n";
             }
 
             if (reg.any_of<ParticleSystemComponent>(entity)) {
