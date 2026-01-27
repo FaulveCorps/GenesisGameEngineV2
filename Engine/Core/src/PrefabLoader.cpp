@@ -1,6 +1,7 @@
 #include "Engine/PrefabLoader.h"
 #include "Engine/Scene.h"
 #include "Engine/Components.h"
+#include "engine/UI.h"
 #include "Engine/Model.h"
 #include "Engine/Texture.h"
 #include <fstream>
@@ -35,6 +36,9 @@ struct PrefabEntityData {
 
     bool hasAudio = false;
     AudioComponent audio;
+
+    bool hasUI = false;
+    UIComponent ui;
 
     bool hasParticle = false;
     ParticleSystemComponent particle;
@@ -126,6 +130,12 @@ static void ApplyPrefabData(entt::registry& reg, entt::entity entity, const Pref
         reg.emplace_or_replace<AudioComponent>(entity, data.audio);
     } else if (reg.any_of<AudioComponent>(entity)) {
         reg.remove<AudioComponent>(entity);
+    }
+
+    if (data.hasUI) {
+        reg.emplace_or_replace<UIComponent>(entity, data.ui);
+    } else if (reg.any_of<UIComponent>(entity)) {
+        reg.remove<UIComponent>(entity);
     }
 
     if (data.hasParticle) {
@@ -273,6 +283,36 @@ static bool ParsePrefabFile(const std::string& filePath, std::vector<PrefabEntit
             a.spatial = (spatial != 0);
             current->hasAudio = true;
             current->audio = a;
+        } else if (token == "UI" && current) {
+            UIComponent ui;
+            int type = 0;
+            int useAnchors = 0;
+            ss >> type
+               >> ui.x >> ui.y >> ui.width >> ui.height
+               >> ui.color[0] >> ui.color[1] >> ui.color[2] >> ui.color[3]
+               >> useAnchors >> ui.anchorX >> ui.anchorY >> ui.pivotX >> ui.pivotY;
+            ui.type = static_cast<UIType>(type);
+            ui.useAnchors = (useAnchors != 0);
+            current->hasUI = true;
+            current->ui = ui;
+        } else if (token == "UI_TEXT" && current) {
+            std::string rest;
+            std::getline(ss, rest);
+            while (!rest.empty() && (rest[0] == ' ' || rest[0] == '\t')) rest.erase(rest.begin());
+            current->hasUI = true;
+            current->ui.text = rest;
+        } else if (token == "UI_TEX" && current) {
+            std::string rest;
+            std::getline(ss, rest);
+            while (!rest.empty() && (rest[0] == ' ' || rest[0] == '\t')) rest.erase(rest.begin());
+            current->hasUI = true;
+            if (!rest.empty() && rest != "NONE") {
+                current->ui.texturePath = rest;
+                current->ui.texture = Texture::CreateFromFile(rest);
+            } else {
+                current->ui.texturePath.clear();
+                current->ui.texture.reset();
+            }
         } else if (token == "PARTICLE" && current) {
             ParticleSystemComponent p;
             int looping = 0, play = 0;
@@ -421,6 +461,20 @@ bool PrefabLoader::SavePrefab(const Scene& scene, entt::entity root, const std::
                 file << "AUDIO " << path << " " << a.volume << " " << a.pitch << " "
                      << (a.loop ? 1 : 0) << " " << (a.playOnAwake ? 1 : 0) << " "
                      << (a.spatial ? 1 : 0) << " " << a.minDistance << " " << a.maxDistance << "\n";
+            }
+
+            if (reg.any_of<UIComponent>(entity)) {
+                const auto& ui = reg.get<UIComponent>(entity);
+                file << "UI " << (int)ui.type << " "
+                     << ui.x << " " << ui.y << " " << ui.width << " " << ui.height << " "
+                     << ui.color[0] << " " << ui.color[1] << " " << ui.color[2] << " " << ui.color[3] << " "
+                     << (ui.useAnchors ? 1 : 0) << " " << ui.anchorX << " " << ui.anchorY << " " << ui.pivotX << " " << ui.pivotY << "\n";
+                if (!ui.text.empty()) {
+                    file << "UI_TEXT " << ui.text << "\n";
+                }
+                if (!ui.texturePath.empty()) {
+                    file << "UI_TEX " << ui.texturePath << "\n";
+                }
             }
 
             if (reg.any_of<ParticleSystemComponent>(entity)) {

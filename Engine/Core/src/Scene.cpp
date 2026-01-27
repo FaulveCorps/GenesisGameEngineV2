@@ -219,6 +219,24 @@ void Scene::OnUpdateEditor(double dt) {
     if (auto audio = GetAudioSubsystem()) {
         audio->Update(dt);
     }
+
+    AnimationSystem::Update(*this, dt, true);
+
+    auto particleView = m_registry.view<ParticleSystemComponent>();
+    for (auto entity : particleView) {
+        auto* state = m_registry.try_get<ParticleSystemState>(entity);
+        if (!state || !state->playing) continue;
+
+        const auto& pc = particleView.get<ParticleSystemComponent>(entity);
+        state->time += static_cast<float>(dt);
+        if (pc.duration > 0.0f && state->time >= pc.duration) {
+            if (pc.looping) {
+                state->time = std::fmod(state->time, pc.duration);
+            } else {
+                state->playing = false;
+            }
+        }
+    }
 }
 
 Matrix4 Scene::GetWorldMatrix(entt::entity entity) const {

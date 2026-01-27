@@ -3593,6 +3593,48 @@ int main(int argc, char** argv) {
                         if (ImGui::ColorEdit4("Start Color", pc.startColor)) if (editorState == EditorState::Edit) sceneDirty = true;
                         if (ImGui::DragFloat("Rate Over Time", &pc.rateOverTime, 0.1f, 0.0f, 10000.0f)) if (editorState == EditorState::Edit) sceneDirty = true;
                         if (ImGui::DragFloat("Emitter Radius", &pc.emitterRadius, 0.01f, 0.0f, 1000.0f)) if (editorState == EditorState::Edit) sceneDirty = true;
+
+                        ImGui::Separator();
+                        ImGui::TextUnformatted("Preview");
+
+                        auto& reg = activeScene->Registry();
+                        auto* previewState = reg.try_get<Genesis::Engine::ParticleSystemState>(selectedEntity);
+                        if (ImGui::Button("Play Preview")) {
+                            if (!previewState) {
+                                previewState = &reg.emplace<Genesis::Engine::ParticleSystemState>(selectedEntity);
+                            }
+                            previewState->playing = true;
+                            previewState->started = true;
+                            if (previewState->time <= 0.0f) previewState->time = 0.0f;
+                        }
+                        ImGui::SameLine();
+                        if (ImGui::Button("Pause")) {
+                            if (previewState) {
+                                previewState->playing = false;
+                            }
+                        }
+                        ImGui::SameLine();
+                        if (ImGui::Button("Reset")) {
+                            if (previewState) {
+                                previewState->time = 0.0f;
+                                previewState->playing = false;
+                                previewState->started = true;
+                            }
+                        }
+
+                        if (previewState) {
+                            ImGui::Text("State: %s", previewState->playing ? "Playing" : "Stopped");
+                            if (pc.duration > 0.0f) {
+                                float t = std::fmod(previewState->time, pc.duration);
+                                float progress = std::min(1.0f, std::max(0.0f, t / pc.duration));
+                                ImGui::ProgressBar(progress, ImVec2(-1, 0));
+                                ImGui::Text("Time: %.2fs / %.2fs", previewState->time, pc.duration);
+                            } else {
+                                ImGui::Text("Time: %.2fs", previewState->time);
+                            }
+                        } else {
+                            ImGui::TextDisabled("Preview not started.");
+                        }
                     }
                 }
 
@@ -3626,9 +3668,14 @@ int main(int argc, char** argv) {
                 if (activeScene->Registry().all_of<Genesis::Engine::AnimationComponent>(selectedEntity)) {
                     if (ImGui::CollapsingHeader("Animation", ImGuiTreeNodeFlags_DefaultOpen)) {
                         auto& anim = activeScene->Registry().get<Genesis::Engine::AnimationComponent>(selectedEntity);
+                        auto* animTransform = activeScene->Registry().try_get<Genesis::Engine::Transform>(selectedEntity);
                         const char* clipName = anim.clip ? anim.clip->name.c_str() : "(none)";
                         ImGui::Text("Clip: %s", clipName);
                         if (ImGui::DragFloat("Current Time", &anim.currentTime, 0.01f, 0.0f, 10000.0f)) {
+                            if (anim.currentTime < 0.0f) anim.currentTime = 0.0f;
+                            if (anim.clip && animTransform) {
+                                Genesis::Engine::AnimationSystem::ApplyPose(*anim.clip, anim.currentTime, *animTransform);
+                            }
                             if (editorState == EditorState::Edit) sceneDirty = true;
                         }
                         if (ImGui::DragFloat("Speed", &anim.speed, 0.01f, -10.0f, 10.0f)) {
@@ -3636,14 +3683,26 @@ int main(int argc, char** argv) {
                         }
                         if (ImGui::Checkbox("Loop", &anim.loop)) if (editorState == EditorState::Edit) sceneDirty = true;
                         if (ImGui::Checkbox("Playing", &anim.isPlaying)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        if (ImGui::Checkbox("Preview In Editor", &anim.previewInEditor)) {
+                            if (anim.clip && animTransform) {
+                                Genesis::Engine::AnimationSystem::ApplyPose(*anim.clip, anim.currentTime, *animTransform);
+                            }
+                            if (editorState == EditorState::Edit) sceneDirty = true;
+                        }
                         if (ImGui::Button("Restart")) {
                             anim.currentTime = 0.0f;
                             anim.isPlaying = true;
+                            if (anim.clip && animTransform) {
+                                Genesis::Engine::AnimationSystem::ApplyPose(*anim.clip, anim.currentTime, *animTransform);
+                            }
                             if (editorState == EditorState::Edit) sceneDirty = true;
                         }
                         ImGui::SameLine();
                         if (ImGui::Button("Stop")) {
                             anim.isPlaying = false;
+                            if (anim.clip && animTransform) {
+                                Genesis::Engine::AnimationSystem::ApplyPose(*anim.clip, anim.currentTime, *animTransform);
+                            }
                             if (editorState == EditorState::Edit) sceneDirty = true;
                         }
                         ImGui::SameLine();
@@ -3651,7 +3710,13 @@ int main(int argc, char** argv) {
                             anim.clip.reset();
                             anim.currentTime = 0.0f;
                             anim.isPlaying = false;
+                            anim.previewInEditor = false;
                             if (editorState == EditorState::Edit) sceneDirty = true;
+                        }
+                        if (ImGui::Button("Apply Pose")) {
+                            if (anim.clip && animTransform) {
+                                Genesis::Engine::AnimationSystem::ApplyPose(*anim.clip, anim.currentTime, *animTransform);
+                            }
                         }
                     }
                 }
@@ -3667,6 +3732,21 @@ int main(int argc, char** argv) {
                         }
                         if (ImGui::DragFloat2("Position", &ui.x, 0.5f)) if (editorState == EditorState::Edit) sceneDirty = true;
                         if (ImGui::DragFloat2("Size", &ui.width, 0.5f, 0.0f, 10000.0f)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        if (ImGui::Checkbox("Use Anchors", &ui.useAnchors)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        if (ui.useAnchors) {
+                            float anchor[2] = { ui.anchorX, ui.anchorY };
+                            if (ImGui::DragFloat2("Anchor (0-1)", anchor, 0.01f, 0.0f, 1.0f)) {
+                                ui.anchorX = std::clamp(anchor[0], 0.0f, 1.0f);
+                                ui.anchorY = std::clamp(anchor[1], 0.0f, 1.0f);
+                                if (editorState == EditorState::Edit) sceneDirty = true;
+                            }
+                            float pivot[2] = { ui.pivotX, ui.pivotY };
+                            if (ImGui::DragFloat2("Pivot (0-1)", pivot, 0.01f, 0.0f, 1.0f)) {
+                                ui.pivotX = std::clamp(pivot[0], 0.0f, 1.0f);
+                                ui.pivotY = std::clamp(pivot[1], 0.0f, 1.0f);
+                                if (editorState == EditorState::Edit) sceneDirty = true;
+                            }
+                        }
                         if (ImGui::ColorEdit4("Color", ui.color)) if (editorState == EditorState::Edit) sceneDirty = true;
 
                         if (selectedEntity != lastUIEntity) {
@@ -3678,11 +3758,7 @@ int main(int argc, char** argv) {
                             if (editorState == EditorState::Edit) sceneDirty = true;
                         }
 
-                        if (ui.texture) {
-                            ImGui::Text("Texture: assigned");
-                        } else {
-                            ImGui::Text("Texture: (none)");
-                        }
+                        ImGui::Text("Texture: %s", ui.texturePath.empty() ? "(none)" : ui.texturePath.c_str());
                         ImGui::TextUnformatted("Drag an image from Content Browser to assign.");
                         if (ImGui::BeginDragDropTarget()) {
                             if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("CONTENT_BROWSER_ITEM")) {
@@ -3692,6 +3768,7 @@ int main(int argc, char** argv) {
                                     std::string ext = ToLowerCopy(p.extension().string());
                                     if (IsImageExtension(ext)) {
                                         ui.texture = Genesis::Engine::Texture::CreateFromFile(p.string());
+                                        ui.texturePath = p.string();
                                         if (editorState == EditorState::Edit) sceneDirty = true;
                                     }
                                 }
@@ -3700,6 +3777,7 @@ int main(int argc, char** argv) {
                         }
                         if (ui.texture && ImGui::Button("Clear Texture")) {
                             ui.texture.reset();
+                            ui.texturePath.clear();
                             if (editorState == EditorState::Edit) sceneDirty = true;
                         }
                     }

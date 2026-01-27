@@ -120,6 +120,7 @@ add_library(EngineCore STATIC
     src/PrefabLoader.cpp
     src/AssetDatabase.cpp
     src/AnimationSystem.cpp
+    src/Pathfinding.cpp
     src/UISystem.cpp
     ${imgui_SOURCE_DIR}/imgui.cpp
     ${imgui_SOURCE_DIR}/imgui_draw.cpp

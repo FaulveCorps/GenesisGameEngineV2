@@ -33,13 +33,15 @@ struct AnimationComponent {
     float speed = 1.0f;
     bool loop = true;
     bool isPlaying = true;
+    bool previewInEditor = false;
 };
 
 class Scene;
 
 class AnimationSystem {
 public:
-    static void Update(Scene& scene, double dt);
+    static void Update(Scene& scene, double dt, bool editorPreview = false);
+    static void ApplyPose(const AnimationClip& clip, float time, Transform& transform);
 };
 
 } // namespace Genesis::Engine

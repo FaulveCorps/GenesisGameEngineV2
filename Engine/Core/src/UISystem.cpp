@@ -7,8 +7,27 @@
 #include "engine/Texture.h"
 #include <SDL.h> // For SDL_BUTTON_LEFT
 #include "imgui.h"
+#include <algorithm>
 
 namespace Genesis::Engine {
+
+static void ResolveUIRect(const UIComponent& ui, float screenW, float screenH, float elemW, float elemH,
+                          float& outX, float& outY, float& outW, float& outH) {
+    outW = elemW;
+    outH = elemH;
+
+    if (ui.useAnchors && screenW > 0.0f && screenH > 0.0f) {
+        float anchorX = std::clamp(ui.anchorX, 0.0f, 1.0f);
+        float anchorY = std::clamp(ui.anchorY, 0.0f, 1.0f);
+        float pivotX = std::clamp(ui.pivotX, 0.0f, 1.0f);
+        float pivotY = std::clamp(ui.pivotY, 0.0f, 1.0f);
+        outX = anchorX * screenW + ui.x - pivotX * outW;
+        outY = anchorY * screenH + ui.y - pivotY * outH;
+    } else {
+        outX = ui.x;
+        outY = ui.y;
+    }
+}
 
 void UISystem::Update(Scene& scene, double /*dt*/) {
     auto input = GetInputSubsystem();
@@ -18,11 +37,17 @@ void UISystem::Update(Scene& scene, double /*dt*/) {
     input->GetMousePosition(mouseX, mouseY);
     bool mouseDown = input->IsMouseButtonDown(SDL_BUTTON_LEFT);
 
+    ImVec2 displaySize = ImGui::GetIO().DisplaySize;
+    float screenW = displaySize.x;
+    float screenH = displaySize.y;
+
     auto view = scene.Registry().view<UIComponent>();
     view.each([&](auto& ui) {
         if (ui.type == UIType::Button) {
-            bool hover = (mouseX >= ui.x && mouseX <= ui.x + ui.width &&
-                          mouseY >= ui.y && mouseY <= ui.y + ui.height);
+            float rx = 0.0f, ry = 0.0f, rw = ui.width, rh = ui.height;
+            ResolveUIRect(ui, screenW, screenH, ui.width, ui.height, rx, ry, rw, rh);
+            bool hover = (mouseX >= rx && mouseX <= rx + rw &&
+                          mouseY >= ry && mouseY <= ry + rh);
             
             if (hover) {
                 if (!ui.isHovered) {
@@ -48,16 +73,25 @@ void UISystem::Update(Scene& scene, double /*dt*/) {
 void UISystem::Render(Scene& scene, IGraphicsAPI* renderer) {
     if (!renderer) return;
 
+    ImVec2 displaySize = ImGui::GetIO().DisplaySize;
+    float screenW = displaySize.x;
+    float screenH = displaySize.y;
+
     auto view = scene.Registry().view<UIComponent>();
     view.each([&](auto& ui) {
         if (ui.type == UIType::Text && !ui.text.empty()) {
+            ImVec2 textSize = ImGui::CalcTextSize(ui.text.c_str());
+            float rx = 0.0f, ry = 0.0f, rw = textSize.x, rh = textSize.y;
+            ResolveUIRect(ui, screenW, screenH, rw, rh, rx, ry, rw, rh);
             ImGui::GetBackgroundDrawList()->AddText(
-                ImVec2(ui.x, ui.y), 
+                ImVec2(rx, ry), 
                 ImGui::GetColorU32(ImVec4(ui.color[0], ui.color[1], ui.color[2], ui.color[3])), 
                 ui.text.c_str()
             );
         }
         else if (ui.texture) {
+            float rx = 0.0f, ry = 0.0f, rw = ui.width, rh = ui.height;
+            ResolveUIRect(ui, screenW, screenH, ui.width, ui.height, rx, ry, rw, rh);
             float r = ui.color[0];
             float g = ui.color[1];
             float b = ui.color[2];
@@ -78,7 +112,7 @@ void UISystem::Render(Scene& scene, IGraphicsAPI* renderer) {
             uint32_t color = (ua << 24) | (ur << 16) | (ug << 8) | ub;
 
             // Draw texture
-            renderer->DrawTexture(ui.texture.get(), ui.x, ui.y, ui.width, ui.height, 0.0f, 0.0f, 1.0f, 1.0f, color);
+            renderer->DrawTexture(ui.texture.get(), rx, ry, rw, rh, 0.0f, 0.0f, 1.0f, 1.0f, color);
         }
     });
 }

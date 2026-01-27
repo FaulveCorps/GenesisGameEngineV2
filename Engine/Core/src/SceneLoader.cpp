@@ -1,6 +1,7 @@
 #include "engine/SceneLoader.h"
 #include "engine/Scene.h"
 #include "engine/Components.h"
+#include "engine/UI.h"
 #include "engine/Model.h"
 #include <fstream>
 #include <sstream>
@@ -133,6 +134,40 @@ bool SceneLoader::LoadScene(Scene& scene, const std::string& filePath) {
             a.playOnAwake = (play != 0);
             a.spatial = (spatial != 0);
             scene.Registry().emplace<AudioComponent>(currentEntity, a);
+        }
+        else if (token == "UI" && currentEntity != entt::null) {
+            UIComponent ui;
+            int type = 0;
+            int useAnchors = 0;
+            ss >> type
+               >> ui.x >> ui.y >> ui.width >> ui.height
+               >> ui.color[0] >> ui.color[1] >> ui.color[2] >> ui.color[3]
+               >> useAnchors >> ui.anchorX >> ui.anchorY >> ui.pivotX >> ui.pivotY;
+            ui.type = static_cast<UIType>(type);
+            ui.useAnchors = (useAnchors != 0);
+            scene.Registry().emplace_or_replace<UIComponent>(currentEntity, ui);
+        }
+        else if (token == "UI_TEXT" && currentEntity != entt::null) {
+            std::string rest;
+            std::getline(ss, rest);
+            while (!rest.empty() && (rest[0] == ' ' || rest[0] == '\t')) rest.erase(rest.begin());
+            if (auto* ui = scene.Registry().try_get<UIComponent>(currentEntity)) {
+                ui->text = rest;
+            }
+        }
+        else if (token == "UI_TEX" && currentEntity != entt::null) {
+            std::string rest;
+            std::getline(ss, rest);
+            while (!rest.empty() && (rest[0] == ' ' || rest[0] == '\t')) rest.erase(rest.begin());
+            if (auto* ui = scene.Registry().try_get<UIComponent>(currentEntity)) {
+                if (!rest.empty() && rest != "NONE") {
+                    ui->texturePath = rest;
+                    ui->texture = Texture::CreateFromFile(rest);
+                } else {
+                    ui->texturePath.clear();
+                    ui->texture.reset();
+                }
+            }
         }
         else if (token == "PARTICLE" && currentEntity != entt::null) {
             ParticleSystemComponent p;
@@ -380,6 +415,20 @@ bool SceneLoader::SaveScene(const Scene& scene, const std::string& filePath) {
                 const auto& a = reg.get<AudioComponent>(entity);
                 std::string path = a.soundPath.empty() ? "NONE" : a.soundPath;
                 file << "AUDIO " << path << " " << a.volume << " " << a.pitch << " " << (a.loop ? 1 : 0) << " " << (a.playOnAwake ? 1 : 0) << " " << (a.spatial ? 1 : 0) << " " << a.minDistance << " " << a.maxDistance << "\n";
+            }
+
+            if (reg.any_of<UIComponent>(entity)) {
+                const auto& ui = reg.get<UIComponent>(entity);
+                file << "UI " << (int)ui.type << " "
+                     << ui.x << " " << ui.y << " " << ui.width << " " << ui.height << " "
+                     << ui.color[0] << " " << ui.color[1] << " " << ui.color[2] << " " << ui.color[3] << " "
+                     << (ui.useAnchors ? 1 : 0) << " " << ui.anchorX << " " << ui.anchorY << " " << ui.pivotX << " " << ui.pivotY << "\n";
+                if (!ui.text.empty()) {
+                    file << "UI_TEXT " << ui.text << "\n";
+                }
+                if (!ui.texturePath.empty()) {
+                    file << "UI_TEX " << ui.texturePath << "\n";
+                }
             }
 
             if (reg.any_of<ParticleSystemComponent>(entity)) {
