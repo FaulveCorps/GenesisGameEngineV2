@@ -156,6 +156,38 @@ bool SceneLoader::LoadScene(Scene& scene, const std::string& filePath) {
                 ui.backgroundColor[2] = bgB;
                 ui.backgroundColor[3] = bgA;
                 ui.drawBackground = (drawBg != 0);
+                int useAlign = ui.useTextAlign ? 1 : 0;
+                int alignH = static_cast<int>(ui.textAlignH);
+                int alignV = static_cast<int>(ui.textAlignV);
+                if (ss >> useAlign >> alignH >> alignV) {
+                    ui.useTextAlign = (useAlign != 0);
+                    ui.textAlignH = static_cast<UIAlignH>(alignH);
+                    ui.textAlignV = static_cast<UIAlignV>(alignV);
+                    float textScale = ui.textScale;
+                    int wrapText = ui.wrapText ? 1 : 0;
+                    float padX = ui.paddingX;
+                    float padY = ui.paddingY;
+                    if (ss >> textScale >> wrapText >> padX >> padY) {
+                        ui.textScale = textScale;
+                        ui.wrapText = (wrapText != 0);
+                        ui.paddingX = padX;
+                        ui.paddingY = padY;
+                        int drawBorder = ui.drawBorder ? 1 : 0;
+                        float borderThickness = ui.borderThickness;
+                        float borderR = ui.borderColor[0];
+                        float borderG = ui.borderColor[1];
+                        float borderB = ui.borderColor[2];
+                        float borderA = ui.borderColor[3];
+                        if (ss >> drawBorder >> borderThickness >> borderR >> borderG >> borderB >> borderA) {
+                            ui.drawBorder = (drawBorder != 0);
+                            ui.borderThickness = borderThickness;
+                            ui.borderColor[0] = borderR;
+                            ui.borderColor[1] = borderG;
+                            ui.borderColor[2] = borderB;
+                            ui.borderColor[3] = borderA;
+                        }
+                    }
+                }
             }
             scene.Registry().emplace_or_replace<UIComponent>(currentEntity, ui);
         }
@@ -309,7 +341,7 @@ bool SceneLoader::LoadScene(Scene& scene, const std::string& filePath) {
     return true;
 }
 
-bool SceneLoader::SaveScene(const Scene& scene, const std::string& filePath) {
+bool SceneLoader::SaveScene(Scene& scene, const std::string& filePath) {
     namespace fs = std::filesystem;
     try {
         fs::path outPath(filePath);
@@ -326,7 +358,7 @@ bool SceneLoader::SaveScene(const Scene& scene, const std::string& filePath) {
         file << "# Saved Scene\n";
         file << std::fixed << std::setprecision(6);
 
-        const auto& reg = scene.Registry();
+        auto& reg = scene.Registry();
         struct EntityEntry {
             entt::entity entity;
             uint64_t id;
@@ -470,7 +502,11 @@ bool SceneLoader::SaveScene(const Scene& scene, const std::string& filePath) {
                      << ui.color[0] << " " << ui.color[1] << " " << ui.color[2] << " " << ui.color[3] << " "
                      << (ui.useAnchors ? 1 : 0) << " " << ui.anchorX << " " << ui.anchorY << " " << ui.pivotX << " " << ui.pivotY << " "
                      << ui.backgroundColor[0] << " " << ui.backgroundColor[1] << " " << ui.backgroundColor[2] << " " << ui.backgroundColor[3] << " "
-                     << (ui.drawBackground ? 1 : 0) << "\n";
+                     << (ui.drawBackground ? 1 : 0) << " "
+                     << (ui.useTextAlign ? 1 : 0) << " " << (int)ui.textAlignH << " " << (int)ui.textAlignV << " "
+                     << ui.textScale << " " << (ui.wrapText ? 1 : 0) << " " << ui.paddingX << " " << ui.paddingY << " "
+                     << (ui.drawBorder ? 1 : 0) << " " << ui.borderThickness << " "
+                     << ui.borderColor[0] << " " << ui.borderColor[1] << " " << ui.borderColor[2] << " " << ui.borderColor[3] << "\n";
                 if (!ui.text.empty()) {
                     file << "UI_TEXT " << ui.text << "\n";
                 }

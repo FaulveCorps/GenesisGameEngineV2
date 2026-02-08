@@ -11,6 +11,8 @@
 #include "engine/ImGuiLayer.h"
 #include "engine/SceneLoader.h"
 #include "engine/IAudio.h"
+#include "engine/IPhysics.h"
+#include "engine/IScripting.h"
 #include "engine/ShaderRegistry.h"
 #include "engine/TextureRegistry.h"
 #include "engine/Texture.h"
@@ -21,6 +23,7 @@
 #include "engine/SubsystemRegistry.h"
 #include "engine/Animation.h"
 #include "engine/UI.h"
+#include "engine/NavigationSystem.h"
 #include "imgui_impl_sdl3.h"
 #include "imgui_impl_opengl3.h"
 #include "ImGuizmo.h"
@@ -3557,9 +3560,89 @@ int main(int argc, char** argv) {
                             strncpy_s(audioPathBuf, ac.soundPath.c_str(), sizeof(audioPathBuf) - 1);
                             lastAudioEntity = selectedEntity;
                         }
+
+                        auto ResolveAudioPath = [&](const std::string& path) {
+                            std::filesystem::path p(path);
+                            if (p.is_relative()) {
+                                return projectRoot / p;
+                            }
+                            return p;
+                        };
+
+                        auto ApplyAudioImportDefaults = [&](const std::filesystem::path& path) {
+                            if (path.empty()) return false;
+                            if (!std::filesystem::exists(path)) return false;
+
+                            Genesis::Engine::AssetMeta meta;
+                            if (!Genesis::Engine::AssetDatabase::LoadMeta(path, meta)) {
+                                meta = Genesis::Engine::AssetDatabase::EnsureMeta(path, projectRoot);
+                            }
+
+                            auto ReadSettingFloat = [&](const char* key, float& out) {
+                                std::string value;
+                                if (!Genesis::Engine::AssetDatabase::GetImportSetting(meta, key, value)) return false;
+                                char* end = nullptr;
+                                float parsed = std::strtof(value.c_str(), &end);
+                                if (end == value.c_str() || !std::isfinite(parsed)) return false;
+                                out = parsed;
+                                return true;
+                            };
+
+                            auto ReadSettingBool = [&](const char* key, bool& out) {
+                                std::string value;
+                                if (!Genesis::Engine::AssetDatabase::GetImportSetting(meta, key, value)) return false;
+                                std::string v = ToLowerCopy(value);
+                                out = (v == "1" || v == "true" || v == "yes");
+                                return true;
+                            };
+
+                            bool changed = false;
+                            float value = 0.0f;
+                            bool bvalue = false;
+
+                            if (ReadSettingFloat("volume", value)) { ac.volume = value; changed = true; }
+                            if (ReadSettingFloat("pitch", value)) { ac.pitch = value; changed = true; }
+                            if (ReadSettingFloat("min_distance", value)) { ac.minDistance = value; changed = true; }
+                            if (ReadSettingFloat("max_distance", value)) { ac.maxDistance = value; changed = true; }
+
+                            if (ReadSettingBool("loop", bvalue)) { ac.loop = bvalue; changed = true; }
+                            if (ReadSettingBool("spatial", bvalue)) { ac.spatial = bvalue; changed = true; }
+                            if (ReadSettingBool("play_on_awake", bvalue)) { ac.playOnAwake = bvalue; changed = true; }
+
+                            if (ac.minDistance > ac.maxDistance) {
+                                ac.maxDistance = ac.minDistance;
+                            }
+
+                            return changed;
+                        };
+
                         if (ImGui::InputText("Sound Path", audioPathBuf, sizeof(audioPathBuf))) {
                             ac.soundPath = audioPathBuf;
                             if (editorState == EditorState::Edit) sceneDirty = true;
+                        }
+                        ImGui::TextUnformatted("Drag an audio asset from Content Browser to assign.");
+                        if (ImGui::BeginDragDropTarget()) {
+                            if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("CONTENT_BROWSER_ITEM")) {
+                                const char* droppedPath = (const char*)payload->Data;
+                                if (droppedPath && droppedPath[0] != 0) {
+                                    std::filesystem::path p(droppedPath);
+                                    std::string ext = ToLowerCopy(p.extension().string());
+                                    if (ext == ".wav" || ext == ".mp3" || ext == ".ogg") {
+                                        ac.soundPath = p.string();
+                                        strncpy_s(audioPathBuf, ac.soundPath.c_str(), sizeof(audioPathBuf) - 1);
+                                        if (ApplyAudioImportDefaults(ResolveAudioPath(ac.soundPath))) {
+                                            if (editorState == EditorState::Edit) sceneDirty = true;
+                                        }
+                                        if (editorState == EditorState::Edit) sceneDirty = true;
+                                    }
+                                }
+                            }
+                            ImGui::EndDragDropTarget();
+                        }
+                        if (ImGui::Button("Apply Import Defaults")) {
+                            if (ApplyAudioImportDefaults(ResolveAudioPath(ac.soundPath))) {
+                                if (editorState == EditorState::Edit) sceneDirty = true;
+                            }
                         }
                         if (ImGui::DragFloat("Volume", &ac.volume, 0.01f, 0.0f, 5.0f)) if (editorState == EditorState::Edit) sceneDirty = true;
                         if (ImGui::DragFloat("Pitch", &ac.pitch, 0.01f, 0.1f, 4.0f)) if (editorState == EditorState::Edit) sceneDirty = true;
@@ -3753,6 +3836,47 @@ int main(int argc, char** argv) {
                             if (ImGui::ColorEdit4("Background Color", ui.backgroundColor)) if (editorState == EditorState::Edit) sceneDirty = true;
                         }
 
+                        if (ImGui::Checkbox("Draw Border", &ui.drawBorder)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        if (ui.drawBorder) {
+                            if (ImGui::ColorEdit4("Border Color", ui.borderColor)) if (editorState == EditorState::Edit) sceneDirty = true;
+                            if (ImGui::DragFloat("Border Thickness", &ui.borderThickness, 0.1f, 0.1f, 20.0f, "%.2f")) {
+                                if (ui.borderThickness < 0.1f) ui.borderThickness = 0.1f;
+                                if (editorState == EditorState::Edit) sceneDirty = true;
+                            }
+                        }
+
+                        if (ImGui::Checkbox("Custom Text Alignment", &ui.useTextAlign)) if (editorState == EditorState::Edit) sceneDirty = true;
+                        if (ui.useTextAlign) {
+                            const char* alignHOptions[] = { "Left", "Center", "Right" };
+                            int alignH = static_cast<int>(ui.textAlignH);
+                            if (ImGui::Combo("Text Align H", &alignH, alignHOptions, IM_ARRAYSIZE(alignHOptions))) {
+                                ui.textAlignH = static_cast<Genesis::Engine::UIAlignH>(alignH);
+                                if (editorState == EditorState::Edit) sceneDirty = true;
+                            }
+                            const char* alignVOptions[] = { "Top", "Center", "Bottom" };
+                            int alignV = static_cast<int>(ui.textAlignV);
+                            if (ImGui::Combo("Text Align V", &alignV, alignVOptions, IM_ARRAYSIZE(alignVOptions))) {
+                                ui.textAlignV = static_cast<Genesis::Engine::UIAlignV>(alignV);
+                                if (editorState == EditorState::Edit) sceneDirty = true;
+                            }
+                        }
+
+                        if (ui.type != Genesis::Engine::UIType::Image) {
+                            if (ImGui::DragFloat("Text Scale", &ui.textScale, 0.05f, 0.1f, 5.0f, "%.2f")) {
+                                if (ui.textScale < 0.1f) ui.textScale = 0.1f;
+                                if (editorState == EditorState::Edit) sceneDirty = true;
+                            }
+                            if (ImGui::Checkbox("Wrap Text", &ui.wrapText)) if (editorState == EditorState::Edit) sceneDirty = true;
+                            if (ui.wrapText || ui.useTextAlign) {
+                                float padding[2] = { ui.paddingX, ui.paddingY };
+                                if (ImGui::DragFloat2("Text Padding", padding, 0.5f, 0.0f, 1000.0f)) {
+                                    ui.paddingX = std::max(0.0f, padding[0]);
+                                    ui.paddingY = std::max(0.0f, padding[1]);
+                                    if (editorState == EditorState::Edit) sceneDirty = true;
+                                }
+                            }
+                        }
+
                         if (selectedEntity != lastUIEntity) {
                             strncpy_s(uiTextBuf, ui.text.c_str(), sizeof(uiTextBuf) - 1);
                             lastUIEntity = selectedEntity;
@@ -3797,6 +3921,26 @@ int main(int argc, char** argv) {
                         if (ImGui::DragFloat("Y", &nav.y, 0.1f, -1000.0f, 1000.0f)) if (editorState == EditorState::Edit) sceneDirty = true;
                         if (ImGui::Checkbox("Auto Bake Colliders", &nav.autoBakeColliders)) if (editorState == EditorState::Edit) sceneDirty = true;
                         if (ImGui::Checkbox("Draw Debug", &nav.drawDebug)) if (editorState == EditorState::Edit) sceneDirty = true;
+
+                        auto* navState = activeScene->Registry().try_get<Genesis::Engine::NavGridState>(selectedEntity);
+                        if (!navState) {
+                            navState = &activeScene->Registry().emplace<Genesis::Engine::NavGridState>(selectedEntity);
+                        }
+                        Genesis::Engine::NavigationSystem::EnsureNavGridCache(*activeScene, nav, *navState);
+
+                        if (ImGui::Button("Rebuild Grid Cache")) {
+                            navState->dirty = true;
+                            Genesis::Engine::NavigationSystem::EnsureNavGridCache(*activeScene, nav, *navState);
+                        }
+
+                        const int totalCells = std::max(0, nav.width) * std::max(0, nav.height);
+                        size_t blockedCount = 0;
+                        for (uint8_t value : navState->blocked) {
+                            if (value) ++blockedCount;
+                        }
+                        ImGui::SameLine();
+                        ImGui::Text("Blocked: %zu / %d", blockedCount, totalCells);
+
                         ImGui::Separator();
                         ImGui::Checkbox("Draw Debug Path", &nav.debugPath);
                         if (ImGui::DragFloat2("Start (X,Z)", &nav.debugStartX, 0.1f)) if (editorState == EditorState::Edit) sceneDirty = true;
@@ -4385,6 +4529,83 @@ int main(int argc, char** argv) {
                             if (ImGui::DragFloat("Scale Factor", &scaleFactor, 0.01f, 0.001f, 1000.0f, "%.3f")) {
                                 if (scaleFactor < 0.001f) scaleFactor = 0.001f;
                                 Genesis::Engine::AssetDatabase::SetImportSetting(meta, "scale_factor", std::to_string(scaleFactor));
+                                settingsChanged = true;
+                            }
+                        } else if (meta.importer == "audio") {
+                            float volume = 1.0f;
+                            {
+                                std::string volValue = GetSettingValue("volume", "1.0");
+                                char* end = nullptr;
+                                float parsed = std::strtof(volValue.c_str(), &end);
+                                if (end != volValue.c_str() && std::isfinite(parsed)) {
+                                    volume = parsed;
+                                }
+                            }
+                            if (ImGui::SliderFloat("Default Volume", &volume, 0.0f, 5.0f, "%.2f")) {
+                                Genesis::Engine::AssetDatabase::SetImportSetting(meta, "volume", std::to_string(volume));
+                                settingsChanged = true;
+                            }
+
+                            float pitch = 1.0f;
+                            {
+                                std::string pitchValue = GetSettingValue("pitch", "1.0");
+                                char* end = nullptr;
+                                float parsed = std::strtof(pitchValue.c_str(), &end);
+                                if (end != pitchValue.c_str() && std::isfinite(parsed)) {
+                                    pitch = parsed;
+                                }
+                            }
+                            if (ImGui::SliderFloat("Default Pitch", &pitch, 0.1f, 4.0f, "%.2f")) {
+                                Genesis::Engine::AssetDatabase::SetImportSetting(meta, "pitch", std::to_string(pitch));
+                                settingsChanged = true;
+                            }
+
+                            bool loop = GetSettingBool("loop", false);
+                            if (ImGui::Checkbox("Default Loop", &loop)) {
+                                Genesis::Engine::AssetDatabase::SetImportSetting(meta, "loop", loop ? "1" : "0");
+                                settingsChanged = true;
+                            }
+
+                            bool spatial = GetSettingBool("spatial", true);
+                            if (ImGui::Checkbox("Default Spatial", &spatial)) {
+                                Genesis::Engine::AssetDatabase::SetImportSetting(meta, "spatial", spatial ? "1" : "0");
+                                settingsChanged = true;
+                            }
+
+                            bool playOnAwake = GetSettingBool("play_on_awake", true);
+                            if (ImGui::Checkbox("Default Play On Awake", &playOnAwake)) {
+                                Genesis::Engine::AssetDatabase::SetImportSetting(meta, "play_on_awake", playOnAwake ? "1" : "0");
+                                settingsChanged = true;
+                            }
+
+                            float minDist = 1.0f;
+                            {
+                                std::string minValue = GetSettingValue("min_distance", "1.0");
+                                char* end = nullptr;
+                                float parsed = std::strtof(minValue.c_str(), &end);
+                                if (end != minValue.c_str() && std::isfinite(parsed)) {
+                                    minDist = parsed;
+                                }
+                            }
+                            if (ImGui::DragFloat("Default Min Distance", &minDist, 0.1f, 0.0f, 1000.0f, "%.2f")) {
+                                if (minDist < 0.0f) minDist = 0.0f;
+                                Genesis::Engine::AssetDatabase::SetImportSetting(meta, "min_distance", std::to_string(minDist));
+                                settingsChanged = true;
+                            }
+
+                            float maxDist = 20.0f;
+                            {
+                                std::string maxValue = GetSettingValue("max_distance", "20.0");
+                                char* end = nullptr;
+                                float parsed = std::strtof(maxValue.c_str(), &end);
+                                if (end != maxValue.c_str() && std::isfinite(parsed)) {
+                                    maxDist = parsed;
+                                }
+                            }
+                            if (maxDist < minDist) maxDist = minDist;
+                            if (ImGui::DragFloat("Default Max Distance", &maxDist, 0.1f, 0.0f, 10000.0f, "%.2f")) {
+                                if (maxDist < minDist) maxDist = minDist;
+                                Genesis::Engine::AssetDatabase::SetImportSetting(meta, "max_distance", std::to_string(maxDist));
                                 settingsChanged = true;
                             }
                         }

@@ -50,3 +50,36 @@ TEST_CASE("Navigation grid: find path in world space", "[navigation]") {
     REQUIRE(!result.gridPath.empty());
     REQUIRE(result.worldPath.size() == result.gridPath.size() * 3);
 }
+
+TEST_CASE("Navigation grid: sphere collider blocks cells", "[navigation]") {
+    Scene scene;
+    NavGridComponent nav;
+    nav.width = 5;
+    nav.height = 1;
+    nav.cellSize = 1.0f;
+    nav.originX = 0.0f;
+    nav.originZ = 0.0f;
+    nav.autoBakeColliders = true;
+
+    auto gridEntity = scene.Registry().create();
+    scene.Registry().emplace<NavGridComponent>(gridEntity, nav);
+
+    auto sphereEntity = scene.Registry().create();
+    SphereColliderComponent sphere;
+    sphere.radius = 0.6f;
+    sphere.offset[0] = 0.0f;
+    sphere.offset[1] = 0.0f;
+    sphere.offset[2] = 0.0f;
+    scene.Registry().emplace<SphereColliderComponent>(sphereEntity, sphere);
+
+    Transform t;
+    t.x = 2.0f;
+    t.z = 0.0f;
+    scene.Registry().emplace<Transform>(sphereEntity, t);
+
+    std::vector<uint8_t> blocked;
+    auto graph = NavigationSystem::BuildGrid(scene, nav, &blocked);
+
+    REQUIRE(graph.IsWalkable({2, 0}) == false);
+    REQUIRE(blocked.size() == static_cast<size_t>(nav.width * nav.height));
+}

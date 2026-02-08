@@ -105,6 +105,28 @@ static ResourceLimits g_defaultResourceLimits;
 // Modules scheduled for deferred cleanup (e.g., timed-out modules that still have active calls)
 static std::vector<std::unique_ptr<WasmModule>>& g_shutdownModules = *new std::vector<std::unique_ptr<WasmModule>>;
 
+static bool HasActiveCalls() {
+    std::lock_guard<std::mutex> lk(g_wasmMutex);
+    for (auto &p : g_modules) {
+        if (p.second && p.second->active_calls.load() > 0) return true;
+    }
+    for (auto &p : g_shutdownModules) {
+        if (p && p->active_calls.load() > 0) return true;
+    }
+    return false;
+}
+
+static void WaitForActiveCalls(std::chrono::milliseconds maxWait) {
+    auto start = std::chrono::steady_clock::now();
+    while (HasActiveCalls()) {
+        if (maxWait.count() > 0) {
+            auto elapsed = std::chrono::steady_clock::now() - start;
+            if (elapsed >= maxWait) break;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+}
+
 // Forward declarations for host functions (M3 API raw-style signatures)
 static const void* engine_create_body(IM3Runtime runtime, IM3ImportContext _ctx, uint64_t* _sp, void* _mem);
 static const void* engine_destroy_body(IM3Runtime runtime, IM3ImportContext _ctx, uint64_t* _sp, void* _mem);
@@ -136,6 +158,9 @@ bool WasmRuntime::Init() {
 }
 
 void WasmRuntime::Shutdown() {
+    // Wait for any in-flight async calls to finish so we don't free runtimes out from under them.
+    WaitForActiveCalls(std::chrono::milliseconds(5000));
+
     std::lock_guard<std::mutex> lk(g_wasmMutex);
     // Destroy modules first (tokens will unregister and runtime/module will be freed in WasmModule destructors)
     std::cerr << "WasmRuntime::Shutdown: destroying " << g_modules.size() << " modules" << std::endl;

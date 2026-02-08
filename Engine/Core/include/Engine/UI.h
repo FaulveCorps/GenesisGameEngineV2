@@ -14,6 +14,18 @@ enum class UIType {
     Text // Placeholder
 };
 
+enum class UIAlignH {
+    Left,
+    Center,
+    Right
+};
+
+enum class UIAlignV {
+    Top,
+    Center,
+    Bottom
+};
+
 struct UIComponent {
     UIType type = UIType::Image;
     float x = 0.0f, y = 0.0f;
@@ -29,6 +41,16 @@ struct UIComponent {
     bool drawBackground = true;
     float color[4] = {1.0f, 1.0f, 1.0f, 1.0f};
     std::string text; // For text/button
+    bool useTextAlign = false;
+    UIAlignH textAlignH = UIAlignH::Left;
+    UIAlignV textAlignV = UIAlignV::Top;
+    float textScale = 1.0f;
+    bool wrapText = false;
+    float paddingX = 0.0f;
+    float paddingY = 0.0f;
+    bool drawBorder = false;
+    float borderThickness = 1.0f;
+    float borderColor[4] = {0.0f, 0.0f, 0.0f, 1.0f};
     std::function<void()> onClick;
     bool isHovered = false;
     bool isPressed = false;

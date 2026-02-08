@@ -7,6 +7,7 @@ namespace Genesis::Engine {
 
 class Scene;
 struct NavGridComponent;
+struct NavGridState;
 
 struct NavPathResult {
     bool success = false;
@@ -23,6 +24,8 @@ public:
     static GridGraph BuildGrid(const Scene& scene, const NavGridComponent& grid, std::vector<uint8_t>* blockedOut = nullptr);
     static NavPathResult FindPath(const Scene& scene, const NavGridComponent& grid,
                                   float startX, float startZ, float goalX, float goalZ);
+
+    static void EnsureNavGridCache(const Scene& scene, const NavGridComponent& grid, NavGridState& state);
 
     static void UpdateAgents(Scene& scene, double dt);
 };

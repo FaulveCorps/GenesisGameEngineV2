@@ -44,13 +44,13 @@ TEST_CASE("AnimationSystem Smoke Test", "[animation]") {
     scene.Registry().emplace<AnimationComponent>(entity, anim);
 
     // Update 0.5s
-    scene.Update(0.5);
+    AnimationSystem::Update(scene, 0.5);
     
     auto& t_updated = scene.Registry().get<Transform>(entity);
     REQUIRE(t_updated.x == Catch::Approx(5.0f));
     
     // Update another 0.5s
-    scene.Update(0.5);
+    AnimationSystem::Update(scene, 0.5);
     auto& t_final = scene.Registry().get<Transform>(entity);
     REQUIRE(t_final.x == Catch::Approx(10.0f));
 }

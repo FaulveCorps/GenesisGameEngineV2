@@ -5,6 +5,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
+#include <cstring>
 #include <limits>
 
 namespace Genesis::Engine {
@@ -19,6 +21,106 @@ static NavVec3 TransformPoint(const Matrix4& m, const NavVec3& v) {
         m.m[1] * v.x + m.m[5] * v.y + m.m[9] * v.z + m.m[13],
         m.m[2] * v.x + m.m[6] * v.y + m.m[10] * v.z + m.m[14]
     };
+}
+
+static uint64_t HashCombine(uint64_t h, uint64_t v) {
+    constexpr uint64_t kFnvPrime = 1099511628211ULL;
+    return (h ^ v) * kFnvPrime;
+}
+
+static uint64_t HashFloat(uint64_t h, float v) {
+    uint32_t bits = 0;
+    std::memcpy(&bits, &v, sizeof(bits));
+    return HashCombine(h, static_cast<uint64_t>(bits));
+}
+
+static uint64_t HashMatrix(uint64_t h, const Matrix4& m) {
+    for (int i = 0; i < 16; ++i) {
+        h = HashFloat(h, m.m[i]);
+    }
+    return h;
+}
+
+static uint64_t HashColliders(const Scene& scene) {
+    constexpr uint64_t kFnvOffset = 1469598103934665603ULL;
+    uint64_t h = kFnvOffset;
+    size_t count = 0;
+
+    auto& reg = scene.Registry();
+    auto view = reg.view<BoxColliderComponent, Transform>();
+    for (auto entity : view) {
+        const auto& collider = view.get<BoxColliderComponent>(entity);
+        Matrix4 world = scene.GetWorldMatrix(entity);
+
+        h = HashMatrix(h, world);
+        for (int i = 0; i < 3; ++i) {
+            h = HashFloat(h, collider.size[i]);
+        }
+        for (int i = 0; i < 3; ++i) {
+            h = HashFloat(h, collider.offset[i]);
+        }
+        h = HashCombine(h, collider.isTrigger ? 1ULL : 0ULL);
+        ++count;
+    }
+
+    auto sphereView = reg.view<SphereColliderComponent, Transform>();
+    for (auto entity : sphereView) {
+        const auto& collider = sphereView.get<SphereColliderComponent>(entity);
+        Matrix4 world = scene.GetWorldMatrix(entity);
+
+        h = HashMatrix(h, world);
+        h = HashFloat(h, collider.radius);
+        for (int i = 0; i < 3; ++i) {
+            h = HashFloat(h, collider.offset[i]);
+        }
+        h = HashCombine(h, collider.isTrigger ? 1ULL : 0ULL);
+        ++count;
+    }
+
+    h = HashCombine(h, static_cast<uint64_t>(count));
+    return h;
+}
+
+static bool NavGridConfigChanged(const NavGridComponent& grid, const NavGridState& state) {
+    return state.cachedWidth != grid.width
+        || state.cachedHeight != grid.height
+        || state.cachedCellSize != grid.cellSize
+        || state.cachedOriginX != grid.originX
+        || state.cachedOriginZ != grid.originZ
+        || state.cachedY != grid.y
+        || state.cachedAutoBake != grid.autoBakeColliders;
+}
+
+static void UpdateNavGridCache(const Scene& scene, const NavGridComponent& grid, NavGridState& state) {
+    const bool invalidGrid = grid.width <= 0 || grid.height <= 0 || grid.cellSize <= 0.0f;
+    const bool configChanged = NavGridConfigChanged(grid, state);
+
+    uint64_t colliderHash = 0;
+    if (!invalidGrid && grid.autoBakeColliders) {
+        colliderHash = HashColliders(scene);
+    }
+
+    const bool needsRebuild = state.dirty || configChanged
+        || (grid.autoBakeColliders && colliderHash != state.collidersHash);
+
+    if (needsRebuild) {
+        if (invalidGrid) {
+            state.grid = GridGraph(0, 0);
+            state.blocked.clear();
+        } else {
+            state.grid = NavigationSystem::BuildGrid(scene, grid, &state.blocked);
+        }
+
+        state.cachedWidth = grid.width;
+        state.cachedHeight = grid.height;
+        state.cachedCellSize = grid.cellSize;
+        state.cachedOriginX = grid.originX;
+        state.cachedOriginZ = grid.originZ;
+        state.cachedY = grid.y;
+        state.cachedAutoBake = grid.autoBakeColliders;
+        state.collidersHash = colliderHash;
+        state.dirty = false;
+    }
 }
 
 bool NavigationSystem::WorldToGrid(const NavGridComponent& grid, float worldX, float worldZ, GridCoord& outCoord) {
@@ -36,12 +138,17 @@ void NavigationSystem::GridToWorld(const NavGridComponent& grid, const GridCoord
 }
 
 GridGraph NavigationSystem::BuildGrid(const Scene& scene, const NavGridComponent& grid, std::vector<uint8_t>* blockedOut) {
+    if (grid.width <= 0 || grid.height <= 0 || grid.cellSize <= 0.0f) {
+        if (blockedOut) blockedOut->clear();
+        return GridGraph(0, 0);
+    }
+
     GridGraph graph(grid.width, grid.height);
     if (blockedOut) {
         blockedOut->assign(static_cast<size_t>(grid.width * grid.height), 0);
     }
 
-    if (!grid.autoBakeColliders || grid.width <= 0 || grid.height <= 0 || grid.cellSize <= 0.0f) {
+    if (!grid.autoBakeColliders) {
         return graph;
     }
 
@@ -104,6 +211,58 @@ GridGraph NavigationSystem::BuildGrid(const Scene& scene, const NavGridComponent
         }
     }
 
+    auto sphereView = reg.view<SphereColliderComponent, Transform>();
+    for (auto entity : sphereView) {
+        const auto& collider = sphereView.get<SphereColliderComponent>(entity);
+        Matrix4 world = scene.GetWorldMatrix(entity);
+
+        NavVec3 centerLocal{collider.offset[0], collider.offset[1], collider.offset[2]};
+        NavVec3 centerWorld = TransformPoint(world, centerLocal);
+
+        // Approximate world scale from matrix columns; use max scale for conservative radius.
+        float sx = std::sqrt(world.m[0] * world.m[0] + world.m[1] * world.m[1] + world.m[2] * world.m[2]);
+        float sy = std::sqrt(world.m[4] * world.m[4] + world.m[5] * world.m[5] + world.m[6] * world.m[6]);
+        float sz = std::sqrt(world.m[8] * world.m[8] + world.m[9] * world.m[9] + world.m[10] * world.m[10]);
+        float scale = std::max(sx, std::max(sy, sz));
+        float radius = collider.radius * scale;
+
+        float minX = centerWorld.x - radius;
+        float maxX = centerWorld.x + radius;
+        float minZ = centerWorld.z - radius;
+        float maxZ = centerWorld.z + radius;
+
+        int minCellX = static_cast<int>(std::floor((minX - grid.originX) / grid.cellSize));
+        int maxCellX = static_cast<int>(std::floor((maxX - grid.originX) / grid.cellSize));
+        int minCellY = static_cast<int>(std::floor((minZ - grid.originZ) / grid.cellSize));
+        int maxCellY = static_cast<int>(std::floor((maxZ - grid.originZ) / grid.cellSize));
+
+        minCellX = std::max(0, std::min(minCellX, grid.width - 1));
+        maxCellX = std::max(0, std::min(maxCellX, grid.width - 1));
+        minCellY = std::max(0, std::min(minCellY, grid.height - 1));
+        maxCellY = std::max(0, std::min(maxCellY, grid.height - 1));
+
+        float radiusSq = radius * radius;
+        for (int y = minCellY; y <= maxCellY; ++y) {
+            for (int x = minCellX; x <= maxCellX; ++x) {
+                float cellMinX = grid.originX + static_cast<float>(x) * grid.cellSize;
+                float cellMinZ = grid.originZ + static_cast<float>(y) * grid.cellSize;
+                float cellMaxX = cellMinX + grid.cellSize;
+                float cellMaxZ = cellMinZ + grid.cellSize;
+
+                float closestX = std::clamp(centerWorld.x, cellMinX, cellMaxX);
+                float closestZ = std::clamp(centerWorld.z, cellMinZ, cellMaxZ);
+                float dx = centerWorld.x - closestX;
+                float dz = centerWorld.z - closestZ;
+                if (dx * dx + dz * dz > radiusSq) continue;
+                GridCoord coord{ x, y };
+                graph.SetWalkable(coord, false);
+                if (blockedOut) {
+                    (*blockedOut)[static_cast<size_t>(y * grid.width + x)] = 1;
+                }
+            }
+        }
+    }
+
     return graph;
 }
 
@@ -117,7 +276,7 @@ NavPathResult NavigationSystem::FindPath(const Scene& scene, const NavGridCompon
     if (!WorldToGrid(grid, goalX, goalZ, goal)) return result;
 
     GridGraph graph = BuildGrid(scene, grid);
-    auto pathResult = FindPath(graph, start, goal);
+    auto pathResult = ::Genesis::Engine::FindPath(graph, start, goal);
     result.success = pathResult.success;
     result.cost = pathResult.cost;
     result.gridPath = pathResult.path;
@@ -136,18 +295,30 @@ NavPathResult NavigationSystem::FindPath(const Scene& scene, const NavGridCompon
     return result;
 }
 
+void NavigationSystem::EnsureNavGridCache(const Scene& scene, const NavGridComponent& grid, NavGridState& state) {
+    UpdateNavGridCache(scene, grid, state);
+}
+
 void NavigationSystem::UpdateAgents(Scene& scene, double dt) {
     auto& reg = scene.Registry();
 
     NavGridComponent* navGrid = nullptr;
+    entt::entity navEntity = entt::null;
     auto navView = reg.view<NavGridComponent>();
     for (auto entity : navView) {
         navGrid = &navView.get<NavGridComponent>(entity);
+        navEntity = entity;
         break;
     }
     if (!navGrid || navGrid->width <= 0 || navGrid->height <= 0 || navGrid->cellSize <= 0.0f) return;
 
-    GridGraph grid = BuildGrid(scene, *navGrid);
+    auto* navState = reg.try_get<NavGridState>(navEntity);
+    if (!navState) {
+        navState = &reg.emplace<NavGridState>(navEntity);
+    }
+    EnsureNavGridCache(scene, *navGrid, *navState);
+    const GridGraph& grid = navState->grid;
+    if (grid.Width() <= 0 || grid.Height() <= 0) return;
 
     auto view = reg.view<NavAgentComponent, Transform>();
     for (auto entity : view) {
@@ -175,7 +346,7 @@ void NavigationSystem::UpdateAgents(Scene& scene, double dt) {
                 continue;
             }
 
-            auto pathResult = FindPath(grid, start, goal);
+            auto pathResult = ::Genesis::Engine::FindPath(grid, start, goal);
             state->path.clear();
             state->pathIndex = 0;
             state->repathTimer = std::max(0.1f, agent.repathInterval);

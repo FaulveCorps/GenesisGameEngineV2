@@ -75,3 +75,27 @@ To compete with commercial engines *without* building a massive editor, Genesis 
 
 ## Conclusion
 Genesis is no longer just a "toy". It is a **functional, modern rendering framework**. While it cannot compete with Unreal's visual fidelity or Unity's tooling breadth yet, it offers a cleaner, faster, and more secure foundation for specific types of games (e.g., simulation, strategy, mod-heavy titles).
+
+---
+
+## Addendum: Verified & Added Features (2026-01-27)
+
+### Rendering (OpenGL verified)
+- Post-processing stack expanded and verified: Bloom, Tone Mapping, Gamma, LUT, Vignette.
+- Directional shadow mapping with PCF softness control (single cascade).
+- Vulkan/DirectX still pending parity verification.
+
+### Navigation & AI Tooling
+- Grid-based navigation with runtime NavGrid bake from colliders.
+- NavAgent component for path following; debug grid + path visualization.
+- Sphere and box colliders contribute to blocked cells.
+
+### UI Framework (runtime + editor)
+- Anchors/pivot layout, background styling, and text alignment.
+- Text scaling, wrapping, padding, and border styling.
+- Scene/prefab serialization for UI settings.
+
+### Audio & Asset Workflow
+- Spatial audio parameters and listener updates.
+- Editor audio mixer and asset preview.
+- Asset import settings UI and deterministic reimport ordering.

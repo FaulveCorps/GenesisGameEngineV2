@@ -124,9 +124,12 @@ void DebugRenderer::Render(Scene& scene, IGraphicsAPI* renderer) {
         const auto& nav = navView.get<NavGridComponent>(entity);
         navGrid = &nav;
         if (!nav.drawDebug || nav.width <= 0 || nav.height <= 0 || nav.cellSize <= 0.0f) continue;
-
-        std::vector<uint8_t> blocked;
-        NavigationSystem::BuildGrid(scene, nav, &blocked);
+        auto* navState = registry.try_get<NavGridState>(entity);
+        if (!navState) {
+            navState = &registry.emplace<NavGridState>(entity);
+        }
+        NavigationSystem::EnsureNavGridCache(scene, nav, *navState);
+        const auto& blocked = navState->blocked;
 
         auto addLineColor = [&](const Vec3& a, const Vec3& b, float r, float g, float bcol) {
             vertices.push_back(a.x); vertices.push_back(a.y); vertices.push_back(a.z);
@@ -170,22 +173,27 @@ void DebugRenderer::Render(Scene& scene, IGraphicsAPI* renderer) {
             }
         }
 
-        if (nav.debugPath) {
-            auto path = NavigationSystem::FindPath(scene, nav, nav.debugStartX, nav.debugStartZ, nav.debugEndX, nav.debugEndZ);
-            if (path.success && path.gridPath.size() > 1) {
-                float prevX = 0.0f;
-                float prevZ = 0.0f;
-                NavigationSystem::GridToWorld(nav, {path.gridPath[0].x, path.gridPath[0].y}, prevX, prevZ);
-                for (size_t i = 1; i < path.gridPath.size(); ++i) {
-                    float nextX = 0.0f;
-                    float nextZ = 0.0f;
-                    NavigationSystem::GridToWorld(nav, {path.gridPath[i].x, path.gridPath[i].y}, nextX, nextZ);
-                    vertices.push_back(prevX); vertices.push_back(y + 0.05f); vertices.push_back(prevZ);
-                    vertices.push_back(nextX); vertices.push_back(y + 0.05f); vertices.push_back(nextZ);
-                    colors.push_back(1.0f); colors.push_back(0.2f); colors.push_back(1.0f);
-                    colors.push_back(1.0f); colors.push_back(0.2f); colors.push_back(1.0f);
-                    prevX = nextX;
-                    prevZ = nextZ;
+        if (nav.debugPath && navState->grid.Width() > 0 && navState->grid.Height() > 0) {
+            GridCoord start;
+            GridCoord goal;
+            if (NavigationSystem::WorldToGrid(nav, nav.debugStartX, nav.debugStartZ, start)
+                && NavigationSystem::WorldToGrid(nav, nav.debugEndX, nav.debugEndZ, goal)) {
+                auto pathResult = ::Genesis::Engine::FindPath(navState->grid, start, goal);
+                if (pathResult.success && pathResult.path.size() > 1) {
+                    float prevX = 0.0f;
+                    float prevZ = 0.0f;
+                    NavigationSystem::GridToWorld(nav, {pathResult.path[0].x, pathResult.path[0].y}, prevX, prevZ);
+                    for (size_t i = 1; i < pathResult.path.size(); ++i) {
+                        float nextX = 0.0f;
+                        float nextZ = 0.0f;
+                        NavigationSystem::GridToWorld(nav, {pathResult.path[i].x, pathResult.path[i].y}, nextX, nextZ);
+                        vertices.push_back(prevX); vertices.push_back(y + 0.05f); vertices.push_back(prevZ);
+                        vertices.push_back(nextX); vertices.push_back(y + 0.05f); vertices.push_back(nextZ);
+                        colors.push_back(1.0f); colors.push_back(0.2f); colors.push_back(1.0f);
+                        colors.push_back(1.0f); colors.push_back(0.2f); colors.push_back(1.0f);
+                        prevX = nextX;
+                        prevZ = nextZ;
+                    }
                 }
             }
         }

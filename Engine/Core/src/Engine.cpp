@@ -32,6 +32,8 @@ void RegisterLuaScriptingFactory();
 static SubsystemManager g_subsystems;
 SubsystemManager& Subsystems() { return g_subsystems; }
 
+static bool g_engineInitialized = false;
+
 // Shader subsystem handle (optional; managed by Engine)
 static std::shared_ptr<IShaderSubsystem> g_shaderSubsystem;
 // Audio subsystem handle (optional; managed by Engine)
@@ -187,6 +189,9 @@ std::shared_ptr<ISave> GetSaveSubsystem() {
 }
 
 bool Init(const std::string& config) {
+    if (g_engineInitialized) {
+        Shutdown();
+    }
     // Ensure built-in subsystems are registered
     RegisterNullAudioFactory();
     RegisterNullShaderFactory();
@@ -220,6 +225,7 @@ bool Init(const std::string& config) {
     CreateScriptingSubsystem("null");
 
     std::cout << "Genesis Engine initialized (config='" << config << "')" << std::endl;
+    g_engineInitialized = true;
     return true;
 }
 
@@ -227,6 +233,17 @@ void Shutdown() {
     // Explicitly destroy the renderer to ensure shaders are cleaned up
     // before static objects (like ShaderRegistry) are destroyed.
     RendererManager::SetRenderer(nullptr);
+
+    g_subsystems.DestroyAll();
+    g_shaderSubsystem.reset();
+    g_audioSubsystem.reset();
+    g_physicsSubsystem.reset();
+    g_inputSubsystem.reset();
+    g_networkSubsystem.reset();
+    g_saveSubsystem.reset();
+    g_scriptingSubsystem.reset();
+
+    g_engineInitialized = false;
 
     std::cout << "Genesis Engine shutdown" << std::endl;
 }

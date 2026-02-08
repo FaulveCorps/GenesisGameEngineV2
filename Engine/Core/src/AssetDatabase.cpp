@@ -7,6 +7,7 @@
 #include <functional>
 #include <cctype>
 #include <cstdint>
+#include <iostream>
 #include <random>
 #include <chrono>
 

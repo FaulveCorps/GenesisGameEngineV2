@@ -29,7 +29,44 @@ static void ResolveUIRect(const UIComponent& ui, float screenW, float screenH, f
     }
 }
 
+static void ResolveTextPosition(const UIComponent& ui, float rx, float ry, float rw, float rh,
+                                const ImVec2& textSize, bool defaultCenter,
+                                float& outX, float& outY) {
+    const float padX = std::max(0.0f, ui.paddingX);
+    const float padY = std::max(0.0f, ui.paddingY);
+    const float contentX = rx + padX;
+    const float contentY = ry + padY;
+    const float contentW = std::max(0.0f, rw - padX * 2.0f);
+    const float contentH = std::max(0.0f, rh - padY * 2.0f);
+
+    if (!ui.useTextAlign) {
+        if (defaultCenter) {
+            outX = contentX + (contentW - textSize.x) * 0.5f;
+            outY = contentY + (contentH - textSize.y) * 0.5f;
+        } else {
+            outX = contentX;
+            outY = contentY;
+        }
+        return;
+    }
+
+    switch (ui.textAlignH) {
+        case UIAlignH::Left:   outX = contentX; break;
+        case UIAlignH::Center: outX = contentX + (contentW - textSize.x) * 0.5f; break;
+        case UIAlignH::Right:  outX = contentX + (contentW - textSize.x); break;
+        default:               outX = contentX; break;
+    }
+
+    switch (ui.textAlignV) {
+        case UIAlignV::Top:    outY = contentY; break;
+        case UIAlignV::Center: outY = contentY + (contentH - textSize.y) * 0.5f; break;
+        case UIAlignV::Bottom: outY = contentY + (contentH - textSize.y); break;
+        default:               outY = contentY; break;
+    }
+}
+
 void UISystem::Update(Scene& scene, double /*dt*/) {
+    if (!ImGui::GetCurrentContext()) return;
     auto input = GetInputSubsystem();
     if (!input) return;
 
@@ -72,6 +109,7 @@ void UISystem::Update(Scene& scene, double /*dt*/) {
 
 void UISystem::Render(Scene& scene, IGraphicsAPI* renderer) {
     if (!renderer) return;
+    if (!ImGui::GetCurrentContext()) return;
 
     ImVec2 displaySize = ImGui::GetIO().DisplaySize;
     float screenW = displaySize.x;
@@ -80,13 +118,47 @@ void UISystem::Render(Scene& scene, IGraphicsAPI* renderer) {
     auto view = scene.Registry().view<UIComponent>();
     view.each([&](auto& ui) {
         if (ui.type == UIType::Text && !ui.text.empty()) {
-            ImVec2 textSize = ImGui::CalcTextSize(ui.text.c_str());
-            float rx = 0.0f, ry = 0.0f, rw = textSize.x, rh = textSize.y;
-            ResolveUIRect(ui, screenW, screenH, rw, rh, rx, ry, rw, rh);
+            const float scale = (ui.textScale > 0.0f) ? ui.textScale : 1.0f;
+            float baseFontSize = ImGui::GetFontSize();
+            float fontSize = baseFontSize * scale;
+
+            float elemW = (ui.useTextAlign || ui.wrapText) ? (ui.width > 0.0f ? ui.width : 0.0f) : 0.0f;
+            float elemH = (ui.useTextAlign || ui.wrapText) ? (ui.height > 0.0f ? ui.height : 0.0f) : 0.0f;
+
+            const float padX = std::max(0.0f, ui.paddingX);
+            const float padY = std::max(0.0f, ui.paddingY);
+            float contentW = (elemW > 0.0f) ? std::max(0.0f, elemW - padX * 2.0f) : 0.0f;
+            float contentH = (elemH > 0.0f) ? std::max(0.0f, elemH - padY * 2.0f) : 0.0f;
+            float wrapWidth = ui.wrapText ? contentW : 0.0f;
+            float wrapWidthCalc = (wrapWidth > 0.0f && scale > 0.0f) ? (wrapWidth / scale) : 0.0f;
+
+            ImVec2 textSize = ImGui::CalcTextSize(ui.text.c_str(), nullptr, false, wrapWidthCalc);
+            textSize.x *= scale;
+            textSize.y *= scale;
+
+            if (elemW <= 0.0f) elemW = textSize.x + padX * 2.0f;
+            if (elemH <= 0.0f) elemH = textSize.y + padY * 2.0f;
+
+            float rx = 0.0f, ry = 0.0f, rw = elemW, rh = elemH;
+            ResolveUIRect(ui, screenW, screenH, elemW, elemH, rx, ry, rw, rh);
+            float tx = 0.0f;
+            float ty = 0.0f;
+            ResolveTextPosition(ui, rx, ry, rw, rh, textSize, false, tx, ty);
+            if (ui.drawBorder && ui.borderThickness > 0.0f) {
+                ImGui::GetBackgroundDrawList()->AddRect(
+                    ImVec2(rx, ry), ImVec2(rx + rw, ry + rh),
+                    ImGui::GetColorU32(ImVec4(ui.borderColor[0], ui.borderColor[1], ui.borderColor[2], ui.borderColor[3])),
+                    0.0f, 0, ui.borderThickness
+                );
+            }
             ImGui::GetBackgroundDrawList()->AddText(
-                ImVec2(rx, ry),
+                ImGui::GetFont(),
+                fontSize,
+                ImVec2(tx, ty),
                 ImGui::GetColorU32(ImVec4(ui.color[0], ui.color[1], ui.color[2], ui.color[3])),
-                ui.text.c_str()
+                ui.text.c_str(),
+                nullptr,
+                wrapWidth
             );
             return;
         }
@@ -111,6 +183,14 @@ void UISystem::Render(Scene& scene, IGraphicsAPI* renderer) {
                 );
             }
 
+            if (ui.drawBorder && ui.borderThickness > 0.0f) {
+                ImGui::GetBackgroundDrawList()->AddRect(
+                    ImVec2(rx, ry), ImVec2(rx + rw, ry + rh),
+                    ImGui::GetColorU32(ImVec4(ui.borderColor[0], ui.borderColor[1], ui.borderColor[2], ui.borderColor[3])),
+                    0.0f, 0, ui.borderThickness
+                );
+            }
+
             if (ui.texture) {
                 float r = ui.color[0];
                 float g = ui.color[1];
@@ -130,13 +210,31 @@ void UISystem::Render(Scene& scene, IGraphicsAPI* renderer) {
             }
 
             if (!ui.text.empty()) {
-                ImVec2 textSize = ImGui::CalcTextSize(ui.text.c_str());
-                float tx = rx + (rw - textSize.x) * 0.5f;
-                float ty = ry + (rh - textSize.y) * 0.5f;
+                const float scale = (ui.textScale > 0.0f) ? ui.textScale : 1.0f;
+                float baseFontSize = ImGui::GetFontSize();
+                float fontSize = baseFontSize * scale;
+
+                const float padX = std::max(0.0f, ui.paddingX);
+                const float padY = std::max(0.0f, ui.paddingY);
+                float contentW = std::max(0.0f, rw - padX * 2.0f);
+                float contentH = std::max(0.0f, rh - padY * 2.0f);
+                float wrapWidth = ui.wrapText ? contentW : 0.0f;
+                float wrapWidthCalc = (wrapWidth > 0.0f && scale > 0.0f) ? (wrapWidth / scale) : 0.0f;
+
+                ImVec2 textSize = ImGui::CalcTextSize(ui.text.c_str(), nullptr, false, wrapWidthCalc);
+                textSize.x *= scale;
+                textSize.y *= scale;
+                float tx = 0.0f;
+                float ty = 0.0f;
+                ResolveTextPosition(ui, rx, ry, rw, rh, textSize, true, tx, ty);
                 ImGui::GetBackgroundDrawList()->AddText(
+                    ImGui::GetFont(),
+                    fontSize,
                     ImVec2(tx, ty),
                     ImGui::GetColorU32(ImVec4(ui.color[0], ui.color[1], ui.color[2], ui.color[3])),
-                    ui.text.c_str()
+                    ui.text.c_str(),
+                    nullptr,
+                    wrapWidth
                 );
             }
             return;
@@ -157,6 +255,14 @@ void UISystem::Render(Scene& scene, IGraphicsAPI* renderer) {
             uint32_t color = (ua << 24) | (ur << 16) | (ug << 8) | ub;
 
             renderer->DrawTexture(ui.texture.get(), rx, ry, rw, rh, 0.0f, 0.0f, 1.0f, 1.0f, color);
+
+            if (ui.drawBorder && ui.borderThickness > 0.0f) {
+                ImGui::GetBackgroundDrawList()->AddRect(
+                    ImVec2(rx, ry), ImVec2(rx + rw, ry + rh),
+                    ImGui::GetColorU32(ImVec4(ui.borderColor[0], ui.borderColor[1], ui.borderColor[2], ui.borderColor[3])),
+                    0.0f, 0, ui.borderThickness
+                );
+            }
         }
     });
 }

@@ -8,6 +8,7 @@
 #include <entt/entt.hpp>
 #include "engine/Model.h"
 #include "engine/Material.h"
+#include "engine/Pathfinding.h"
 
 namespace Genesis::Engine {
 
@@ -172,6 +173,21 @@ struct NavGridComponent {
     float debugStartZ = 0.0f;
     float debugEndX = 1.0f;
     float debugEndZ = 1.0f;
+};
+
+// Runtime-only cache for NavGridComponent (not serialized)
+struct NavGridState {
+    GridGraph grid{0, 0};
+    std::vector<uint8_t> blocked;
+    int cachedWidth = -1;
+    int cachedHeight = -1;
+    float cachedCellSize = -1.0f;
+    float cachedOriginX = 0.0f;
+    float cachedOriginZ = 0.0f;
+    float cachedY = 0.0f;
+    bool cachedAutoBake = true;
+    uint64_t collidersHash = 0;
+    bool dirty = true;
 };
 
 struct NavAgentComponent {

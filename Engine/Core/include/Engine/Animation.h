@@ -37,6 +37,7 @@ struct AnimationComponent {
 };
 
 class Scene;
+struct Transform;
 
 class AnimationSystem {
 public:
