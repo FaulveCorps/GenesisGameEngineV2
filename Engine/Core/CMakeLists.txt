@@ -85,6 +85,7 @@ add_library(EngineCore STATIC
     src/Model.cpp
     src/Mesh.cpp
     src/Shader.cpp
+    src/MaterialGraph.cpp
     src/Scene.cpp
     src/DebugRenderer.cpp
     src/JobSystem.cpp

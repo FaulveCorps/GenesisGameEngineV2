@@ -29,6 +29,7 @@ add_executable(UnitTests
     test_pbr_shader_compile.cpp
     test_renderer_mesh.cpp
     test_gltf_material_import.cpp
+    test_material_graph.cpp
     test_asset_database_dependencies.cpp
     test_asset_database_dependency_order.cpp
     test_asset_database_gltf_uri_decode.cpp

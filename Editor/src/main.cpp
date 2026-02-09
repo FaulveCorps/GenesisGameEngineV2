@@ -16,6 +16,7 @@
 #include "engine/ShaderRegistry.h"
 #include "engine/TextureRegistry.h"
 #include "engine/Texture.h"
+#include "engine/MaterialGraph.h"
 #include "engine/OpenGLRenderer.h"
 #include "engine/ScriptRegistry.h"
 #include "engine/PrefabLoader.h"
@@ -33,6 +34,7 @@
 #include <fstream>
 #include <string>
 #include <vector>
+#include <array>
 #include <cstdlib>
 #include <unordered_map>
 #include <cstdint>
@@ -1067,6 +1069,8 @@ int main(int argc, char** argv) {
     bool showOpenSceneModal = false;
     bool showSaveAsSceneModal = false;
     bool showAboutModal = false;
+    bool showProfiler = true;
+    bool showMaterialGraph = false;
     bool showSavePrefabModal = false;
     bool showUpdatePrefabModal = false;
     entt::entity prefabTargetEntity = entt::null;
@@ -1075,6 +1079,14 @@ int main(int argc, char** argv) {
     bool focusInspectorName = false;
     char scenePathBuffer[512] = "";
     char prefabPathBuffer[512] = "";
+
+    // Material Graph
+    Genesis::Engine::MaterialGraph materialGraph;
+    std::string materialGraphPath;
+    bool materialGraphDirty = false;
+    char materialGraphPathBuffer[512] = "";
+    char materialGraphNameBuffer[128] = "";
+    std::unordered_map<int, std::array<char, 256>> materialGraphTextureBuffers;
 
     // Asset selection (Content Browser)
     std::string selectedAssetPath;
@@ -1533,15 +1545,13 @@ int main(int argc, char** argv) {
     Genesis::Engine::Profiler profiler;
     Genesis::Engine::ImGuiLayer gui(window.GetSDLWindow(), window.GetGLContext());
 
-    // Global UI sizing tweak (Editor-only): make widgets/buttons slightly roomier.
-    // This helps match the more comfortable click targets users expect from tools like VS Code.
+    // Global UI sizing tweak (Editor-only): subtle boost for comfortable click targets.
     {
         ImGuiStyle& style = ImGui::GetStyle();
-        // (Option B sizing): clearly larger click targets.
-        style.FramePadding = ImVec2(style.FramePadding.x + 4.0f, style.FramePadding.y + 4.0f);
-        style.ItemSpacing = ImVec2(style.ItemSpacing.x + 4.0f, style.ItemSpacing.y + 2.0f);
-        style.ScrollbarSize += 4.0f;
-        style.GrabMinSize += 4.0f;
+        style.FramePadding = ImVec2(style.FramePadding.x + 2.0f, style.FramePadding.y + 2.0f);
+        style.ItemSpacing = ImVec2(style.ItemSpacing.x + 2.0f, style.ItemSpacing.y + 1.0f);
+        style.ScrollbarSize += 2.0f;
+        style.GrabMinSize += 2.0f;
     }
 
     cameraIconTex = LoadIconTexturePPM("Assets/icons/camera_icon.ppm");
@@ -1772,9 +1782,14 @@ int main(int argc, char** argv) {
 
         profiler.BeginFrame();
 
+        Genesis::Engine::Profiler::Scope frameScope(profiler, "Frame");
+
         // Start ImGui frame
-        gui.NewFrame();
-        ImGuizmo::BeginFrame();
+        {
+            Genesis::Engine::Profiler::Scope scope(profiler, "ImGui Begin");
+            gui.NewFrame();
+            ImGuizmo::BeginFrame();
+        }
 
         // Global Shortcuts (Editor)
         if (ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_P)) {
@@ -1880,6 +1895,7 @@ int main(int argc, char** argv) {
             ImGui::DockBuilderDockWindow("Scene Hierarchy", dock_id_left);
             ImGui::DockBuilderDockWindow("Content Browser", dock_id_left_bottom);
             ImGui::DockBuilderDockWindow("Console", dock_id_bottom);
+            ImGui::DockBuilderDockWindow("Profiler", dock_id_bottom);
 
             ImGui::DockBuilderFinish(rootDockId);
         };
@@ -2003,6 +2019,8 @@ int main(int argc, char** argv) {
                 ImGui::MenuItem("Content Browser");
                 ImGui::MenuItem("Audio Mixer");
                 ImGui::MenuItem("Project Settings");
+                ImGui::MenuItem("Profiler", nullptr, &showProfiler);
+                ImGui::MenuItem("Material Graph", nullptr, &showMaterialGraph);
                 ImGui::EndMenu();
             }
             if (ImGui::BeginMenu("Help")) {
@@ -2065,6 +2083,21 @@ int main(int argc, char** argv) {
             static bool isCustomMaximized = false;
             static int restoreX = 0, restoreY = 0, restoreW = 1600, restoreH = 900;
 
+            ImGuiStyle& titleStyle = ImGui::GetStyle();
+            auto LerpColor = [](const ImVec4& a, const ImVec4& b, float t) {
+                return ImVec4(
+                    a.x + (b.x - a.x) * t,
+                    a.y + (b.y - a.y) * t,
+                    a.z + (b.z - a.z) * t,
+                    a.w + (b.w - a.w) * t);
+            };
+            const ImVec4 textColor = titleStyle.Colors[ImGuiCol_Text];
+            const ImVec4 buttonHover = titleStyle.Colors[ImGuiCol_ButtonHovered];
+            const ImVec4 buttonActive = titleStyle.Colors[ImGuiCol_ButtonActive];
+            const ImVec4 dangerBase = ImVec4(0.86f, 0.22f, 0.25f, 1.0f);
+            const ImVec4 dangerHover = LerpColor(buttonHover, dangerBase, 0.65f);
+            const ImVec4 dangerActive = LerpColor(buttonActive, dangerBase, 0.70f);
+
             // Helper lambda for drawing custom window buttons
             auto DrawWindowButton = [&](const char* id, int type) -> bool {
                 ImVec2 pos = ImGui::GetCursorScreenPos();
@@ -2074,15 +2107,15 @@ int main(int argc, char** argv) {
                 bool active = ImGui::IsItemActive();
                 
                 ImU32 bgColor = 0;
-                ImU32 iconColor = IM_COL32(200, 200, 200, 255); // Light grey text
+                ImU32 iconColor = ImGui::GetColorU32(textColor);
 
                 if (type == 2) { // Close button
-                    if (hovered) bgColor = IM_COL32(232, 17, 35, 255); // Red
-                    if (active) bgColor = IM_COL32(153, 11, 23, 255); // Darker Red
-                    if (hovered || active) iconColor = IM_COL32(255, 255, 255, 255); // White icon
+                    if (hovered) bgColor = ImGui::GetColorU32(dangerHover);
+                    if (active) bgColor = ImGui::GetColorU32(dangerActive);
+                    if (hovered || active) iconColor = ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
                 } else {
-                    if (hovered) bgColor = IM_COL32(255, 255, 255, 30); // Subtle white overlay
-                    if (active) bgColor = IM_COL32(255, 255, 255, 60);
+                    if (hovered) bgColor = ImGui::GetColorU32(buttonHover);
+                    if (active) bgColor = ImGui::GetColorU32(buttonActive);
                 }
 
                 ImDrawList* drawList = ImGui::GetWindowDrawList();
@@ -2323,25 +2356,34 @@ int main(int argc, char** argv) {
         }
 
         // Render scene (now that camera matrices are final)
-        if (currentRenderer) {
-            currentRenderer->BeginFrame();
-            currentRenderer->SetViewProjection(glm::value_ptr(view), glm::value_ptr(projection));
-        }
-
-        if (editorState == EditorState::Play) {
-            activeScene->OnUpdateRuntime(dt);
-        } else if (editorState == EditorState::Pause) {
-            if (stepRuntime) {
-                activeScene->OnUpdateRuntime(dt);
-                stepRuntime = false;
+        {
+            Genesis::Engine::Profiler::Scope scope(profiler, "Render Setup");
+            if (currentRenderer) {
+                currentRenderer->BeginFrame();
+                currentRenderer->SetViewProjection(glm::value_ptr(view), glm::value_ptr(projection));
             }
-        } else {
-            activeScene->OnUpdateEditor(dt);
         }
-        activeScene->Render(currentRenderer);
 
-        if (currentRenderer) {
-            currentRenderer->EndFrame(); // Renders scene to internal texture (no swap)
+        {
+            Genesis::Engine::Profiler::Scope scope(profiler, "Scene Update");
+            if (editorState == EditorState::Play) {
+                activeScene->OnUpdateRuntime(dt);
+            } else if (editorState == EditorState::Pause) {
+                if (stepRuntime) {
+                    activeScene->OnUpdateRuntime(dt);
+                    stepRuntime = false;
+                }
+            } else {
+                activeScene->OnUpdateEditor(dt);
+            }
+        }
+
+        {
+            Genesis::Engine::Profiler::Scope scope(profiler, "Scene Render");
+            activeScene->Render(currentRenderer);
+            if (currentRenderer) {
+                currentRenderer->EndFrame(); // Renders scene to internal texture (no swap)
+            }
         }
 
         auto glRenderer = dynamic_cast<Genesis::Engine::OpenGLRenderer*>(currentRenderer);
@@ -2422,6 +2464,12 @@ int main(int argc, char** argv) {
             auto BoostColor = [&](const ImVec4& c, float add) {
                 return ImVec4(Clamp01(c.x + add), Clamp01(c.y + add), Clamp01(c.z + add), c.w);
             };
+            ImVec4 selectionColor = ImGui::GetStyle().Colors[ImGuiCol_NavHighlight];
+            selectionColor.w = 0.85f;
+            ImU32 selectionOutline = ImGui::GetColorU32(selectionColor);
+            ImVec4 selectionSoftColor = selectionColor;
+            selectionSoftColor.w = 0.35f;
+            ImU32 selectionSoft = ImGui::GetColorU32(selectionSoftColor);
             auto DrawCameraIcon = [&](ImVec2 center, float size, const ImVec4& base) {
                 const float half = size * 0.5f;
                 const float bodyH = size * 0.58f;
@@ -2571,7 +2619,7 @@ int main(int argc, char** argv) {
                     }
 
                     if (selectedEntity == entity) {
-                        dl->AddRect(pMin, pMax, IM_COL32(255, 255, 255, 200), 2.0f, 0, 1.5f);
+                        dl->AddRect(pMin, pMax, selectionOutline, 2.0f, 0, 1.5f);
                     }
 
                     if (clicked && !viewportClickConsumed) {
@@ -2615,7 +2663,7 @@ int main(int argc, char** argv) {
                 }
 
                 if (selectedEntity == entity) {
-                    dl->AddRect(pMin, pMax, IM_COL32(255, 255, 255, 200), 2.0f, 0, 1.5f);
+                    dl->AddRect(pMin, pMax, selectionOutline, 2.0f, 0, 1.5f);
                 }
 
                 if (lc.type == Genesis::Engine::LightType::Point && lc.range > 0.0f) {
@@ -2624,7 +2672,7 @@ int main(int argc, char** argv) {
                     float rdepth = 1.0f;
                     if (WorldToScreen(rworld, rscr, ruv, rdepth)) {
                         float pixelR = sqrtf((rscr.x - p.x) * (rscr.x - p.x) + (rscr.y - p.y) * (rscr.y - p.y));
-                        dl->AddCircle(p, pixelR, IM_COL32(255, 255, 255, 100), 64, 1.5f);
+                        dl->AddCircle(p, pixelR, selectionSoft, 64, 1.5f);
                     }
                 }
 
@@ -2657,7 +2705,7 @@ int main(int argc, char** argv) {
                     DrawAudioIcon(p, iconSize, baseColor);
 
                     if (selectedEntity == entity) {
-                        dl->AddRect(pMin, pMax, IM_COL32(255, 255, 255, 200), 2.0f, 0, 1.5f);
+                        dl->AddRect(pMin, pMax, selectionOutline, 2.0f, 0, 1.5f);
                     }
 
                     if (clicked && !viewportClickConsumed) {
@@ -2690,7 +2738,7 @@ int main(int argc, char** argv) {
                     DrawParticleIcon(p, iconSize, baseColor);
 
                     if (selectedEntity == entity) {
-                        dl->AddRect(pMin, pMax, IM_COL32(255, 255, 255, 200), 2.0f, 0, 1.5f);
+                        dl->AddRect(pMin, pMax, selectionOutline, 2.0f, 0, 1.5f);
                     }
 
                     if (clicked && !viewportClickConsumed) {
@@ -2723,7 +2771,7 @@ int main(int argc, char** argv) {
                     DrawRigidBodyIcon(p, iconSize, baseColor);
 
                     if (selectedEntity == entity) {
-                        dl->AddRect(pMin, pMax, IM_COL32(255, 255, 255, 200), 2.0f, 0, 1.5f);
+                        dl->AddRect(pMin, pMax, selectionOutline, 2.0f, 0, 1.5f);
                     }
 
                     if (clicked && !viewportClickConsumed) {
@@ -2757,7 +2805,7 @@ int main(int argc, char** argv) {
                     DrawBoxColliderIcon(p, iconSize, baseColor);
 
                     if (selectedEntity == entity) {
-                        dl->AddRect(pMin, pMax, IM_COL32(255, 255, 255, 200), 2.0f, 0, 1.5f);
+                        dl->AddRect(pMin, pMax, selectionOutline, 2.0f, 0, 1.5f);
                     }
 
                     if (clicked && !viewportClickConsumed) {
@@ -2791,7 +2839,7 @@ int main(int argc, char** argv) {
                     DrawSphereColliderIcon(p, iconSize, baseColor);
 
                     if (selectedEntity == entity) {
-                        dl->AddRect(pMin, pMax, IM_COL32(255, 255, 255, 200), 2.0f, 0, 1.5f);
+                        dl->AddRect(pMin, pMax, selectionOutline, 2.0f, 0, 1.5f);
                     }
 
                     if (clicked && !viewportClickConsumed) {
@@ -2861,14 +2909,16 @@ int main(int argc, char** argv) {
         // View Manipulate (View Cube) - position already calculated above for conflict detection
         glm::mat4 viewCopy = view; // Make a copy to pass to ViewManipulate
         ImGuizmo::SetDrawlist();
-        ImGuizmo::ViewManipulate(glm::value_ptr(viewCopy), 5.0f, viewManipulatePos, ImVec2(viewManipulateSize, viewManipulateSize), 0x10101010);
+        ImVec4 viewCubeBg = ImGui::GetStyle().Colors[ImGuiCol_WindowBg];
+        viewCubeBg.w = 0.6f;
+        ImGuizmo::ViewManipulate(glm::value_ptr(viewCopy), 5.0f, viewManipulatePos, ImVec2(viewManipulateSize, viewManipulateSize), ImGui::GetColorU32(viewCubeBg));
 
         // Axis labels (X/Y/Z) around the cube (overlay, positioned based on current view orientation)
         {
             ImDrawList* dl = ImGui::GetWindowDrawList();
-            const ImU32 shadow = IM_COL32(0, 0, 0, 160);
-            const ImU32 textFront = IM_COL32(235, 235, 235, 230);
-            const ImU32 textBack = IM_COL32(170, 170, 170, 180);
+            const ImU32 shadow = ImGui::GetColorU32(ImVec4(0.0f, 0.0f, 0.0f, 0.5f));
+            const ImU32 textFront = ImGui::GetColorU32(ImGui::GetStyle().Colors[ImGuiCol_Text]);
+            const ImU32 textBack = ImGui::GetColorU32(ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]);
             const ImVec2 center = ImVec2(viewManipulatePos.x + viewManipulateSize * 0.5f, viewManipulatePos.y + viewManipulateSize * 0.5f);
 
             // View matrix transforms World -> View (camera). Use its rotation part to estimate
@@ -4713,6 +4763,234 @@ int main(int argc, char** argv) {
             ImGui::End();
         }
 
+        // Material Graph
+        if (!zenMode && showMaterialGraph) {
+            ImGui::Begin("Material Graph", &showMaterialGraph);
+            ImGui::InputText("Graph Path", materialGraphPathBuffer, sizeof(materialGraphPathBuffer));
+
+            auto ComputeNextMaterialNodeId = [&]() {
+                int maxId = 0;
+                for (const auto& node : materialGraph.nodes) {
+                    maxId = std::max(maxId, node.id);
+                }
+                return maxId + 1;
+            };
+
+            auto EnsureMaterialOutputNode = [&]() {
+                if (materialGraph.outputNode >= 0) return;
+                for (const auto& node : materialGraph.nodes) {
+                    if (node.type == Genesis::Engine::MaterialNodeType::Output) {
+                        materialGraph.outputNode = node.id;
+                        return;
+                    }
+                }
+                Genesis::Engine::MaterialNode node;
+                node.id = ComputeNextMaterialNodeId();
+                node.type = Genesis::Engine::MaterialNodeType::Output;
+                node.x = 100.0f;
+                node.y = 100.0f;
+                materialGraph.outputNode = node.id;
+                materialGraph.nodes.push_back(node);
+            };
+
+            auto StartNewMaterialGraph = [&]() {
+                materialGraph = Genesis::Engine::MaterialGraph{};
+                materialGraph.name = "MaterialGraph";
+                materialGraph.nodes.clear();
+                materialGraph.links.clear();
+                materialGraph.outputNode = -1;
+                materialGraphPath.clear();
+                materialGraphPathBuffer[0] = '\0';
+                strncpy_s(materialGraphNameBuffer, materialGraph.name.c_str(), sizeof(materialGraphNameBuffer) - 1);
+                materialGraphTextureBuffers.clear();
+                EnsureMaterialOutputNode();
+                materialGraphDirty = true;
+            };
+
+            if (materialGraphNameBuffer[0] == '\0' && !materialGraph.name.empty()) {
+                strncpy_s(materialGraphNameBuffer, materialGraph.name.c_str(), sizeof(materialGraphNameBuffer) - 1);
+            }
+            EnsureMaterialOutputNode();
+
+            if (ImGui::Button("New")) {
+                StartNewMaterialGraph();
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Load")) {
+                if (materialGraphPathBuffer[0] != 0) {
+                    if (Genesis::Engine::LoadMaterialGraph(materialGraphPathBuffer, materialGraph)) {
+                        materialGraphPath = materialGraphPathBuffer;
+                        EnsureMaterialOutputNode();
+                        strncpy_s(materialGraphNameBuffer, materialGraph.name.c_str(), sizeof(materialGraphNameBuffer) - 1);
+                        materialGraphTextureBuffers.clear();
+                        materialGraphDirty = false;
+                    }
+                }
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Save")) {
+                if (materialGraphPathBuffer[0] != 0) {
+                    if (Genesis::Engine::SaveMaterialGraph(materialGraph, materialGraphPathBuffer)) {
+                        materialGraphPath = materialGraphPathBuffer;
+                        materialGraphDirty = false;
+                    }
+                }
+            }
+            ImGui::SameLine();
+            ImGui::TextDisabled(materialGraphDirty ? "*" : "");
+
+            ImGui::Separator();
+            if (ImGui::InputText("Graph Name", materialGraphNameBuffer, sizeof(materialGraphNameBuffer))) {
+                materialGraph.name = materialGraphNameBuffer;
+                materialGraphDirty = true;
+            }
+
+            if (ImGui::Button("Add Node")) {
+                ImGui::OpenPopup("AddMaterialNode");
+            }
+            if (ImGui::BeginPopup("AddMaterialNode")) {
+                auto addNode = [&](Genesis::Engine::MaterialNodeType type) {
+                    Genesis::Engine::MaterialNode node;
+                    node.id = ComputeNextMaterialNodeId();
+                    node.type = type;
+                    node.x = 120.0f;
+                    node.y = 120.0f;
+                    if (type == Genesis::Engine::MaterialNodeType::ConstantFloat) {
+                        node.value = 1.0f;
+                    }
+                    materialGraph.nodes.push_back(node);
+                    if (type == Genesis::Engine::MaterialNodeType::Output) {
+                        materialGraph.outputNode = node.id;
+                    }
+                    materialGraphDirty = true;
+                };
+                if (ImGui::MenuItem("Constant Color")) { addNode(Genesis::Engine::MaterialNodeType::ConstantColor); }
+                if (ImGui::MenuItem("Constant Float")) { addNode(Genesis::Engine::MaterialNodeType::ConstantFloat); }
+                if (ImGui::MenuItem("Texture2D")) { addNode(Genesis::Engine::MaterialNodeType::Texture2D); }
+                if (ImGui::MenuItem("Multiply")) { addNode(Genesis::Engine::MaterialNodeType::Multiply); }
+                if (ImGui::MenuItem("Add")) { addNode(Genesis::Engine::MaterialNodeType::Add); }
+                if (materialGraph.outputNode < 0 && ImGui::MenuItem("Output")) { addNode(Genesis::Engine::MaterialNodeType::Output); }
+                ImGui::EndPopup();
+            }
+
+            ImGui::Separator();
+            ImGui::TextUnformatted("Output");
+            if (ImGui::BeginCombo("Output Node", materialGraph.outputNode < 0 ? "(none)" : std::to_string(materialGraph.outputNode).c_str())) {
+                for (const auto& node : materialGraph.nodes) {
+                    const bool selected = (node.id == materialGraph.outputNode);
+                    std::string label = std::to_string(node.id) + " - " + Genesis::Engine::MaterialNodeTypeToString(node.type);
+                    if (ImGui::Selectable(label.c_str(), selected)) {
+                        materialGraph.outputNode = node.id;
+                        materialGraphDirty = true;
+                    }
+                    if (selected) ImGui::SetItemDefaultFocus();
+                }
+                ImGui::EndCombo();
+            }
+
+            ImGui::Separator();
+            ImGui::TextUnformatted("Nodes");
+            ImGui::BeginChild("##material_nodes", ImVec2(0, 220), true);
+            int removeNodeId = -1;
+            for (auto& node : materialGraph.nodes) {
+                ImGui::PushID(node.id);
+                std::string header = std::to_string(node.id) + " - " + Genesis::Engine::MaterialNodeTypeToString(node.type);
+                if (ImGui::TreeNode(header.c_str())) {
+                    ImGui::DragFloat2("Position", &node.x, 1.0f);
+                    if (node.type == Genesis::Engine::MaterialNodeType::ConstantColor) {
+                        if (ImGui::ColorEdit4("Color", node.color.data())) {
+                            materialGraphDirty = true;
+                        }
+                    } else if (node.type == Genesis::Engine::MaterialNodeType::ConstantFloat) {
+                        if (ImGui::DragFloat("Value", &node.value, 0.01f)) {
+                            materialGraphDirty = true;
+                        }
+                    } else if (node.type == Genesis::Engine::MaterialNodeType::Texture2D) {
+                        auto& texBuf = materialGraphTextureBuffers[node.id];
+                        if (texBuf[0] == '\0' && !node.texturePath.empty()) {
+                            strncpy_s(texBuf.data(), texBuf.size(), node.texturePath.c_str(), texBuf.size() - 1);
+                        }
+                        if (ImGui::InputText("Texture Path", texBuf.data(), static_cast<int>(texBuf.size()))) {
+                            node.texturePath = texBuf.data();
+                            materialGraphDirty = true;
+                        }
+                    }
+
+                    if (node.type != Genesis::Engine::MaterialNodeType::Output) {
+                        if (ImGui::Button("Delete")) {
+                            removeNodeId = node.id;
+                        }
+                    }
+                    ImGui::TreePop();
+                }
+                ImGui::PopID();
+            }
+            if (removeNodeId >= 0) {
+                materialGraph.nodes.erase(std::remove_if(materialGraph.nodes.begin(), materialGraph.nodes.end(), [&](const Genesis::Engine::MaterialNode& n) {
+                    return n.id == removeNodeId;
+                }), materialGraph.nodes.end());
+                materialGraph.links.erase(std::remove_if(materialGraph.links.begin(), materialGraph.links.end(), [&](const Genesis::Engine::MaterialLink& link) {
+                    return link.fromNode == removeNodeId || link.toNode == removeNodeId;
+                }), materialGraph.links.end());
+                materialGraphTextureBuffers.erase(removeNodeId);
+                if (materialGraph.outputNode == removeNodeId) {
+                    materialGraph.outputNode = -1;
+                    EnsureMaterialOutputNode();
+                }
+                materialGraphDirty = true;
+            }
+            ImGui::EndChild();
+
+            ImGui::Separator();
+            ImGui::TextUnformatted("Links");
+            ImGui::BeginChild("##material_links", ImVec2(0, 120), true);
+            int removeLinkIndex = -1;
+            for (size_t i = 0; i < materialGraph.links.size(); ++i) {
+                const auto& link = materialGraph.links[i];
+                ImGui::PushID(static_cast<int>(i));
+                ImGui::Text("%d:%d -> %d:%d", link.fromNode, link.fromSlot, link.toNode, link.toSlot);
+                ImGui::SameLine();
+                if (ImGui::SmallButton("Remove")) {
+                    removeLinkIndex = static_cast<int>(i);
+                }
+                ImGui::PopID();
+            }
+            if (removeLinkIndex >= 0) {
+                materialGraph.links.erase(materialGraph.links.begin() + removeLinkIndex);
+                materialGraphDirty = true;
+            }
+            ImGui::EndChild();
+
+            static int newLinkFrom = -1;
+            static int newLinkTo = -1;
+            if (ImGui::BeginCombo("From", newLinkFrom < 0 ? "(none)" : std::to_string(newLinkFrom).c_str())) {
+                for (const auto& node : materialGraph.nodes) {
+                    if (ImGui::Selectable(std::to_string(node.id).c_str(), node.id == newLinkFrom)) {
+                        newLinkFrom = node.id;
+                    }
+                }
+                ImGui::EndCombo();
+            }
+            ImGui::SameLine();
+            if (ImGui::BeginCombo("To", newLinkTo < 0 ? "(none)" : std::to_string(newLinkTo).c_str())) {
+                for (const auto& node : materialGraph.nodes) {
+                    if (ImGui::Selectable(std::to_string(node.id).c_str(), node.id == newLinkTo)) {
+                        newLinkTo = node.id;
+                    }
+                }
+                ImGui::EndCombo();
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Add Link")) {
+                if (newLinkFrom >= 0 && newLinkTo >= 0 && newLinkFrom != newLinkTo) {
+                    materialGraph.links.push_back({newLinkFrom, 0, newLinkTo, 0});
+                    materialGraphDirty = true;
+                }
+            }
+
+            ImGui::End();
+        }
+
         // Content Browser
         if (!zenMode) {
             ImGui::Begin("Content Browser");
@@ -4740,164 +5018,210 @@ int main(int argc, char** argv) {
                 float thumbnailSize = 64.0f;
                 float cellSize = thumbnailSize + padding;
                 float panelWidth = ImGui::GetContentRegionAvail().x;
+                if (panelWidth > 0.0f && panelWidth < cellSize) {
+                    const float minThumb = 36.0f;
+                    thumbnailSize = std::max(minThumb, panelWidth - padding);
+                    cellSize = thumbnailSize + padding;
+                }
+
                 int columnCount = (int)(panelWidth / cellSize);
                 if (columnCount < 1) columnCount = 1;
 
-                ImGui::Columns(columnCount, 0, false);
-
-                std::vector<std::filesystem::directory_entry> entries;
-                for (const auto& entry : std::filesystem::directory_iterator(contentDir)) {
-                    entries.push_back(entry);
-                }
-                std::sort(entries.begin(), entries.end(), [](const auto& a, const auto& b) {
-                    if (a.is_directory() != b.is_directory()) return a.is_directory() > b.is_directory();
-                    return a.path().filename().string() < b.path().filename().string();
-                });
-
-                for (const auto& entry : entries) {
-                    std::string path = entry.path().string();
-                    std::string filename = entry.path().filename().string();
-                    if (Genesis::Engine::AssetDatabase::IsMetaFile(entry.path())) {
-                        continue;
+                ImGuiTableFlags tableFlags = ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_NoSavedSettings | ImGuiTableFlags_PadOuterX;
+                if (ImGui::BeginTable("##content_browser_table", columnCount, tableFlags)) {
+                    for (int i = 0; i < columnCount; ++i) {
+                        ImGui::TableSetupColumn("##content_col", ImGuiTableColumnFlags_WidthFixed, cellSize);
                     }
 
-                    if (contentSearch[0] != 0) {
-                        std::string fLower = filename;
-                        std::string sLower = contentSearch;
-                        std::transform(fLower.begin(), fLower.end(), fLower.begin(), [](unsigned char c) { return (char)std::tolower(c); });
-                        std::transform(sLower.begin(), sLower.end(), sLower.begin(), [](unsigned char c) { return (char)std::tolower(c); });
-                        if (fLower.find(sLower) == std::string::npos) continue;
+                    std::vector<std::filesystem::directory_entry> entries;
+                    for (const auto& entry : std::filesystem::directory_iterator(contentDir)) {
+                        entries.push_back(entry);
                     }
+                    std::sort(entries.begin(), entries.end(), [](const auto& a, const auto& b) {
+                        if (a.is_directory() != b.is_directory()) return a.is_directory() > b.is_directory();
+                        return a.path().filename().string() < b.path().filename().string();
+                    });
 
-                    if (!entry.is_directory()) {
-                        if (metaEnsured.insert(path).second) {
-                            Genesis::Engine::AssetDatabase::EnsureMeta(entry.path(), projectRoot);
+                    for (const auto& entry : entries) {
+                        std::string path = entry.path().string();
+                        std::string filename = entry.path().filename().string();
+                        if (Genesis::Engine::AssetDatabase::IsMetaFile(entry.path())) {
+                            continue;
                         }
-                    }
-                    
-                    ImGui::PushID(filename.c_str());
-                    auto GetIconTexture = [&](const std::string& key, const IconColor& color, bool isFolder) {
-                        auto it = iconCache.find(key);
-                        if (it != iconCache.end()) return it->second;
-                        auto tex = isFolder ? MakeFolderIcon(color) : MakeFileIcon(color);
-                        iconCache[key] = tex;
-                        return tex;
-                    };
 
-                    auto GetFileTypeIcon = [&](const std::string& extLower, bool isDir) {
-                        if (isDir) {
-                            return GetIconTexture("folder", IconColor{ 231, 189, 90, 255 }, true);
+                        if (contentSearch[0] != 0) {
+                            std::string fLower = filename;
+                            std::string sLower = contentSearch;
+                            std::transform(fLower.begin(), fLower.end(), fLower.begin(), [](unsigned char c) { return (char)std::tolower(c); });
+                            std::transform(sLower.begin(), sLower.end(), sLower.begin(), [](unsigned char c) { return (char)std::tolower(c); });
+                            if (fLower.find(sLower) == std::string::npos) continue;
                         }
-                        if (extLower == ".scene") return GetIconTexture("scene", IconColor{ 94, 156, 255, 255 }, false);
-                        if (extLower == ".prefab") return GetIconTexture("prefab", IconColor{ 170, 120, 255, 255 }, false);
-                        if (extLower == ".gltf" || extLower == ".glb" || extLower == ".obj" || extLower == ".fbx") return GetIconTexture("model", IconColor{ 180, 120, 255, 255 }, false);
-                        if (extLower == ".vert" || extLower == ".frag" || extLower == ".glsl" || extLower == ".hlsl" || extLower == ".spv") return GetIconTexture("shader", IconColor{ 255, 166, 77, 255 }, false);
-                        if (extLower == ".ttf" || extLower == ".otf") return GetIconTexture("font", IconColor{ 121, 215, 155, 255 }, false);
-                        if (extLower == ".wav" || extLower == ".mp3" || extLower == ".ogg") return GetIconTexture("audio", IconColor{ 120, 210, 220, 255 }, false);
-                        if (extLower == ".lua" || extLower == ".cs" || extLower == ".js") return GetIconTexture("script", IconColor{ 245, 215, 110, 255 }, false);
-                        return GetIconTexture("file", IconColor{ 140, 150, 165, 255 }, false);
-                    };
 
-                    std::shared_ptr<Genesis::Engine::Texture> thumbTex;
-                    const bool isDir = entry.is_directory();
-                    std::string extLower = isDir ? std::string() : ToLowerCopy(entry.path().extension().string());
-
-                    if (!isDir && IsImageExtension(extLower)) {
-                        auto it = thumbnailCache.find(path);
-                        if (it != thumbnailCache.end()) {
-                            thumbTex = it->second;
-                        } else {
-                            auto loaded = Genesis::Engine::Texture::CreateFromFile(path);
-                            if (loaded) {
-                                thumbnailCache[path] = loaded;
-                                thumbTex = loaded;
+                        if (!entry.is_directory()) {
+                            if (metaEnsured.insert(path).second) {
+                                Genesis::Engine::AssetDatabase::EnsureMeta(entry.path(), projectRoot);
                             }
                         }
-                    }
 
-                    if (!thumbTex) {
-                        thumbTex = GetFileTypeIcon(extLower, isDir);
-                    }
+                        ImGui::TableNextColumn();
+                        ImGui::PushID(filename.c_str());
+                        auto GetIconTexture = [&](const std::string& key, const IconColor& color, bool isFolder) {
+                            auto it = iconCache.find(key);
+                            if (it != iconCache.end()) return it->second;
+                            auto tex = isFolder ? MakeFolderIcon(color) : MakeFileIcon(color);
+                            iconCache[key] = tex;
+                            return tex;
+                        };
 
-                    if (thumbTex) {
-                        thumbTex->UploadToRenderer(currentRenderer);
-                    }
+                        auto GetFileTypeIcon = [&](const std::string& extLower, bool isDir) {
+                            if (isDir) {
+                                return GetIconTexture("folder", IconColor{ 231, 189, 90, 255 }, true);
+                            }
+                            if (extLower == ".scene") return GetIconTexture("scene", IconColor{ 94, 156, 255, 255 }, false);
+                            if (extLower == ".prefab") return GetIconTexture("prefab", IconColor{ 170, 120, 255, 255 }, false);
+                            if (extLower == ".matgraph") return GetIconTexture("material", IconColor{ 120, 200, 255, 255 }, false);
+                            if (extLower == ".gltf" || extLower == ".glb" || extLower == ".obj" || extLower == ".fbx") return GetIconTexture("model", IconColor{ 180, 120, 255, 255 }, false);
+                            if (extLower == ".vert" || extLower == ".frag" || extLower == ".glsl" || extLower == ".hlsl" || extLower == ".spv") return GetIconTexture("shader", IconColor{ 255, 166, 77, 255 }, false);
+                            if (extLower == ".ttf" || extLower == ".otf") return GetIconTexture("font", IconColor{ 121, 215, 155, 255 }, false);
+                            if (extLower == ".wav" || extLower == ".mp3" || extLower == ".ogg") return GetIconTexture("audio", IconColor{ 120, 210, 220, 255 }, false);
+                            if (extLower == ".lua" || extLower == ".cs" || extLower == ".js") return GetIconTexture("script", IconColor{ 245, 215, 110, 255 }, false);
+                            return GetIconTexture("file", IconColor{ 140, 150, 165, 255 }, false);
+                        };
 
-                    ImTextureID texId = (thumbTex && thumbTex->GetID()) ? (ImTextureID)(uintptr_t)thumbTex->GetID() : (ImTextureID)0;
-                    // Thumbnail / icon
-                    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
-                    ImGui::ImageButton(filename.c_str(), texId, ImVec2(thumbnailSize, thumbnailSize));
-                    ImGui::PopStyleColor();
+                        std::shared_ptr<Genesis::Engine::Texture> thumbTex;
+                        const bool isDir = entry.is_directory();
+                        std::string extLower = isDir ? std::string() : ToLowerCopy(entry.path().extension().string());
 
-                    if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
-                        selectedAssetPath = path;
-                    }
-
-                    if (!selectedAssetPath.empty()) {
-                        std::error_code selEc;
-                        bool isSelected = std::filesystem::equivalent(entry.path(), std::filesystem::path(selectedAssetPath), selEc);
-                        if (!selEc && isSelected) {
-                            ImDrawList* dl = ImGui::GetWindowDrawList();
-                            ImVec2 min = ImGui::GetItemRectMin();
-                            ImVec2 max = ImGui::GetItemRectMax();
-                            dl->AddRect(min, max, IM_COL32(120, 180, 255, 200), 4.0f, 0, 2.0f);
-                        }
-                    }
-
-                    if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
-                        if (entry.is_directory()) {
-                            contentDir = entry.path();
-                        } else {
-                            std::string ext = entry.path().extension().string();
-                            std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) { return (char)std::tolower(c); });
-                            if (ext == ".scene") {
-                                const std::string pathStr = entry.path().string();
-                                if (!MaybePromptUnsaved(PendingSceneAction::LoadScenePath, pathStr)) {
-                                    LoadSceneFromPath(pathStr, true);
+                        if (!isDir && IsImageExtension(extLower)) {
+                            auto it = thumbnailCache.find(path);
+                            if (it != thumbnailCache.end()) {
+                                thumbTex = it->second;
+                            } else {
+                                auto loaded = Genesis::Engine::Texture::CreateFromFile(path);
+                                if (loaded) {
+                                    thumbnailCache[path] = loaded;
+                                    thumbTex = loaded;
                                 }
-                            } else if (ext == ".prefab") {
-                                if (editorState == EditorState::Edit) {
-                                    entt::entity root = Genesis::Engine::PrefabLoader::InstantiatePrefab(editorScene, entry.path().string(), entt::null);
-                                    if (root != entt::null) {
-                                        selectedEntity = root;
-                                        sceneDirty = true;
+                            }
+                        }
+
+                        if (!thumbTex) {
+                            thumbTex = GetFileTypeIcon(extLower, isDir);
+                        }
+
+                        if (thumbTex) {
+                            thumbTex->UploadToRenderer(currentRenderer);
+                        }
+
+                        ImTextureID texId = (thumbTex && thumbTex->GetID()) ? (ImTextureID)(uintptr_t)thumbTex->GetID() : (ImTextureID)0;
+                        // Thumbnail / icon
+                        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
+                        ImGui::ImageButton(filename.c_str(), texId, ImVec2(thumbnailSize, thumbnailSize));
+                        ImGui::PopStyleColor();
+
+                        if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
+                            selectedAssetPath = path;
+                        }
+
+                        if (!selectedAssetPath.empty()) {
+                            std::error_code selEc;
+                            bool isSelected = std::filesystem::equivalent(entry.path(), std::filesystem::path(selectedAssetPath), selEc);
+                            if (!selEc && isSelected) {
+                                ImDrawList* dl = ImGui::GetWindowDrawList();
+                                ImVec2 min = ImGui::GetItemRectMin();
+                                ImVec2 max = ImGui::GetItemRectMax();
+                                ImVec4 select = ImGui::GetStyle().Colors[ImGuiCol_NavHighlight];
+                                select.w = 0.85f;
+                                dl->AddRect(min, max, ImGui::GetColorU32(select), 4.0f, 0, 2.0f);
+                            }
+                        }
+
+                        if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+                            if (entry.is_directory()) {
+                                contentDir = entry.path();
+                            } else {
+                                std::string ext = entry.path().extension().string();
+                                std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) { return (char)std::tolower(c); });
+                                if (ext == ".scene") {
+                                    const std::string pathStr = entry.path().string();
+                                    if (!MaybePromptUnsaved(PendingSceneAction::LoadScenePath, pathStr)) {
+                                        LoadSceneFromPath(pathStr, true);
+                                    }
+                                } else if (ext == ".prefab") {
+                                    if (editorState == EditorState::Edit) {
+                                        entt::entity root = Genesis::Engine::PrefabLoader::InstantiatePrefab(editorScene, entry.path().string(), entt::null);
+                                        if (root != entt::null) {
+                                            selectedEntity = root;
+                                            sceneDirty = true;
+                                        }
+                                    }
+                                } else if (ext == ".matgraph") {
+                                    const std::string pathStr = entry.path().string();
+                                    if (Genesis::Engine::LoadMaterialGraph(pathStr, materialGraph)) {
+                                        materialGraphPath = pathStr;
+                                        strncpy_s(materialGraphPathBuffer, materialGraphPath.c_str(), sizeof(materialGraphPathBuffer) - 1);
+                                        strncpy_s(materialGraphNameBuffer, materialGraph.name.c_str(), sizeof(materialGraphNameBuffer) - 1);
+                                        materialGraphTextureBuffers.clear();
+                                        showMaterialGraph = true;
+                                        materialGraphDirty = false;
                                     }
                                 }
                             }
                         }
-                    }
 
-                    if (ImGui::BeginDragDropSource()) {
-                        ImGui::SetDragDropPayload("CONTENT_BROWSER_ITEM", path.c_str(), path.length() + 1);
-                        ImGui::EndDragDropSource();
-                    }
+                        if (ImGui::BeginDragDropSource()) {
+                            ImGui::SetDragDropPayload("CONTENT_BROWSER_ITEM", path.c_str(), path.length() + 1);
+                            ImGui::EndDragDropSource();
+                        }
 
-                    if (ImGui::BeginPopupContextItem()) {
-                        if (!entry.is_directory()) {
-                            if (ImGui::MenuItem("Reimport")) {
-                                Genesis::Engine::AssetDatabase::Reimport(entry.path(), projectRoot);
-                                std::string ext = ToLowerCopy(entry.path().extension().string());
-                                if (ext == ".gltf" || ext == ".glb" || ext == ".obj" || ext == ".fbx") {
-                                    ReloadModelAsset(entry.path());
-                                } else if (IsImageExtension(ext)) {
-                                    ReloadTextureAsset(entry.path());
+                        if (ImGui::BeginPopupContextItem()) {
+                            if (!entry.is_directory()) {
+                                if (ImGui::MenuItem("Reimport")) {
+                                    Genesis::Engine::AssetDatabase::Reimport(entry.path(), projectRoot);
+                                    std::string ext = ToLowerCopy(entry.path().extension().string());
+                                    if (ext == ".gltf" || ext == ".glb" || ext == ".obj" || ext == ".fbx") {
+                                        ReloadModelAsset(entry.path());
+                                    } else if (IsImageExtension(ext)) {
+                                        ReloadTextureAsset(entry.path());
+                                    }
                                 }
                             }
+                            ImGui::EndPopup();
                         }
-                        ImGui::EndPopup();
-                    }
 
-                    ImGui::TextWrapped("%s", filename.c_str());
-                    ImGui::NextColumn();
-                    ImGui::PopID();
+                        ImGui::TextWrapped("%s", filename.c_str());
+                        ImGui::PopID();
+                    }
+                    ImGui::EndTable();
                 }
-                ImGui::Columns(1);
                 if (ImGui::IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem)
                     && ImGui::IsMouseClicked(ImGuiMouseButton_Left)
                     && !ImGui::IsAnyItemHovered()) {
                     selectedAssetPath.clear();
                 }
             }
+            ImGui::End();
+        }
+
+        // Profiler
+        if (!zenMode && showProfiler) {
+            ImGui::Begin("Profiler", &showProfiler);
+            ImGui::Text("Frame: %.2f ms (%.1f FPS)", profiler.GetLastFrameMS(), profiler.GetFPS());
+            ImGui::Text("Jobs: %u workers | %u queued | %u active", profiler.GetJobWorkerCount(), profiler.GetJobQueuedCount(), profiler.GetJobActiveCount());
+
+            if (profiler.GetFrameAllocatorCapacity() > 0) {
+                ImGui::Text("Frame Allocator: %zu / %zu bytes", profiler.GetFrameAllocatorUsed(), profiler.GetFrameAllocatorCapacity());
+            }
+
+            ImGui::Separator();
+            ImGui::TextUnformatted("Scopes");
+            ImGui::BeginChild("##profiler_scopes", ImVec2(0, 160), true);
+            for (const auto& sample : profiler.GetSamples()) {
+                ImGui::Indent(sample.depth * 12.0f);
+                ImGui::Text("%s: %.3f ms", sample.name.c_str(), sample.ms);
+                ImGui::Unindent(sample.depth * 12.0f);
+            }
+            ImGui::EndChild();
             ImGui::End();
         }
 
@@ -5340,30 +5664,34 @@ int main(int argc, char** argv) {
             ImGui::PopStyleVar();
         }
 
-        ImGui::Render();
-        
-        // Ensure we are rendering to the default framebuffer (the window)
-        if (auto glRenderer = dynamic_cast<Genesis::Engine::OpenGLRenderer*>(currentRenderer)) {
-            glRenderer->BindDefaultFramebuffer();
-            glRenderer->Clear(0.1f, 0.12f, 0.15f, 1.0f); // Clear to dark grey
-        }
-
-        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-        
-        // Update and Render additional Platform Windows
-        // (Platform functions may change the current OpenGL context, so we save/restore it to make it easier to paste this code elsewhere.
-        //  For this specific binding SDL_GL_MakeCurrent() performs a lazy context switch so the saving/restoring is not strictly necessary.)
-        if (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
         {
-            SDL_Window* backup_current_window = SDL_GL_GetCurrentWindow();
-            SDL_GLContext backup_current_context = SDL_GL_GetCurrentContext();
-            ImGui::UpdatePlatformWindows();
-            ImGui::RenderPlatformWindowsDefault();
-            SDL_GL_MakeCurrent(backup_current_window, backup_current_context);
-        }
+            Genesis::Engine::Profiler::Scope scope(profiler, "ImGui Render");
+            ImGui::Render();
 
-        if (currentRenderer) {
-            currentRenderer->Present(); // Swap buffers
+            // Ensure we are rendering to the default framebuffer (the window)
+            if (auto glRenderer = dynamic_cast<Genesis::Engine::OpenGLRenderer*>(currentRenderer)) {
+                glRenderer->BindDefaultFramebuffer();
+                ImVec4 clear = ImGui::GetStyle().Colors[ImGuiCol_WindowBg];
+                glRenderer->Clear(clear.x, clear.y, clear.z, 1.0f);
+            }
+
+            ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
+            // Update and Render additional Platform Windows
+            // (Platform functions may change the current OpenGL context, so we save/restore it to make it easier to paste this code elsewhere.
+            //  For this specific binding SDL_GL_MakeCurrent() performs a lazy context switch so the saving/restoring is not strictly necessary.)
+            if (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
+            {
+                SDL_Window* backup_current_window = SDL_GL_GetCurrentWindow();
+                SDL_GLContext backup_current_context = SDL_GL_GetCurrentContext();
+                ImGui::UpdatePlatformWindows();
+                ImGui::RenderPlatformWindowsDefault();
+                SDL_GL_MakeCurrent(backup_current_window, backup_current_context);
+            }
+
+            if (currentRenderer) {
+                currentRenderer->Present(); // Swap buffers
+            }
         }
         
         profiler.EndFrame();

@@ -338,6 +338,7 @@ static std::string InferImporter(const std::filesystem::path& assetPath) {
     if (ext == ".wav" || ext == ".mp3" || ext == ".ogg") return "audio";
     if (ext == ".scene") return "scene";
     if (ext == ".prefab") return "prefab";
+    if (ext == ".matgraph") return "material_graph";
     if (ext == ".vert" || ext == ".frag" || ext == ".glsl" || ext == ".hlsl" || ext == ".spv") return "shader";
     if (ext == ".ttf" || ext == ".otf") return "font";
     if (ext == ".lua" || ext == ".cs" || ext == ".js") return "script";
