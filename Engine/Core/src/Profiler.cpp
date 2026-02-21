@@ -1,5 +1,6 @@
 #include "engine/Profiler.h"
 #include "engine/JobSystem.h"
+#include "engine/Stats.h"
 
 #include <algorithm>
 
@@ -32,6 +33,23 @@ void Profiler::EndFrame() {
     auto end = high_resolution_clock::now();
     m_lastFrameMS = duration<double, std::milli>(end - m_start).count();
     m_fps = (m_lastFrameMS > 0.0) ? (1000.0 / m_lastFrameMS) : 0.0;
+    m_drawCalls = Stats::GetDrawCalls();
+
+    FrameRecord record;
+    record.frameMs = m_lastFrameMS;
+    record.fps = m_fps;
+    record.jobWorkers = m_jobWorkers;
+    record.jobQueued = m_jobQueued;
+    record.jobActive = m_jobActive;
+    record.drawCalls = m_drawCalls;
+    record.frameAllocUsed = m_frameAllocUsed;
+    record.frameAllocCapacity = m_frameAllocCapacity;
+    record.samples = m_samples;
+
+    m_history.push_back(std::move(record));
+    if (m_history.size() > m_historyCapacity) {
+        m_history.pop_front();
+    }
 }
 
 double Profiler::GetLastFrameMS() const { return m_lastFrameMS; }
@@ -45,11 +63,29 @@ void Profiler::ClearSamples() {
     m_depth = 0;
 }
 
+const std::deque<Profiler::FrameRecord>& Profiler::GetFrameHistory() const {
+    return m_history;
+}
+
+void Profiler::SetHistoryCapacity(size_t capacity) {
+    if (capacity == 0) capacity = 1;
+    m_historyCapacity = capacity;
+    while (m_history.size() > m_historyCapacity) {
+        m_history.pop_front();
+    }
+}
+
+size_t Profiler::GetHistoryCapacity() const {
+    return m_historyCapacity;
+}
+
 uint32_t Profiler::GetJobWorkerCount() const { return m_jobWorkers; }
 
 uint32_t Profiler::GetJobQueuedCount() const { return m_jobQueued; }
 
 uint32_t Profiler::GetJobActiveCount() const { return m_jobActive; }
+
+int Profiler::GetDrawCalls() const { return m_drawCalls; }
 
 void Profiler::SetFrameAllocatorUsage(size_t usedBytes, size_t capacityBytes) {
     m_frameAllocUsed = usedBytes;

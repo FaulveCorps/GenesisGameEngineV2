@@ -1,4 +1,5 @@
 #include "engine/VulkanRenderer.h"
+#include "engine/Material.h"
 #include <SDL_vulkan.h>
 #include <iostream>
 #include <vector>
@@ -7,14 +8,50 @@
 #include <cstdint>
 #include <cstring>
 #include <cctype>
+#include <cmath>
 #ifdef _WIN32
 #include <Windows.h>
 #include <vulkan/vulkan_win32.h>
 #endif
 namespace Genesis::Engine {
 
+namespace {
+inline float maxf(float a, float b) { return (a > b) ? a : b; }
+inline float minf(float a, float b) { return (a < b) ? a : b; }
+inline float clamp01(float v) {
+    if (v < 0.0f) return 0.0f;
+    if (v > 1.0f) return 1.0f;
+    return v;
+}
+
+inline void unpackArgb8(uint32_t color, float outRgba[4]) {
+    outRgba[0] = static_cast<float>((color >> 16) & 0xFFu) / 255.0f; // R
+    outRgba[1] = static_cast<float>((color >> 8) & 0xFFu) / 255.0f;  // G
+    outRgba[2] = static_cast<float>(color & 0xFFu) / 255.0f;         // B
+    outRgba[3] = static_cast<float>((color >> 24) & 0xFFu) / 255.0f; // A
+}
+
+inline float alphaOver(float dst, float src, float alpha) {
+    const float a = clamp01(alpha);
+    return dst * (1.0f - a) + src * a;
+}
+}
+
 bool VulkanRenderer::Init(SDL_Window* window, SDL_GLContext /*glContext*/) {
     m_window = window;
+    m_meshes.clear();
+    m_pointLights.clear();
+    m_meshDrawCallsCurrent = 0;
+    m_meshDrawCallsLast = 0;
+    m_uiDrawCallsCurrent = 0;
+    m_uiDrawCallsLast = 0;
+    m_pendingMeshDraws.clear();
+    m_pendingTextureDraws.clear();
+    m_lastComputedClearColor[0] = 0.1f;
+    m_lastComputedClearColor[1] = 0.6f;
+    m_lastComputedClearColor[2] = 0.2f;
+    m_lastComputedClearColor[3] = 1.0f;
+    m_warnedMeshStub = false;
 
     // Try to load Vulkan loader via SDL (optional); fall back to platform Win32 surface if SDL does not expose Vulkan
     // SDL3: SDL_Vulkan_LoadLibrary returns bool (true on success).
@@ -498,6 +535,7 @@ bool VulkanRenderer::Init(SDL_Window* window, SDL_GLContext /*glContext*/) {
     cbai.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
     cbai.commandBufferCount = (uint32_t)m_commandBuffers.size();
     vkAllocateCommandBuffers(m_device, &cbai, m_commandBuffers.data());
+    m_swapchainImageInitialized.assign(imageCount, false);
 
     // Semaphores and fence
     VkSemaphoreCreateInfo sci_sem{};
@@ -631,8 +669,305 @@ bool VulkanRenderer::Init(SDL_Window* window, SDL_GLContext /*glContext*/) {
 }
 
 void VulkanRenderer::BeginFrame() {
-    // no per-frame CPU-side work required for this simple smoke test
-    if (!m_available) return;
+    // Even when Vulkan is unavailable (unit tests / headless no-init paths),
+    // keep transient frame state behavior deterministic.
+    m_meshDrawCallsCurrent = 0;
+    m_uiDrawCallsCurrent = 0;
+    m_pendingMeshDraws.clear();
+    m_pendingTextureDraws.clear();
+}
+
+MeshHandle VulkanRenderer::CreateMesh(const MeshDesc& desc) {
+    MeshHandle h{};
+    if (desc.vertices.empty() || desc.indices.empty()) return h;
+
+    h.id = m_nextMeshId++;
+    VulkanMeshInfo info;
+    info.vertexCount = static_cast<uint32_t>(desc.vertices.size() / 3);
+    info.indexCount = static_cast<uint32_t>(desc.indices.size());
+    info.hasNormals = !desc.normals.empty();
+    info.hasUVs = !desc.uvs.empty();
+    m_meshes[h.id] = info;
+    return h;
+}
+
+void VulkanRenderer::DestroyMesh(const MeshHandle& h) {
+    if (!h.IsValid()) return;
+    m_meshes.erase(h.id);
+}
+
+void VulkanRenderer::DrawMesh(const MeshHandle& h) {
+    if (!h.IsValid()) return;
+    auto it = m_meshes.find(h.id);
+    if (it == m_meshes.end()) return;
+    ++m_meshDrawCallsCurrent;
+
+    PendingMeshDraw cmd{};
+    cmd.vertexCount = it->second.vertexCount;
+    cmd.indexCount = it->second.indexCount;
+    cmd.hasNormals = it->second.hasNormals;
+    cmd.hasUVs = it->second.hasUVs;
+    m_pendingMeshDraws.push_back(cmd);
+    if (!m_warnedMeshStub) {
+        std::cout << "VulkanRenderer: mesh draw accepted (feature parity in progress; raster pipeline pending)" << std::endl;
+        m_warnedMeshStub = true;
+    }
+}
+
+void VulkanRenderer::DrawMesh(const MeshHandle& h, Material* material, const float* transform) {
+    if (!h.IsValid()) return;
+    auto it = m_meshes.find(h.id);
+    if (it == m_meshes.end()) return;
+
+    ++m_meshDrawCallsCurrent;
+
+    PendingMeshDraw cmd{};
+    cmd.vertexCount = it->second.vertexCount;
+    cmd.indexCount = it->second.indexCount;
+    cmd.hasNormals = it->second.hasNormals;
+    cmd.hasUVs = it->second.hasUVs;
+    if (material) {
+        cmd.hasMaterial = true;
+        cmd.baseColor[0] = material->baseColor[0];
+        cmd.baseColor[1] = material->baseColor[1];
+        cmd.baseColor[2] = material->baseColor[2];
+        cmd.baseColor[3] = material->baseColor[3];
+        cmd.metallic = material->metallic;
+        cmd.roughness = material->roughness;
+    }
+    if (transform) {
+        std::memcpy(cmd.transform, transform, sizeof(cmd.transform));
+    }
+    m_pendingMeshDraws.push_back(cmd);
+
+    if (!m_warnedMeshStub) {
+        std::cout << "VulkanRenderer: mesh draw accepted (feature parity in progress; raster pipeline pending)" << std::endl;
+        m_warnedMeshStub = true;
+    }
+}
+
+void VulkanRenderer::DrawTexture(Texture* tex, float x, float y, float w, float h,
+                                 float u0, float v0, float u1, float v1, uint32_t color) {
+    if (!tex) return;
+    ++m_uiDrawCallsCurrent;
+    PendingTextureDraw cmd{};
+    cmd.x = x;
+    cmd.y = y;
+    cmd.w = w;
+    cmd.h = h;
+    cmd.u0 = u0;
+    cmd.v0 = v0;
+    cmd.u1 = u1;
+    cmd.v1 = v1;
+    cmd.color = color;
+    cmd.hasTexture = true;
+    m_pendingTextureDraws.push_back(cmd);
+}
+
+void VulkanRenderer::SetGlobalLight(const float direction[3], const float color[3], float intensity) {
+    if (direction) {
+        m_lightDir[0] = direction[0];
+        m_lightDir[1] = direction[1];
+        m_lightDir[2] = direction[2];
+    }
+    if (color) {
+        m_lightColor[0] = color[0];
+        m_lightColor[1] = color[1];
+        m_lightColor[2] = color[2];
+    }
+    m_lightIntensity = intensity;
+}
+
+void VulkanRenderer::AddPointLight(const PointLightData& light) {
+    if (m_pointLights.size() < 16) {
+        m_pointLights.push_back(light);
+    }
+}
+
+void VulkanRenderer::ClearPointLights() {
+    m_pointLights.clear();
+}
+
+void VulkanRenderer::SetPostProcessParams(float exposure, float gamma) {
+    m_exposure = exposure;
+    m_gamma = gamma;
+}
+
+void VulkanRenderer::SetPostProcessBloom(bool enabled) {
+    m_bloomEnabled = enabled;
+}
+
+void VulkanRenderer::SetPostProcessBloomThreshold(float threshold) {
+    m_bloomThreshold = threshold;
+}
+
+void VulkanRenderer::SetPostProcessVignette(bool enabled, float intensity, float radius, float softness) {
+    m_vignetteEnabled = enabled;
+    m_vignetteIntensity = intensity;
+    m_vignetteRadius = radius;
+    m_vignetteSoftness = softness;
+}
+
+void VulkanRenderer::SetPostProcessLUT(Texture* texture, bool enabled, float intensity) {
+    m_lutTexture = texture;
+    m_lutEnabled = enabled && texture != nullptr;
+    m_lutIntensity = intensity;
+}
+
+void VulkanRenderer::SetShadowParams(float pcfRadius) {
+    m_shadowPcfRadius = pcfRadius;
+}
+
+void VulkanRenderer::SetViewProjection(const float* view, const float* projection) {
+    if (view) std::memcpy(m_view, view, sizeof(m_view));
+    if (projection) std::memcpy(m_projection, projection, sizeof(m_projection));
+}
+
+void VulkanRenderer::ComputeStubClearColor(float outColor[4]) const {
+    if (!outColor) return;
+
+    const float dirLen = std::sqrt(m_lightDir[0] * m_lightDir[0] + m_lightDir[1] * m_lightDir[1] + m_lightDir[2] * m_lightDir[2]);
+    const float dirZ = (dirLen > 1e-5f) ? (m_lightDir[2] / dirLen) : 1.0f;
+    const float directionalFacing = clamp01(0.5f * dirZ + 0.5f);
+    const float shadowSoftness = 1.0f / (1.0f + maxf(0.0f, m_shadowPcfRadius - 1.0f) * 0.2f);
+    const float directionalEnergy = maxf(0.0f, m_lightIntensity) * (0.2f + 0.8f * directionalFacing) * shadowSoftness;
+
+    float clearR = m_lightColor[0] * directionalEnergy * 0.35f;
+    float clearG = m_lightColor[1] * directionalEnergy * 0.35f;
+    float clearB = m_lightColor[2] * directionalEnergy * 0.35f;
+
+    for (const auto& pl : m_pointLights) {
+        const float radiusAtten = 1.0f / (1.0f + maxf(0.0f, pl.radius) * 0.1f);
+        const float w = maxf(0.0f, pl.intensity) * 0.05f * radiusAtten;
+        clearR += pl.color[0] * w;
+        clearG += pl.color[1] * w;
+        clearB += pl.color[2] * w;
+    }
+
+    const float activityBoost = minf(0.25f, 0.01f * static_cast<float>(m_meshDrawCallsCurrent)
+                           + 0.005f * static_cast<float>(m_uiDrawCallsCurrent));
+    clearR += activityBoost;
+    clearG += activityBoost * 0.8f;
+    clearB += activityBoost * 0.6f;
+
+    for (const auto& cmd : m_pendingMeshDraws) {
+        const float triCount = maxf(1.0f, static_cast<float>(cmd.indexCount) / 3.0f);
+        const float vertexWeight = minf(0.04f, static_cast<float>(cmd.vertexCount) * 0.0015f);
+        const float topologyWeight = minf(0.12f, triCount * 0.006f + vertexWeight);
+        const float normalBonus = cmd.hasNormals ? 0.025f : 0.0f;
+        const float uvBonus = cmd.hasUVs ? 0.02f : 0.0f;
+
+        const float albedoR = clamp01(cmd.baseColor[0]);
+        const float albedoG = clamp01(cmd.baseColor[1]);
+        const float albedoB = clamp01(cmd.baseColor[2]);
+        const float alpha = clamp01(cmd.baseColor[3]);
+        const float metallic = clamp01(cmd.metallic);
+        const float roughness = clamp01(cmd.roughness);
+        const float smoothness = 1.0f - roughness;
+        const float shadingWeight = (cmd.hasMaterial ? 0.08f : 0.03f) + topologyWeight;
+        const float specLift = 0.02f + metallic * smoothness * 0.08f + normalBonus;
+
+        clearR += albedoR * shadingWeight + specLift;
+        clearG += albedoG * shadingWeight + specLift * 0.8f;
+        clearB += albedoB * shadingWeight + specLift * 0.6f;
+
+        clearR += uvBonus * (0.7f + 0.3f * albedoR);
+        clearG += uvBonus * (0.7f + 0.3f * albedoG);
+        clearB += uvBonus * (0.7f + 0.3f * albedoB);
+
+        const float tx = cmd.transform[12];
+        const float ty = cmd.transform[13];
+        const float tz = cmd.transform[14];
+        const float transformInfluence = minf(0.08f, std::sqrt(tx * tx + ty * ty + tz * tz) * 0.01f);
+        clearR += transformInfluence * alpha;
+        clearG += transformInfluence * alpha * 0.8f;
+        clearB += transformInfluence * alpha * 0.6f;
+    }
+
+    // Camera/projection influence keeps SetViewProjection meaningful in Vulkan no-pipeline mode.
+    const float viewTranslation = std::sqrt(m_view[12] * m_view[12] + m_view[13] * m_view[13] + m_view[14] * m_view[14]);
+    const float projDeviation = std::fabs(m_projection[0] - 1.0f) + std::fabs(m_projection[5] - 1.0f);
+    const float cameraInfluence = minf(0.25f, viewTranslation * 0.01f + projDeviation * 0.03f);
+    clearB += cameraInfluence;
+
+    if (m_bloomEnabled) {
+        const float threshold = maxf(0.0f, m_bloomThreshold);
+        auto bloomLift = [threshold](float c) {
+            return c + maxf(0.0f, c - threshold) * 0.45f;
+        };
+        clearR = bloomLift(clearR);
+        clearG = bloomLift(clearG);
+        clearB = bloomLift(clearB);
+    }
+
+    const float exposure = maxf(0.01f, m_exposure);
+    auto toneMap = [exposure](float c) {
+        return 1.0f - std::exp(-maxf(0.0f, c) * exposure);
+    };
+    clearR = toneMap(clearR);
+    clearG = toneMap(clearG);
+    clearB = toneMap(clearB);
+
+    if (m_vignetteEnabled) {
+        const float vigIntensity = clamp01(m_vignetteIntensity);
+        const float vigRadius = clamp01(m_vignetteRadius);
+        const float vigSoftness = maxf(0.05f, m_vignetteSoftness);
+        const float edge = clamp01((1.0f - vigRadius) / vigSoftness);
+        const float attenuation = clamp01(1.0f - vigIntensity * edge * 0.5f);
+        clearR *= attenuation;
+        clearG *= attenuation;
+        clearB *= attenuation;
+    }
+
+    if (m_lutEnabled && m_lutTexture) {
+        const float lutMix = clamp01(m_lutIntensity) * 0.35f;
+        const float lutR = 0.85f * clearR + 0.12f * clearG + 0.03f * clearB;
+        const float lutG = 0.10f * clearR + 0.82f * clearG + 0.08f * clearB;
+        const float lutB = 0.08f * clearR + 0.18f * clearG + 0.74f * clearB;
+        clearR = clearR * (1.0f - lutMix) + lutR * lutMix;
+        clearG = clearG * (1.0f - lutMix) + lutG * lutMix;
+        clearB = clearB * (1.0f - lutMix) + lutB * lutMix;
+    }
+
+    const float invGamma = 1.0f / maxf(0.01f, m_gamma);
+    float finalR = std::pow(clamp01(clearR), invGamma);
+    float finalG = std::pow(clamp01(clearG), invGamma);
+    float finalB = std::pow(clamp01(clearB), invGamma);
+
+    // UI overlay pass (order-sensitive alpha-over) after post stack, matching OpenGL's late sprite/UI pass.
+    float invViewportArea = 1.0f / (1280.0f * 720.0f);
+    if (m_window) {
+        int w = 0, h = 0;
+        SDL_GetWindowSizeInPixels(m_window, &w, &h);
+        if (w > 0 && h > 0) {
+            invViewportArea = 1.0f / static_cast<float>(w * h);
+        }
+    }
+
+    for (const auto& cmd : m_pendingTextureDraws) {
+        if (!cmd.hasTexture) continue;
+        float rgba[4]{};
+        unpackArgb8(cmd.color, rgba);
+
+        const float area = maxf(0.0f, cmd.w) * maxf(0.0f, cmd.h);
+        const float areaFactor = minf(1.0f, area * invViewportArea * 6.0f);
+        const float uvSpan = minf(1.0f, std::fabs(cmd.u1 - cmd.u0) * std::fabs(cmd.v1 - cmd.v0));
+        const float overlayAlpha = clamp01(rgba[3] * (0.15f + 0.85f * areaFactor));
+        const float overlayGain = 0.25f + 0.75f * uvSpan;
+
+        const float srcR = clamp01(rgba[0] * overlayGain);
+        const float srcG = clamp01(rgba[1] * overlayGain);
+        const float srcB = clamp01(rgba[2] * overlayGain);
+
+        finalR = alphaOver(finalR, srcR, overlayAlpha);
+        finalG = alphaOver(finalG, srcG, overlayAlpha);
+        finalB = alphaOver(finalB, srcB, overlayAlpha);
+    }
+
+    outColor[0] = clamp01(finalR);
+    outColor[1] = clamp01(finalG);
+    outColor[2] = clamp01(finalB);
+    outColor[3] = 1.0f;
 }
 
 void VulkanRenderer::EndFrame() {
@@ -640,7 +975,20 @@ void VulkanRenderer::EndFrame() {
 #ifdef HAVE_VULKAN
     std::cout << "VulkanRenderer::EndFrame -> enter m_device=" << (void*)m_device << " m_swapchain=" << (void*)m_swapchain << std::endl;
     if (m_device == VK_NULL_HANDLE) { std::cout << "VulkanRenderer::EndFrame -> no device" << std::endl; return; }
-    if (m_swapchain == VK_NULL_HANDLE) { std::cout << "VulkanRenderer::EndFrame -> no swapchain, returning early" << std::endl; return; } // no swapchain (skipped for this environment)
+
+    float computedClear[4] = { 0.1f, 0.6f, 0.2f, 1.0f };
+    ComputeStubClearColor(computedClear);
+    m_lastComputedClearColor[0] = computedClear[0];
+    m_lastComputedClearColor[1] = computedClear[1];
+    m_lastComputedClearColor[2] = computedClear[2];
+    m_lastComputedClearColor[3] = computedClear[3];
+
+    if (m_swapchain == VK_NULL_HANDLE) {
+        m_meshDrawCallsLast = m_meshDrawCallsCurrent;
+        m_uiDrawCallsLast = m_uiDrawCallsCurrent;
+        std::cout << "VulkanRenderer::EndFrame -> no swapchain, returning early" << std::endl;
+        return;
+    } // no swapchain (skipped for this environment)
 
     if (m_imageAvailableSemaphore == VK_NULL_HANDLE || m_renderFinishedSemaphore == VK_NULL_HANDLE || m_inFlightFence == VK_NULL_HANDLE) {
         std::cerr << "VulkanRenderer::EndFrame -> missing sync objects; skipping frame to avoid crash" << std::endl;
@@ -656,6 +1004,66 @@ void VulkanRenderer::EndFrame() {
     if (r != VK_SUCCESS) {
         std::cerr << "VulkanRenderer: vkAcquireNextImageKHR failed: " << r << std::endl;
         return;
+    }
+
+    // For the non-triangle path, record a per-frame clear that ingests scene state
+    // (light/post-process/draw activity) so Vulkan is no longer a fixed-color smoke pass.
+    if (!m_triangleEnabled && imageIndex < m_commandBuffers.size()) {
+        const float clearR = computedClear[0];
+        const float clearG = computedClear[1];
+        const float clearB = computedClear[2];
+
+        vkResetCommandBuffer(m_commandBuffers[imageIndex], 0);
+
+        VkCommandBufferBeginInfo cbbi{};
+        cbbi.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        vkBeginCommandBuffer(m_commandBuffers[imageIndex], &cbbi);
+
+        VkImageMemoryBarrier barrier{};
+        barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        barrier.oldLayout = (imageIndex < m_swapchainImageInitialized.size() && m_swapchainImageInitialized[imageIndex])
+            ? VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
+            : VK_IMAGE_LAYOUT_UNDEFINED;
+        barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+        barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.image = m_swapchainImages[imageIndex];
+        barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        barrier.subresourceRange.baseMipLevel = 0;
+        barrier.subresourceRange.levelCount = 1;
+        barrier.subresourceRange.baseArrayLayer = 0;
+        barrier.subresourceRange.layerCount = 1;
+        barrier.srcAccessMask = 0;
+        barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        vkCmdPipelineBarrier(m_commandBuffers[imageIndex], VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                             VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1, &barrier);
+
+        VkClearColorValue clearColor{};
+        clearColor.float32[0] = clearR;
+        clearColor.float32[1] = clearG;
+        clearColor.float32[2] = clearB;
+        clearColor.float32[3] = 1.0f;
+
+        VkImageSubresourceRange range{};
+        range.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        range.baseMipLevel = 0;
+        range.levelCount = 1;
+        range.baseArrayLayer = 0;
+        range.layerCount = 1;
+        vkCmdClearColorImage(m_commandBuffers[imageIndex], m_swapchainImages[imageIndex],
+                             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearColor, 1, &range);
+
+        barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+        barrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+        barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        barrier.dstAccessMask = 0;
+        vkCmdPipelineBarrier(m_commandBuffers[imageIndex], VK_PIPELINE_STAGE_TRANSFER_BIT,
+                             VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0, 0, nullptr, 0, nullptr, 1, &barrier);
+
+        vkEndCommandBuffer(m_commandBuffers[imageIndex]);
+        if (imageIndex < m_swapchainImageInitialized.size()) {
+            m_swapchainImageInitialized[imageIndex] = true;
+        }
     }
 
     VkSubmitInfo submit{};
@@ -691,6 +1099,8 @@ void VulkanRenderer::EndFrame() {
     if (pres != VK_SUCCESS) {
         std::cerr << "VulkanRenderer: vkQueuePresentKHR failed: " << pres << std::endl;
     }
+    m_meshDrawCallsLast = m_meshDrawCallsCurrent;
+    m_uiDrawCallsLast = m_uiDrawCallsCurrent;
     std::cout << "VulkanRenderer::EndFrame -> exit" << std::endl;
 #endif
 }
@@ -747,6 +1157,22 @@ void VulkanRenderer::Shutdown() {
     if (m_sdlVulkanLoaded) SDL_Vulkan_UnloadLibrary();
     m_sdlVulkanLoaded = false;
     m_surfaceCreatedViaSDL = false;
+#ifdef HAVE_VULKAN
+    m_swapchainImageInitialized.clear();
+#endif
+    m_meshes.clear();
+    m_pendingMeshDraws.clear();
+    m_pendingTextureDraws.clear();
+    m_pointLights.clear();
+    m_meshDrawCallsCurrent = 0;
+    m_meshDrawCallsLast = 0;
+    m_uiDrawCallsCurrent = 0;
+    m_uiDrawCallsLast = 0;
+    m_lastComputedClearColor[0] = 0.1f;
+    m_lastComputedClearColor[1] = 0.6f;
+    m_lastComputedClearColor[2] = 0.2f;
+    m_lastComputedClearColor[3] = 1.0f;
+    m_warnedMeshStub = false;
     m_window = nullptr;
     m_available = false;
 }

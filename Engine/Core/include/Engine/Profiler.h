@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <string>
 #include <vector>
+#include <deque>
 
 namespace Genesis::Engine {
 
@@ -14,6 +15,18 @@ public:
         std::string name;
         double ms = 0.0;
         int depth = 0;
+    };
+
+    struct FrameRecord {
+        double frameMs = 0.0;
+        double fps = 0.0;
+        uint32_t jobWorkers = 0;
+        uint32_t jobQueued = 0;
+        uint32_t jobActive = 0;
+        int drawCalls = 0;
+        size_t frameAllocUsed = 0;
+        size_t frameAllocCapacity = 0;
+        std::vector<Sample> samples;
     };
 
     class Scope {
@@ -37,9 +50,14 @@ public:
     const std::vector<Sample>& GetSamples() const;
     void ClearSamples();
 
+    const std::deque<FrameRecord>& GetFrameHistory() const;
+    void SetHistoryCapacity(size_t capacity);
+    size_t GetHistoryCapacity() const;
+
     uint32_t GetJobWorkerCount() const;
     uint32_t GetJobQueuedCount() const;
     uint32_t GetJobActiveCount() const;
+    int GetDrawCalls() const;
 
     void SetFrameAllocatorUsage(size_t usedBytes, size_t capacityBytes);
     size_t GetFrameAllocatorUsed() const;
@@ -55,10 +73,13 @@ private:
     uint32_t m_jobWorkers = 0;
     uint32_t m_jobQueued = 0;
     uint32_t m_jobActive = 0;
+    int m_drawCalls = 0;
     size_t m_frameAllocUsed = 0;
     size_t m_frameAllocCapacity = 0;
     int m_depth = 0;
     std::vector<Sample> m_samples;
+    size_t m_historyCapacity = 240;
+    std::deque<FrameRecord> m_history;
 };
 
 } // namespace Genesis::Engine

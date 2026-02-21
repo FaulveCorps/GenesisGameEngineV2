@@ -40,20 +40,25 @@ std::unique_ptr<IGraphicsAPI> GraphicsFactory::CreateRenderer(SDL_Window* window
 #ifdef HAVE_VULKAN
             auto r = std::make_unique<VulkanRenderer>();
             if (r->Init(window, glContext)) {
-                // If the caller requested strict Vulkan (requires present), verify capability
-                if (requirePresentForVulkan) {
-                    // Query whether Vulkan renderer has swapchain/present capability
-                    // VulkanRenderer::IsPresentCapable is a lightweight check
-                    auto vr = static_cast<VulkanRenderer*>(r.get());
-                    if (!vr->IsPresentCapable()) {
-                        std::cerr << "GraphicsFactory: Vulkan initialized but not present-capable; trying next" << std::endl;
-                        r->Shutdown();
-                    } else {
-                        std::cout << "GraphicsFactory: selected VulkanRenderer (present-capable)" << std::endl;
-                        return r;
+                // Vulkan renderer may initialize in non-present smoke mode when window was not created with
+                // SDL_WINDOW_VULKAN (Win32 fallback). For normal runtime use, selecting such renderer would
+                // effectively render nothing. Enforce present-capability unless explicitly allowed.
+                bool requirePresent = requirePresentForVulkan;
+                if (!requirePresent) {
+                    const bool windowHasVulkanFlag = (SDL_GetWindowFlags(window) & SDL_WINDOW_VULKAN) != 0;
+                    if (!windowHasVulkanFlag) {
+                        const char* allowNoPresent = std::getenv("GENESIS_ALLOW_VULKAN_NO_PRESENT");
+                        const bool explicitlyAllowed = (allowNoPresent && std::strcmp(allowNoPresent, "1") == 0);
+                        requirePresent = !explicitlyAllowed;
                     }
+                }
+
+                auto vr = static_cast<VulkanRenderer*>(r.get());
+                if (requirePresent && !vr->IsPresentCapable()) {
+                    std::cerr << "GraphicsFactory: Vulkan initialized but not present-capable; trying next" << std::endl;
+                    r->Shutdown();
                 } else {
-                    std::cout << "GraphicsFactory: selected VulkanRenderer" << std::endl;
+                    std::cout << "GraphicsFactory: selected VulkanRenderer" << (vr->IsPresentCapable() ? " (present-capable)" : " (no-present mode)") << std::endl;
                     return r;
                 }
             }

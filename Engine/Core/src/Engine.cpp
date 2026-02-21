@@ -64,6 +64,11 @@ std::shared_ptr<IShaderSubsystem> GetShaderSubsystem() {
 }
 
 bool CreateAudioSubsystem(const std::string& name) {
+    if (g_audioSubsystem) {
+        g_audioSubsystem->StopAll();
+        g_audioSubsystem->Shutdown();
+        g_audioSubsystem.reset();
+    }
     auto inst = g_subsystems.CreateSubsystem("Audio", name);
     if (!inst) return false;
     // Try to cast to IAudio

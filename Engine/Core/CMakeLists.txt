@@ -77,6 +77,7 @@ add_library(EngineCore STATIC
     src/WgpuRenderer.cpp
     src/SoftwareRenderer.cpp
     src/RendererManager.cpp
+    src/RenderGraph.cpp
     src/MeshRegistry.cpp
     src/ShaderRegistry.cpp
     src/TextureRegistry.cpp

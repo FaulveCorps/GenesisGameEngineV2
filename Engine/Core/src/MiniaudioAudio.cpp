@@ -23,6 +23,7 @@ public:
             return false;
         }
         ma_engine_set_volume(&m_engine, m_masterVolume);
+        m_initialized = true;
         return true;
 #else
         std::cerr << "MiniaudioAudio: miniaudio not available at compile time" << std::endl;
@@ -32,15 +33,18 @@ public:
 
     void Shutdown() override {
 #ifdef HAVE_MINIAUDIO
+        if (!m_initialized) return;
         std::lock_guard<std::mutex> lock(m_lock);
         // ma_engine_uninit stops and frees resources
         ma_engine_uninit(&m_engine);
         m_active.clear();
+        m_initialized = false;
 #endif
     }
 
     void Update(double /*dt*/) override {
 #ifdef HAVE_MINIAUDIO
+        if (!m_initialized) return;
         std::lock_guard<std::mutex> lock(m_lock);
         for (auto it = m_active.begin(); it != m_active.end();) {
             ma_sound* s = *it;
@@ -66,6 +70,7 @@ public:
 
     bool PlayOneShot(const std::string& assetPath, const AudioPlayParams& params) override {
 #ifdef HAVE_MINIAUDIO
+        if (!m_initialized) return false;
         if (assetPath.empty()) return false;
         ma_sound* sound = (ma_sound*)ma_malloc(sizeof(ma_sound), NULL);
         if (!sound) {
@@ -111,6 +116,7 @@ public:
 
     void StopAll() override {
 #ifdef HAVE_MINIAUDIO
+        if (!m_initialized) return;
         std::lock_guard<std::mutex> lock(m_lock);
         for (auto s : m_active) {
             if (s) {
@@ -125,6 +131,7 @@ public:
 
     void SetListener(const AudioListener& listener) override {
 #ifdef HAVE_MINIAUDIO
+        if (!m_initialized) return;
         std::lock_guard<std::mutex> lock(m_lock);
         ma_engine_listener_set_position(&m_engine, 0, listener.position[0], listener.position[1], listener.position[2]);
         ma_engine_listener_set_direction(&m_engine, 0, listener.forward[0], listener.forward[1], listener.forward[2]);
@@ -137,6 +144,7 @@ public:
     void SetMasterVolume(float volume) override {
         IAudio::SetMasterVolume(volume);
 #ifdef HAVE_MINIAUDIO
+        if (!m_initialized) return;
         ma_engine_set_volume(&m_engine, m_masterVolume);
 #endif
     }
@@ -150,6 +158,7 @@ private:
     ma_engine m_engine;
     std::vector<ma_sound*> m_active;
     std::mutex m_lock;
+    bool m_initialized = false;
 #endif
 };
 

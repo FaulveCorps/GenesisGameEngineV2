@@ -5213,6 +5213,11 @@ int main(int argc, char** argv) {
                 ImGui::Text("Frame Allocator: %zu / %zu bytes", profiler.GetFrameAllocatorUsed(), profiler.GetFrameAllocatorCapacity());
             }
 
+            int historyCapacity = static_cast<int>(profiler.GetHistoryCapacity());
+            if (ImGui::SliderInt("History Capacity", &historyCapacity, 30, 600)) {
+                profiler.SetHistoryCapacity(static_cast<size_t>(historyCapacity));
+            }
+
             ImGui::Separator();
             ImGui::TextUnformatted("Scopes");
             ImGui::BeginChild("##profiler_scopes", ImVec2(0, 160), true);
@@ -5222,6 +5227,77 @@ int main(int argc, char** argv) {
                 ImGui::Unindent(sample.depth * 12.0f);
             }
             ImGui::EndChild();
+
+            ImGui::Separator();
+            ImGui::TextUnformatted("Frame History");
+            const auto& history = profiler.GetFrameHistory();
+            static std::vector<float> frameMsHistory;
+            frameMsHistory.clear();
+            frameMsHistory.reserve(history.size());
+            float minMs = 0.0f;
+            float maxMs = 0.0f;
+            double sumMs = 0.0;
+            for (const auto& record : history) {
+                float ms = static_cast<float>(record.frameMs);
+                frameMsHistory.push_back(ms);
+                sumMs += record.frameMs;
+                if (frameMsHistory.size() == 1) {
+                    minMs = maxMs = ms;
+                } else {
+                    minMs = std::min(minMs, ms);
+                    maxMs = std::max(maxMs, ms);
+                }
+            }
+            if (!frameMsHistory.empty()) {
+                ImGui::PlotLines("##frame_ms", frameMsHistory.data(), static_cast<int>(frameMsHistory.size()), 0, nullptr, 0.0f, std::max(33.0f, maxMs * 1.2f), ImVec2(0, 80));
+                double avgMs = sumMs / static_cast<double>(frameMsHistory.size());
+                std::vector<float> sorted = frameMsHistory;
+                std::sort(sorted.begin(), sorted.end());
+                size_t p95Index = static_cast<size_t>(std::floor(0.95f * static_cast<float>(sorted.size() - 1)));
+                float p95 = sorted[p95Index];
+                ImGui::Text("Min/Max: %.2f / %.2f ms", minMs, maxMs);
+                ImGui::Text("Avg: %.2f ms | P95: %.2f ms", avgMs, p95);
+            } else {
+                ImGui::TextDisabled("No frame history yet.");
+            }
+
+            ImGui::Separator();
+            ImGui::TextUnformatted("Hot Scopes (avg over history)");
+            if (!history.empty()) {
+                struct ScopeStat {
+                    std::string name;
+                    double avgMs = 0.0;
+                    double totalMs = 0.0;
+                };
+                std::unordered_map<std::string, double> totals;
+                for (const auto& record : history) {
+                    for (const auto& sample : record.samples) {
+                        totals[sample.name] += sample.ms;
+                    }
+                }
+
+                std::vector<ScopeStat> stats;
+                stats.reserve(totals.size());
+                const double historyCount = static_cast<double>(history.size());
+                for (const auto& entry : totals) {
+                    ScopeStat stat;
+                    stat.name = entry.first;
+                    stat.totalMs = entry.second;
+                    stat.avgMs = entry.second / historyCount;
+                    stats.push_back(stat);
+                }
+
+                std::sort(stats.begin(), stats.end(), [](const ScopeStat& a, const ScopeStat& b) {
+                    return a.avgMs > b.avgMs;
+                });
+
+                const size_t maxRows = std::min<size_t>(stats.size(), 8);
+                for (size_t i = 0; i < maxRows; ++i) {
+                    ImGui::Text("%s: %.3f ms", stats[i].name.c_str(), stats[i].avgMs);
+                }
+            } else {
+                ImGui::TextDisabled("No scope history yet.");
+            }
             ImGui::End();
         }
 

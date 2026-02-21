@@ -59,6 +59,7 @@ TEST_CASE("Audio playback: miniaudio plays generated WAV", "[subsystem][audio][m
     bool ok = Genesis::Engine::CreateAudioSubsystem("miniaudio");
     if (!ok) {
         WARN("miniaudio backend not available; skipping playback test");
+        Genesis::Engine::Shutdown();
         SUCCEED("miniaudio not available");
         return;
     }
@@ -69,6 +70,7 @@ TEST_CASE("Audio playback: miniaudio plays generated WAV", "[subsystem][audio][m
     auto tmp = std::filesystem::temp_directory_path() / "test_miniaudio_tone.wav";
     if (!write_test_wav(tmp)) {
         FAIL("Failed to write test WAV file");
+        Genesis::Engine::Shutdown();
         return;
     }
 
@@ -77,6 +79,7 @@ TEST_CASE("Audio playback: miniaudio plays generated WAV", "[subsystem][audio][m
         WARN("PlayOneShot returned false (likely no audio device); skipping playback assertions");
         Genesis::Engine::CreateAudioSubsystem("null");
         std::error_code ec; std::filesystem::remove(tmp, ec);
+        Genesis::Engine::Shutdown();
         SUCCEED("Playback not supported on this host");
         return;
     }
@@ -84,12 +87,14 @@ TEST_CASE("Audio playback: miniaudio plays generated WAV", "[subsystem][audio][m
     // Let playback start briefly then stop
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
     a->StopAll();
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
     // Switch back to null to allow clean shutdown
     Genesis::Engine::CreateAudioSubsystem("null");
 
     std::error_code ec; std::filesystem::remove(tmp, ec);
     if (ec) WARN("Failed to remove temp wav: " << ec.message());
+    Genesis::Engine::Shutdown();
 #else
     SUCCEED("No miniaudio support at compile time; skipping") ;
 #endif

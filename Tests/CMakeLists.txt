@@ -12,6 +12,8 @@ FetchContent_MakeAvailable(catch2)
 add_executable(UnitTests
     test_core.cpp
     test_wgpu_smoke.cpp
+  test_vulkan_scene_api_smoke.cpp
+    test_vulkan_stub_clearcolor.cpp
     test_software_smoke.cpp
     test_renderer_switch.cpp
     test_shader_recreate.cpp
@@ -44,6 +46,7 @@ add_executable(UnitTests
     test_frame_allocator.cpp
     test_job_system.cpp
     test_profiler.cpp
+    test_render_graph.cpp
     test_audio.cpp
     test_audio_playback.cpp
     test_physics.cpp

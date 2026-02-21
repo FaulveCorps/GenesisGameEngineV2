@@ -85,6 +85,11 @@ Genesis is no longer just a "toy". It is a **functional, modern rendering framew
 - Directional shadow mapping with PCF softness control (single cascade).
 - Vulkan/DirectX still pending parity verification.
 
+### Backend parity check (2026-02-11, code inspection)
+- **VulkanRenderer**: swapchain clear / optional CPU-generated triangle blit; no post-processing or shadow pipeline present.
+- **DirectXRenderer (D3D11)**: basic triangle path only; no post-processing or shadow pipeline present.
+- **D3D12Renderer**: basic triangle path only; no post-processing or shadow pipeline present.
+
 ### Navigation & AI Tooling
 - Grid-based navigation with runtime NavGrid bake from colliders.
 - NavAgent component for path following; debug grid + path visualization.
