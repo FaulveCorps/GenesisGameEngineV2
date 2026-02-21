@@ -84,14 +84,24 @@ wasm_hb_log*.txt
 /artifacts/
 software_render*.bmp
 test_cycle_*.bmp
+test_autocycle_*.bmp
+game_*.txt
+run_log_*.txt
+test_output_*.txt
+
+# Editor state (generated, not source)
+imgui.ini
+Editor/imgui.ini
 
 
 # Crash capture / Procdump artifacts
 Tools/Procdump.zip
+Tools/Procdump/
 tools/Procdump/*.dmp
 *.dmp
 dumps/
-Tools/external/procdump/dumps/
+Tools/external/
+
 
 # Temporary and misc
 *.tmp

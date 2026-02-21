@@ -1,6 +1,0 @@
-MSBuild version 17.14.23+b0019275e for .NET Framework
-
-  EngineCore.vcxproj -> C:\Users\jpfau\Desktop\Project\GenesisGameEngine\build-vs\Engine\Core\Debug\EngineCore.lib
-  SamplePlugin.vcxproj -> C:\Users\jpfau\Desktop\Project\GenesisGameEngine\build-vs\Plugins\SamplePlugin\Debug\SamplePlugin.dll
-  main.cpp
-LINK : fatal error LNK1168: cannot open C:\Users\jpfau\Desktop\Project\GenesisGameEngine\build-vs\Editor\Debug\GenesisEditor.exe for writing [C:\Users\jpfau\Desktop\Project\GenesisGameEngine\build-vs\Editor\GenesisEditor.vcxproj]
