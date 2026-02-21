@@ -54,6 +54,7 @@ Thumbs.db
 .vscode/
 .idea/
 *.code-workspace
+imgui.ini
 
 # vcpkg binary cache and top-level helper artifacts (keep vcpkg.exe if present)
 .vcpkg_binary_cache
